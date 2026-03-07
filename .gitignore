@@ -33,6 +33,12 @@ supabase/.temp/
 # TypeScript
 *.tsbuildinfo
 
+# Lockfiles (using pnpm)
+package-lock.json
+
+# Server cache
+server/cache/
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
