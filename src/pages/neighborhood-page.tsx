@@ -1,23 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import SanDiegoMap from './components/map/san-diego-map';
-import NeighborhoodSelector from './components/ui/neighborhood-selector';
-import Sidebar from './components/ui/sidebar';
-import { getLibraries, getRecCenters, getTransitStops, get311, generateBrief, getNeighborhoodBoundaries } from './api/client';
-import type { CommunityAnchor, CommunityBrief, NeighborhoodProfile } from './types';
+import SanDiegoMap from '../components/map/san-diego-map';
+import NeighborhoodSelector from '../components/ui/neighborhood-selector';
+import Sidebar from '../components/ui/sidebar';
+import { getLibraries, getRecCenters, getTransitStops, get311, generateBrief, getNeighborhoodBoundaries } from '../api/client';
+import type { CommunityAnchor, CommunityBrief, NeighborhoodProfile } from '../types';
 import type { FeatureCollection } from 'geojson';
-
-function toSlug(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-}
-
-function fromSlug(slug: string): string {
-  // Title-case each word from the slug
-  return slug
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
+import { toSlug, fromSlug } from '../utils/slug';
 
 interface TransitStop {
   id: string;
@@ -26,7 +15,7 @@ interface TransitStop {
   lng: number;
 }
 
-function App() {
+export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const [mobileView, setMobileView] = useState<'map' | 'info'>('map');
@@ -149,24 +138,7 @@ function App() {
   }, [selectedCommunity, selectedAnchor, metrics]);
 
   return (
-    <div className="flex flex-col h-screen md:flex-row print:block">
-      {/* Skip to main content — WCAG 2.4.1 */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-white focus:text-blue-700 focus:rounded focus:shadow-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-      >
-        Skip to main content
-      </a>
-
-      {/* Mobile header — title + selector, hidden on desktop */}
-      <header className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white shrink-0 print:hidden">
-        <h1 className="text-base font-bold shrink-0">Block Report</h1>
-        <NeighborhoodSelector
-          value={selectedCommunity ?? ''}
-          onChange={(c) => { handleCommunityChange(c); if (c) setMobileView('info'); }}
-        />
-      </header>
-
+    <div className="flex flex-col h-full md:flex-row print:block">
       {/* Sidebar — full panel on desktop, shown on mobile only in 'info' tab */}
       <aside
         id="panel-info"
@@ -178,12 +150,11 @@ function App() {
           ${mobileView === 'info' ? 'flex' : 'hidden md:flex'}
         `}
       >
-        {/* Desktop-only header inside sidebar */}
-        <div className="hidden md:block p-4 border-b border-gray-100 shrink-0">
-          <h1 className="text-xl font-bold mb-3">Block Report</h1>
+        {/* Sidebar header with neighborhood selector */}
+        <div className="p-4 border-b border-gray-100 shrink-0">
           <NeighborhoodSelector
             value={selectedCommunity ?? ''}
-            onChange={handleCommunityChange}
+            onChange={(c) => { handleCommunityChange(c); if (c) setMobileView('info'); }}
           />
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -256,5 +227,3 @@ function App() {
     </div>
   );
 }
-
-export default App;

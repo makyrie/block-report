@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { COMMUNITIES } from './neighborhood-selector';
-
-function toSlug(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-}
+import { COMMUNITIES } from '../components/ui/neighborhood-selector';
+import { toSlug } from '../utils/slug';
 
 const QUESTION_TILES = [
   {
@@ -42,12 +39,7 @@ export default function WelcomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3">
-        <h1 className="text-lg font-bold text-gray-900">Block Report</h1>
-      </header>
-
+    <div className="h-full overflow-y-auto bg-gray-50 flex flex-col">
       <main id="main-content" className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
 
         {/* Hero */}
@@ -72,7 +64,7 @@ export default function WelcomePage() {
                 onChange={(e) => setSelected(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Pick a neighborhood…</option>
+                <option value="">Pick a neighborhood...</option>
                 {COMMUNITIES.map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}

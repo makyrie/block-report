@@ -14,7 +14,8 @@
     width: 100%;
     padding: 1rem;
   }
-  .no-print {
+  .no-print,
+  nav[aria-label="Main navigation"] {
     display: none !important;
   }
 }
