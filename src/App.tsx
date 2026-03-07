@@ -1,10 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import SanDiegoMap from './components/map/san-diego-map';
 import NeighborhoodSelector from './components/ui/neighborhood-selector';
 import Sidebar from './components/ui/sidebar';
 import { getLibraries, getRecCenters, getTransitStops, get311, generateBrief } from './api/client';
 import type { CommunityAnchor, CommunityBrief, NeighborhoodProfile } from './types';
 
+function toSlug(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+function fromSlug(slug: string): string {
+  // Title-case each word from the slug
+  return slug
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
 
 interface TransitStop {
   id: string;
@@ -14,11 +26,16 @@ interface TransitStop {
 }
 
 function App() {
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+
   const [libraries, setLibraries] = useState<CommunityAnchor[]>([]);
   const [recCenters, setRecCenters] = useState<CommunityAnchor[]>([]);
   const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
 
-  const [selectedCommunity, setSelectedCommunity] = useState<string | null>(null);
+  const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
+    slug ? fromSlug(slug) : null,
+  );
   const [selectedAnchor, setSelectedAnchor] = useState<CommunityAnchor | null>(null);
   const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
@@ -26,13 +43,21 @@ function App() {
   const [brief, setBrief] = useState<CommunityBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
 
+  // Sync URL → state when slug changes (e.g. browser back/forward)
+  useEffect(() => {
+    const communityFromUrl = slug ? fromSlug(slug) : null;
+    if (communityFromUrl !== selectedCommunity) {
+      setSelectedCommunity(communityFromUrl);
+      setSelectedAnchor(null);
+    }
+  }, [slug]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch map data on mount
   useEffect(() => {
     getLibraries().then(setLibraries).catch(console.error);
     getRecCenters().then(setRecCenters).catch(console.error);
     getTransitStops()
       .then((stops) => {
-        // Normalize transit stop shape from the API
         const normalized: TransitStop[] = (stops as Record<string, unknown>[]).map((s) => ({
           id: String((s as Record<string, unknown>).id ?? (s as Record<string, unknown>).stop_uid ?? ''),
           name: String((s as Record<string, unknown>).name ?? (s as Record<string, unknown>).stop_name ?? ''),
@@ -62,15 +87,27 @@ function App() {
       .finally(() => setMetricsLoading(false));
   }, [selectedCommunity]);
 
-  const handleCommunityChange = useCallback((community: string) => {
-    setSelectedCommunity(community || null);
-    setSelectedAnchor(null);
-  }, []);
+  const handleCommunityChange = useCallback(
+    (community: string) => {
+      if (community) {
+        navigate(`/neighborhood/${toSlug(community)}`);
+      } else {
+        navigate('/');
+      }
+      setSelectedCommunity(community || null);
+      setSelectedAnchor(null);
+    },
+    [navigate],
+  );
 
-  const handleAnchorClick = useCallback((anchor: CommunityAnchor) => {
-    setSelectedAnchor(anchor);
-    setSelectedCommunity(anchor.community);
-  }, []);
+  const handleAnchorClick = useCallback(
+    (anchor: CommunityAnchor) => {
+      setSelectedAnchor(anchor);
+      setSelectedCommunity(anchor.community);
+      navigate(`/neighborhood/${toSlug(anchor.community)}`);
+    },
+    [navigate],
+  );
 
   const handleGenerateBrief = useCallback(async () => {
     if (!selectedCommunity || !metrics) return;
