@@ -73,33 +73,12 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  // Strip SQL wildcards and enforce length
-  const cleaned = community!.replace(/[%_]/g, '');
-  if (cleaned.length > 100 || cleaned.length === 0) {
-    res.status(400).json({ error: 'Invalid community name' });
-    return;
-  }
-
-  // Community-based lookup: find all tracts for this community
-  // Try matching community name in the census data
-  const { data, error } = await supabase
-    .from('census_language')
-    .select('*')
-    .ilike('community', cleaned);
-
-  if (error) {
-    logger.error('Failed to fetch demographics by community', { error: error.message, community });
-    res.status(500).json({ error: 'Internal server error' });
-    return;
-  }
-
-  if (!data || data.length === 0) {
-    // Fall back: return empty rather than 404 so the frontend degrades gracefully
-    res.json({ topLanguages: [] });
-    return;
-  }
-
-  res.json({ topLanguages: computeTopLanguages(data as Record<string, unknown>[]) });
+  // TODO: community-to-tract crosswalk not yet implemented.
+  // census_language is keyed by tract only. A TIGER/Line spatial join or static
+  // crosswalk table is needed to map community plan names → tract IDs.
+  // Return empty so the frontend degrades gracefully rather than throwing 500.
+  logger.warn('Demographics by community requested but crosswalk not implemented', { community });
+  res.json({ topLanguages: [] });
 });
 
 export default router;
