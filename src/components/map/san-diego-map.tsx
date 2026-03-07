@@ -7,6 +7,84 @@ import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { CommunityAnchor } from '../../types';
 
+// ── Popup content components ─────────────────────────────────────────────────
+
+type TypeConfig = {
+  dot: string;   // Tailwind bg color — must match legend
+  label: string;
+  text: string;  // text color for label
+};
+
+const TYPE_CONFIG: Record<'library' | 'rec_center' | 'transit', TypeConfig> = {
+  library:    { dot: 'bg-blue-500',  label: 'Library',      text: 'text-blue-700'  },
+  rec_center: { dot: 'bg-green-500', label: 'Rec Center',   text: 'text-green-700' },
+  transit:    { dot: 'bg-gray-400',  label: 'Transit Stop', text: 'text-gray-600'  },
+};
+
+function TypeBadge({ type }: { type: keyof typeof TYPE_CONFIG }) {
+  const { dot, label, text } = TYPE_CONFIG[type];
+  return (
+    <div className="flex items-center gap-1.5 mb-2">
+      <span aria-hidden="true" className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
+      <span className={`text-xs font-semibold uppercase tracking-wide ${text}`}>{label}</span>
+    </div>
+  );
+}
+
+function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
+  const type = anchor.type === 'library' ? 'library' : 'rec_center';
+  return (
+    <div className="min-w-[200px] max-w-[260px]">
+      <TypeBadge type={type} />
+      <p className="font-semibold text-gray-900 text-sm leading-snug mb-1.5">{anchor.name}</p>
+      {anchor.address && (
+        <p className="text-xs text-gray-600 flex items-start gap-1 mb-1">
+          <span aria-hidden="true" className="mt-px shrink-0">📍</span>
+          <span>{anchor.address}</span>
+        </p>
+      )}
+      {anchor.community && (
+        <p className="text-xs text-gray-500 mb-1">
+          <span className="font-medium">Neighborhood:</span> {anchor.community}
+        </p>
+      )}
+      {anchor.phone && (
+        <p className="text-xs mt-1">
+          <a
+            href={`tel:${anchor.phone}`}
+            className="text-blue-600 hover:underline"
+            aria-label={`Call ${anchor.name} at ${anchor.phone}`}
+          >
+            📞 {anchor.phone}
+          </a>
+        </p>
+      )}
+      {anchor.website && (
+        <p className="text-xs mt-0.5">
+          <a
+            href={anchor.website}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-600 hover:underline"
+            aria-label={`Visit ${anchor.name} website (opens in new tab)`}
+          >
+            🌐 Website ↗
+          </a>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TransitPopupContent({ name }: { name: string }) {
+  return (
+    <div className="min-w-[160px] max-w-[240px]">
+      <TypeBadge type="transit" />
+      <p className="font-semibold text-gray-900 text-sm leading-snug">{name}</p>
+    </div>
+  );
+}
+
 // Fix Leaflet default icon paths for bundlers
 L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl });
 
@@ -146,7 +224,9 @@ export default function SanDiegoMap({
           radius={4}
           pathOptions={{ color: '#9ca3af', fillColor: '#9ca3af', fillOpacity: 0.6, weight: 1 }}
         >
-          <Popup>{stop.name}</Popup>
+          <Popup>
+            <TransitPopupContent name={stop.name} />
+          </Popup>
         </CircleMarker>
       ))}
 
@@ -156,12 +236,11 @@ export default function SanDiegoMap({
           key={lib.id}
           position={[lib.lat, lib.lng]}
           icon={blueIcon}
+          aria-label={`Library: ${lib.name}`}
           eventHandlers={{ click: handleMarkerClick(lib) }}
         >
           <Popup>
-            <strong>{lib.name}</strong>
-            <br />
-            {lib.address}
+            <AnchorPopupContent anchor={lib} />
           </Popup>
         </Marker>
       ))}
@@ -172,12 +251,11 @@ export default function SanDiegoMap({
           key={rc.id}
           position={[rc.lat, rc.lng]}
           icon={greenIcon}
+          aria-label={`Rec Center: ${rc.name}`}
           eventHandlers={{ click: handleMarkerClick(rc) }}
         >
           <Popup>
-            <strong>{rc.name}</strong>
-            <br />
-            {rc.address}
+            <AnchorPopupContent anchor={rc} />
           </Popup>
         </Marker>
       ))}
