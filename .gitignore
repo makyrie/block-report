@@ -23,7 +23,6 @@ Thumbs.db
 # Claude local settings
 .claude/settings.local.json
 .claude/todos.local.json
-CLAUDE.md
 
 # Vite
 *.local
