@@ -6,10 +6,10 @@ import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 
 const QUESTION_TILES = [
-  { icon: '\ud83d\udccb', qKey: 'tile.q1', descKey: 'tile.q1desc', sample: 'Mira Mesa' },
-  { icon: '\u23f1\ufe0f', qKey: 'tile.q2', descKey: 'tile.q2desc', sample: 'North Park' },
-  { icon: '\ud83c\udfdb\ufe0f', qKey: 'tile.q3', descKey: 'tile.q3desc', sample: 'City Heights' },
-  { icon: '\ud83d\udda8\ufe0f', qKey: 'tile.q4', descKey: 'tile.q4desc', sample: 'Barrio Logan' },
+  { icon: '\ud83d\udccb', qKey: 'tile.q1', descKey: 'tile.q1desc' },
+  { icon: '\u23f1\ufe0f', qKey: 'tile.q2', descKey: 'tile.q2desc' },
+  { icon: '\ud83c\udfdb\ufe0f', qKey: 'tile.q3', descKey: 'tile.q3desc' },
+  { icon: '\ud83d\udda8\ufe0f', qKey: 'tile.q4', descKey: 'tile.q4desc' },
 ];
 
 export default function WelcomePage() {
@@ -95,16 +95,10 @@ export default function WelcomePage() {
           </h2>
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="list">
             {QUESTION_TILES.map((tile) => (
-              <li key={tile.qKey}>
-                <button
-                  type="button"
-                  onClick={() => goToNeighborhood(tile.sample)}
-                  className="w-full text-left rounded-xl border border-gray-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                >
-                  <span className="text-xl mb-2 block" aria-hidden="true">{tile.icon}</span>
-                  <span className="font-medium text-gray-900 text-sm block mb-1">{t(tile.qKey)}</span>
-                  <span className="text-xs text-gray-500">{t(tile.descKey)}</span>
-                </button>
+              <li key={tile.qKey} className="rounded-xl border border-gray-200 bg-white p-4">
+                <span className="text-xl mb-2 block" aria-hidden="true">{tile.icon}</span>
+                <span className="font-medium text-gray-900 text-sm block mb-1">{t(tile.qKey)}</span>
+                <span className="text-xs text-gray-500">{t(tile.descKey)}</span>
               </li>
             ))}
           </ul>
