@@ -1,0 +1,1 @@
+Use `git status` to see what's changed.  Run `pnpm build` to make sure everything builds.  Then add and commit the changes to the repository, without self-reference.  **DO NOT MENTION CLAUDE IN THE COMMIT**.  Once done, say something nice to the user.  Do not push your commit.
