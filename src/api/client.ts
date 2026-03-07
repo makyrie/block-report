@@ -44,6 +44,16 @@ export function getDemographics(tractOrCommunity: string): Promise<NeighborhoodP
   return fetchJSON(`${BASE}/demographics?community=${encodeURIComponent(tractOrCommunity)}`);
 }
 
+export function getAccessGap(community: string): Promise<NonNullable<NeighborhoodProfile['accessGap']>> {
+  return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`);
+}
+
+export function getAccessGapRanking(limit = 10): Promise<{
+  ranking: { community: string; accessGapScore: number; signals: NonNullable<NeighborhoodProfile['accessGap']>['signals'] }[];
+}> {
+  return fetchJSON(`${BASE}/access-gap/ranking?limit=${limit}`);
+}
+
 export function generateBrief(profile: NeighborhoodProfile, language: string): Promise<CommunityBrief> {
   return fetchJSON(`${BASE}/brief/generate`, {
     method: 'POST',

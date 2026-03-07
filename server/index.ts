@@ -8,6 +8,7 @@ import metricsRouter from './routes/metrics.js';
 import demographicsRouter from './routes/demographics.js';
 import briefRouter from './routes/brief.js';
 import transitRouter from './routes/transit.js';
+import gapAnalysisRouter from './routes/gap-analysis.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -47,6 +48,7 @@ app.use('/api/311', metricsRouter);
 app.use('/api/demographics', demographicsRouter);
 app.use('/api/brief', briefRouter);
 app.use('/api/transit', transitRouter);
+app.use('/api/access-gap', gapAnalysisRouter);
 
 app.listen(PORT, () => {
   logger.info(`Server running on http://localhost:${PORT}`);

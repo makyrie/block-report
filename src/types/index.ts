@@ -36,6 +36,16 @@ export interface NeighborhoodProfile {
   demographics: {
     topLanguages: { language: string; percentage: number }[];
   };
+  accessGap?: {
+    accessGapScore: number;
+    signals: {
+      lowEngagement: number | null;
+      lowTransit: number | null;
+      highNonEnglish: number | null;
+    };
+    rank: number;
+    totalCommunities: number;
+  } | null;
 }
 
 export interface TransitStop {

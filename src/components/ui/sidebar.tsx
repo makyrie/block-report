@@ -14,6 +14,7 @@ interface SidebarProps {
   briefError: string | null;
   topLanguages?: { language: string; percentage: number }[];
   transitScore?: NeighborhoodProfile['transit'] | null;
+  accessGap?: NeighborhoodProfile['accessGap'];
 }
 
 function LoadingSpinner({ label }: { label: string }) {
@@ -69,6 +70,7 @@ export default function Sidebar({
   briefError,
   topLanguages,
   transitScore,
+  accessGap,
 }: SidebarProps) {
   const [showDetails, setShowDetails] = useState(false);
   const { t, briefLang, setBriefLang } = useLanguage();
@@ -200,6 +202,54 @@ export default function Sidebar({
                 {transitScore.agencies.length > 0 && (
                   <> ({transitScore.agencies.join(', ')})</>
                 )}.
+              </p>
+            </section>
+          )}
+
+          {/* Access gap score */}
+          {accessGap && accessGap.accessGapScore != null && (
+            <section aria-labelledby="access-gap-heading" className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+              <h2 id="access-gap-heading" className="text-sm font-medium text-amber-800 mb-2">
+                Access Gap Assessment
+              </h2>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="text-2xl font-bold text-amber-700">{accessGap.accessGapScore}</div>
+                <div className="text-xs text-amber-600">
+                  <span className="block">/ 100</span>
+                  <span className="block">
+                    Rank {accessGap.rank} of {accessGap.totalCommunities} communities
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-amber-700 mb-2">
+                {accessGap.accessGapScore >= 65
+                  ? 'Data patterns suggest this neighborhood may face significant access barriers to civic services.'
+                  : accessGap.accessGapScore >= 40
+                    ? 'Some indicators suggest potential access gaps in this neighborhood.'
+                    : 'This neighborhood shows relatively fewer signs of access barriers.'}
+              </p>
+              <div className="space-y-1.5 text-xs text-amber-600">
+                {accessGap.signals.lowEngagement != null && (
+                  <div className="flex justify-between">
+                    <span>Low civic engagement signal</span>
+                    <span className="font-mono">{Math.round(accessGap.signals.lowEngagement * 100)}%</span>
+                  </div>
+                )}
+                {accessGap.signals.lowTransit != null && (
+                  <div className="flex justify-between">
+                    <span>Limited transit access signal</span>
+                    <span className="font-mono">{Math.round(accessGap.signals.lowTransit * 100)}%</span>
+                  </div>
+                )}
+                {accessGap.signals.highNonEnglish != null && (
+                  <div className="flex justify-between">
+                    <span>Language barrier signal</span>
+                    <span className="font-mono">{Math.round(accessGap.signals.highNonEnglish * 100)}%</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-amber-500 mt-2 italic">
+                This score identifies potential access gaps based on available data. It does not prove a neighborhood is underserved.
               </p>
             </section>
           )}

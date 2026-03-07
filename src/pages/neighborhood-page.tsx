@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
-import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateBrief, getNeighborhoodBoundaries, getTransitScore } from '../api/client';
+import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateBrief, getNeighborhoodBoundaries, getTransitScore, getAccessGap } from '../api/client';
 import type { CommunityAnchor, CommunityBrief, NeighborhoodProfile, TransitStop } from '../types';
 import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
@@ -30,6 +30,7 @@ export default function NeighborhoodPage() {
   const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
 
   const [transitScore, setTransitScore] = useState<NeighborhoodProfile['transit'] | null>(null);
+  const [accessGap, setAccessGap] = useState<NeighborhoodProfile['accessGap']>(null);
   const [dataError, setDataError] = useState<string | null>(null);
 
   const [brief, setBrief] = useState<CommunityBrief | null>(null);
@@ -62,6 +63,7 @@ export default function NeighborhoodPage() {
       setBrief(null);
       setTopLanguages([]);
       setTransitScore(null);
+      setAccessGap(null);
       return;
     }
 
@@ -70,6 +72,7 @@ export default function NeighborhoodPage() {
     setBrief(null);
     setTopLanguages([]);
     setTransitScore(null);
+    setAccessGap(null);
 
     get311(selectedCommunity)
       .then(setMetrics)
@@ -79,6 +82,10 @@ export default function NeighborhoodPage() {
     getTransitScore(selectedCommunity)
       .then(setTransitScore)
       .catch(() => { /* transit score may not be available */ });
+
+    getAccessGap(selectedCommunity)
+      .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
+      .catch(() => { /* access gap score may not be available */ });
 
     // Try to fetch demographics for language suggestion
     getDemographics(selectedCommunity)
@@ -131,6 +138,7 @@ export default function NeighborhoodPage() {
       metrics,
       transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0 },
       demographics: { topLanguages },
+      accessGap: accessGap ?? null,
     };
 
     setBriefLoading(true);
@@ -144,7 +152,7 @@ export default function NeighborhoodPage() {
     } finally {
       setBriefLoading(false);
     }
-  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore]);
+  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">
@@ -199,6 +207,7 @@ export default function NeighborhoodPage() {
             briefError={briefError}
             topLanguages={topLanguages}
             transitScore={transitScore}
+            accessGap={accessGap}
           />
         </div>
       </aside>
