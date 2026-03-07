@@ -160,6 +160,20 @@ export default function Sidebar({
             )}
           </section>
 
+          {/* Good news */}
+          {metrics.goodNews.length > 0 && (
+            <section aria-labelledby="good-news-heading" className="rounded-lg bg-green-50 border border-green-200 p-3">
+              <h2 id="good-news-heading" className="text-sm font-medium text-green-800 mb-2">
+                Good News
+              </h2>
+              <ul className="space-y-1.5 text-sm text-green-700">
+                {metrics.goodNews.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {/* Top issues — visual bars */}
           {metrics.topIssues.length > 0 && (
             <section aria-labelledby="issues-heading">

@@ -88,6 +88,62 @@ router.get('/', async (req, res) => {
       ? Math.round((total / population) * 1000 * 10) / 10
       : null;
 
+  // --- Good news detection ---
+  const goodNews: string[] = [];
+  const now = Date.now();
+  const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
+
+  // 1. Recently resolved issues in last 90 days
+  const recentResolved = resolved.filter((r) => {
+    if (!r.date_closed) return false;
+    return now - new Date(r.date_closed).getTime() < NINETY_DAYS;
+  });
+  if (recentResolved.length > 0) {
+    // Group by category to find the top resolved category
+    const recentCounts: Record<string, number> = {};
+    for (const r of recentResolved) {
+      const cat = r.service_name || 'Unknown';
+      recentCounts[cat] = (recentCounts[cat] || 0) + 1;
+    }
+    const topResolved = Object.entries(recentCounts).sort(([, a], [, b]) => b - a)[0];
+    goodNews.push(
+      `${recentResolved.length} issues were resolved in the last 90 days. The most common fix: ${topResolved[0]} (${topResolved[1]} resolved).`
+    );
+  }
+
+  // 2. Categories with high resolution rates (≥90%, minimum 10 reports)
+  const categoryStats: Record<string, { total: number; resolved: number }> = {};
+  for (const r of data) {
+    const cat = r.service_name || 'Unknown';
+    if (!categoryStats[cat]) categoryStats[cat] = { total: 0, resolved: 0 };
+    categoryStats[cat].total++;
+    if (r.status === 'Closed' || r.date_closed) categoryStats[cat].resolved++;
+  }
+  const highResCategories = Object.entries(categoryStats)
+    .filter(([, s]) => s.total >= 10 && s.resolved / s.total >= 0.9)
+    .sort(([, a], [, b]) => b.resolved / b.total - a.resolved / a.total);
+  if (highResCategories.length > 0) {
+    const [cat, stats] = highResCategories[0];
+    const rate = Math.round((stats.resolved / stats.total) * 100);
+    goodNews.push(
+      `${cat} reports are resolved ${rate}% of the time in this neighborhood.`
+    );
+  }
+
+  // 3. Overall resolution rate is strong
+  if (resolutionRate >= 0.7) {
+    goodNews.push(
+      `The city has resolved ${Math.round(resolutionRate * 100)}% of all reported issues here — a strong track record.`
+    );
+  }
+
+  // 4. Active engagement as a positive signal
+  if (requestsPer1000Residents !== null && requestsPer1000Residents >= 50) {
+    goodNews.push(
+      `Residents here are active advocates, reporting about ${requestsPer1000Residents} issues per 1,000 people — one of the higher civic engagement rates in the city.`
+    );
+  }
+
   res.json({
     totalRequests311: total,
     resolvedCount,
@@ -97,6 +153,7 @@ router.get('/', async (req, res) => {
     recentlyResolved,
     population,
     requestsPer1000Residents,
+    goodNews,
   });
 });
 

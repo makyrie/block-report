@@ -22,6 +22,7 @@ export interface NeighborhoodProfile {
     recentlyResolved: { category: string; date: string }[];
     population: number;
     requestsPer1000Residents: number | null;
+    goodNews: string[];
   };
   transit: {
     nearbyStopCount: number;
