@@ -107,9 +107,14 @@ export default function Sidebar({
           {/* Narrative summary */}
           <section aria-labelledby="summary-heading">
             <h2 id="summary-heading" className="sr-only">{t('sidebar.neighborhoodSummary')}</h2>
-            <p className="text-sm text-gray-700 mb-3">
+            <p className="text-sm text-gray-700 mb-1">
               {t('sidebar.requestsSummary', { count: metrics.totalRequests311.toLocaleString() })}
             </p>
+            {metrics.requestsPer1000Residents != null && metrics.population > 0 && (
+              <p className="text-sm text-gray-600 mb-3">
+                Residents here report about <span className="font-semibold">{metrics.requestsPer1000Residents}</span> issues per 1,000 people.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               {resolutionBadge(metrics.resolutionRate)}
               {responseBadge(metrics.avgDaysToResolve)}
@@ -139,6 +144,18 @@ export default function Sidebar({
                   <dt className="text-gray-500">{t('sidebar.avgDays')}</dt>
                   <dd className="font-mono font-medium">{metrics.avgDaysToResolve.toFixed(1)}</dd>
                 </div>
+                {metrics.population > 0 && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-500">Est. population</dt>
+                    <dd className="font-mono font-medium">{metrics.population.toLocaleString()}</dd>
+                  </div>
+                )}
+                {metrics.requestsPer1000Residents != null && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-500">Requests per 1,000</dt>
+                    <dd className="font-mono font-medium">{metrics.requestsPer1000Residents}</dd>
+                  </div>
+                )}
               </dl>
             )}
           </section>

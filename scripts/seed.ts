@@ -48,6 +48,40 @@ function parseInt_(val: string | undefined): number | null {
   return isNaN(n) ? null : n;
 }
 
+// --- Geo helpers ---
+
+type Polygon = number[][][]; // [ring][point][lng, lat]
+
+// Ray-casting point-in-polygon test
+function pointInPolygon(lat: number, lng: number, polygon: Polygon): boolean {
+  for (const ring of polygon) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][1], yi = ring[i][0]; // GeoJSON is [lng, lat]
+      const xj = ring[j][1], yj = ring[j][0];
+      if ((yi > lng) !== (yj > lng) && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+    if (inside) return true;
+  }
+  return false;
+}
+
+interface CommunityFeature {
+  name: string;
+  polygons: Polygon[];
+}
+
+function findCommunity(lat: number, lng: number, communities: CommunityFeature[]): string | null {
+  for (const c of communities) {
+    for (const poly of c.polygons) {
+      if (pointInPolygon(lat, lng, poly)) return c.name;
+    }
+  }
+  return null;
+}
+
 // --- Seeders ---
 
 async function seedLibraries() {
@@ -228,6 +262,77 @@ async function seedCensusLanguage() {
 
   const count = await batchInsert('census_language', mapped);
   console.log(`  ✓ ${count} Census tracts`);
+
+  // Map tracts to communities using centroids + community boundaries
+  await mapTractsToCommunitites(censusKey, rows);
+}
+
+async function mapTractsToCommunitites(censusKey: string, censusRows: string[][]) {
+  console.log('Mapping Census tracts to communities...');
+
+  // Fetch community boundaries GeoJSON
+  console.log('  Fetching community boundaries...');
+  const boundaryRes = await fetch(
+    'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson'
+  );
+  if (!boundaryRes.ok) {
+    console.log('  ⚠ Failed to fetch community boundaries, skipping tract mapping');
+    return;
+  }
+  const boundaries = await boundaryRes.json();
+
+  // Parse community features
+  const communities: CommunityFeature[] = [];
+  for (const feature of boundaries.features) {
+    const name = toTitleCase((feature.properties.cpname || feature.properties.name || '').trim());
+    if (!name) continue;
+    const geom = feature.geometry;
+    const polygons: Polygon[] =
+      geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
+    communities.push({ name, polygons });
+  }
+  console.log(`  ${communities.length} community boundaries loaded`);
+
+  // Fetch tract centroids from TIGERweb
+  console.log('  Fetching tract centroids from TIGERweb...');
+  const tigerUrl =
+    'https://tigerweb.geo.census.gov/arcrest/services/TIGERweb/tigerWMS_ACS2021/MapServer/8/query' +
+    "?where=STATE='06'+AND+COUNTY='073'&outFields=TRACT,CENTLAT,CENTLON&f=json&returnGeometry=false";
+  const tigerRes = await fetch(tigerUrl);
+  if (!tigerRes.ok) {
+    console.log('  ⚠ Failed to fetch tract centroids, skipping tract mapping');
+    return;
+  }
+  const tigerData = await tigerRes.json();
+
+  // Build tract → centroid map
+  const tractCentroids = new Map<string, { lat: number; lng: number }>();
+  for (const feat of tigerData.features || []) {
+    const attrs = feat.attributes || feat.properties;
+    if (attrs?.TRACT && attrs.CENTLAT != null && attrs.CENTLON != null) {
+      tractCentroids.set(attrs.TRACT, { lat: Number(attrs.CENTLAT), lng: Number(attrs.CENTLON) });
+    }
+  }
+  console.log(`  ${tractCentroids.size} tract centroids loaded`);
+
+  // Match each tract to a community
+  let mapped = 0;
+  for (const row of censusRows) {
+    const tract = row[row.length - 1];
+    const centroid = tractCentroids.get(tract);
+    if (!centroid) continue;
+
+    const community = findCommunity(centroid.lat, centroid.lng, communities);
+    if (!community) continue;
+
+    const { error } = await supabase
+      .from('census_language')
+      .update({ community })
+      .eq('tract', tract);
+
+    if (!error) mapped++;
+  }
+  console.log(`  ✓ ${mapped} tracts mapped to communities`);
 }
 
 // --- Main ---

@@ -29,6 +29,16 @@ router.get('/', async (req, res) => {
     return;
   }
 
+  // Fetch population for this community from census data
+  const { data: censusData } = await supabase
+    .from('census_language')
+    .select('total_pop_5plus')
+    .ilike('community', cleaned);
+
+  const population = censusData
+    ? censusData.reduce((sum, row) => sum + (Number(row.total_pop_5plus) || 0), 0)
+    : 0;
+
   const total = data.length;
   const resolved = data.filter(
     (r) => r.status === 'Closed' || r.date_closed
@@ -73,6 +83,11 @@ router.get('/', async (req, res) => {
       date: r.date_closed,
     }));
 
+  const requestsPer1000Residents =
+    population > 0
+      ? Math.round((total / population) * 1000 * 10) / 10
+      : null;
+
   res.json({
     totalRequests311: total,
     resolvedCount,
@@ -80,6 +95,8 @@ router.get('/', async (req, res) => {
     avgDaysToResolve: Math.round(avgDaysToResolve * 10) / 10,
     topIssues,
     recentlyResolved,
+    population,
+    requestsPer1000Residents,
   });
 });
 

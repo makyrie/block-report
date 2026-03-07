@@ -20,6 +20,8 @@ export interface NeighborhoodProfile {
     avgDaysToResolve: number;
     topIssues: { category: string; count: number }[];
     recentlyResolved: { category: string; date: string }[];
+    population: number;
+    requestsPer1000Residents: number | null;
   };
   transit: {
     nearbyStopCount: number;
