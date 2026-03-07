@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { logger } from './logger.js';
 import locationsRouter from './routes/locations.js';
 import metricsRouter from './routes/metrics.js';
@@ -9,7 +11,21 @@ import briefRouter from './routes/brief.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(helmet());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+  methods: ['GET', 'POST'],
+}));
+
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
+const briefLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many brief generation requests, please try again later' },
+});
+app.use('/api/brief', briefLimiter);
+app.use('/api', apiLimiter);
+
 app.use(express.json());
 
 app.use((req, res, next) => {

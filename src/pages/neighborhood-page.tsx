@@ -4,18 +4,11 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateBrief, getNeighborhoodBoundaries } from '../api/client';
-import type { CommunityAnchor, CommunityBrief, NeighborhoodProfile } from '../types';
+import type { CommunityAnchor, CommunityBrief, NeighborhoodProfile, TransitStop } from '../types';
 import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
-
-interface TransitStop {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-}
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -36,6 +29,8 @@ export default function NeighborhoodPage() {
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
 
+  const [dataError, setDataError] = useState<string | null>(null);
+
   const [brief, setBrief] = useState<CommunityBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
@@ -51,19 +46,11 @@ export default function NeighborhoodPage() {
 
   // Fetch map data on mount
   useEffect(() => {
-    getLibraries().then(setLibraries).catch(console.error);
+    getLibraries().then(setLibraries).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
     getRecCenters().then(setRecCenters).catch(console.error);
     getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch(console.error);
     getTransitStops()
-      .then((stops) => {
-        const normalized: TransitStop[] = (stops as Record<string, unknown>[]).map((s) => ({
-          id: String((s as Record<string, unknown>).id ?? (s as Record<string, unknown>).stop_uid ?? ''),
-          name: String((s as Record<string, unknown>).name ?? (s as Record<string, unknown>).stop_name ?? ''),
-          lat: Number((s as Record<string, unknown>).lat ?? (s as Record<string, unknown>).stop_lat ?? 0),
-          lng: Number((s as Record<string, unknown>).lng ?? (s as Record<string, unknown>).stop_lon ?? 0),
-        }));
-        setTransitStops(normalized);
-      })
+      .then(setTransitStops)
       .catch(console.error);
   }, []);
 
@@ -153,7 +140,12 @@ export default function NeighborhoodPage() {
   }, [selectedCommunity, selectedAnchor, metrics, topLanguages]);
 
   return (
-    <div className="flex flex-col h-full md:flex-row print:block" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+    <div className="flex flex-col h-full md:flex-row print:block">
+      {dataError && (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-sm text-red-700" role="alert">
+          {dataError}
+        </div>
+      )}
       {/* Sidebar — full panel on desktop, shown on mobile only in 'info' tab */}
       <aside
         id="panel-info"

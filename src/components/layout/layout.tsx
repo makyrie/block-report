@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Navbar from './navbar';
 import { useLanguage } from '../../i18n/context';
+import ErrorBoundary from '../ui/error-boundary';
 
 export default function Layout() {
   const { lang, t } = useLanguage();
@@ -16,7 +17,9 @@ export default function Layout() {
       </a>
       <Navbar />
       <div className="flex-1 overflow-hidden">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </div>
     </div>
   );

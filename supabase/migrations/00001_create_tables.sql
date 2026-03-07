@@ -107,3 +107,5 @@ BEGIN
   TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+REVOKE EXECUTE ON FUNCTION truncate_seed_tables() FROM anon, authenticated;

@@ -6,7 +6,7 @@ interface BriefDisplayProps {
   loading: boolean;
 }
 
-export function BriefDisplay({ brief, loading }: BriefDisplayProps) {
+export default function BriefDisplay({ brief, loading }: BriefDisplayProps) {
   const { t } = useLanguage();
 
   if (loading) {

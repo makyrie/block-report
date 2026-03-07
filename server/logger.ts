@@ -6,14 +6,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.join(__dirname, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'server.log');
 
-let dirEnsured = false;
+fs.mkdirSync(LOG_DIR, { recursive: true });
 
-function ensureDir() {
-  if (!dirEnsured) {
-    fs.mkdirSync(LOG_DIR, { recursive: true });
-    dirEnsured = true;
-  }
-}
+const logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
 
 type LogLevel = 'info' | 'warn' | 'error';
 
@@ -26,8 +21,7 @@ function write(level: LogLevel, message: string, extra?: Record<string, unknown>
   };
   const line = JSON.stringify(entry);
 
-  ensureDir();
-  fs.appendFileSync(LOG_FILE, line + '\n');
+  logStream.write(line + '\n');
 
   if (level === 'error') {
     console.error(line);

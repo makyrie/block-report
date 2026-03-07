@@ -1,11 +1,11 @@
-import { useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { CommunityAnchor } from '../../types';
+import type { CommunityAnchor, TransitStop } from '../../types';
 
 // ── Popup content components ─────────────────────────────────────────────────
 
@@ -107,13 +107,6 @@ function makePinIcon(color: string) {
 const blueIcon = makePinIcon('#3b82f6');
 const greenIcon = makePinIcon('#22c55e');
 
-interface TransitStop {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-}
-
 interface SanDiegoMapProps {
   libraries: CommunityAnchor[];
   recCenters: CommunityAnchor[];
@@ -152,7 +145,7 @@ function MapController({ feature }: { feature: Feature | null }) {
   return null;
 }
 
-export default function SanDiegoMap({
+function SanDiegoMap({
   libraries,
   recCenters,
   transitStops,
@@ -193,6 +186,7 @@ export default function SanDiegoMap({
     <MapContainer
       center={[32.7157, -117.1611]}
       zoom={11}
+      preferCanvas={true}
       style={{ width: '100%', height: '100%' }}
     >
       <TileLayer
@@ -263,3 +257,5 @@ export default function SanDiegoMap({
     </div>
   );
 }
+
+export default memo(SanDiegoMap);

@@ -26,7 +26,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
     });
-    res.status(500).json({ error: message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
