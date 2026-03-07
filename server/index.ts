@@ -7,6 +7,7 @@ import locationsRouter from './routes/locations.js';
 import metricsRouter from './routes/metrics.js';
 import demographicsRouter from './routes/demographics.js';
 import briefRouter from './routes/brief.js';
+import transitRouter from './routes/transit.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -45,6 +46,7 @@ app.use('/api/locations', locationsRouter);
 app.use('/api/311', metricsRouter);
 app.use('/api/demographics', demographicsRouter);
 app.use('/api/brief', briefRouter);
+app.use('/api/transit', transitRouter);
 
 app.listen(PORT, () => {
   logger.info(`Server running on http://localhost:${PORT}`);

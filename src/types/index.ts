@@ -27,6 +27,11 @@ export interface NeighborhoodProfile {
   transit: {
     nearbyStopCount: number;
     nearestStopDistance: number;
+    stopCount: number;
+    agencyCount: number;
+    agencies: string[];
+    transitScore: number;
+    cityAverage: number;
   };
   demographics: {
     topLanguages: { language: string; percentage: number }[];

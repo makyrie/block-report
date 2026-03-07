@@ -32,6 +32,10 @@ export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
   return fetchJSON(`${BASE}/locations/neighborhoods`);
 }
 
+export function getTransitScore(community: string): Promise<NeighborhoodProfile['transit']> {
+  return fetchJSON(`${BASE}/transit?community=${encodeURIComponent(community)}`);
+}
+
 export function get311(community: string): Promise<NeighborhoodProfile['metrics']> {
   return fetchJSON(`${BASE}/311?community=${encodeURIComponent(community)}`);
 }

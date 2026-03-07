@@ -13,6 +13,7 @@ interface SidebarProps {
   briefLoading: boolean;
   briefError: string | null;
   topLanguages?: { language: string; percentage: number }[];
+  transitScore?: NeighborhoodProfile['transit'] | null;
 }
 
 function LoadingSpinner({ label }: { label: string }) {
@@ -67,6 +68,7 @@ export default function Sidebar({
   briefLoading,
   briefError,
   topLanguages,
+  transitScore,
 }: SidebarProps) {
   const [showDetails, setShowDetails] = useState(false);
   const { t, briefLang, setBriefLang } = useLanguage();
@@ -156,9 +158,51 @@ export default function Sidebar({
                     <dd className="font-mono font-medium">{metrics.requestsPer1000Residents}</dd>
                   </div>
                 )}
+                {transitScore && transitScore.stopCount > 0 && (
+                  <>
+                    <div className="flex justify-between">
+                      <dt className="text-gray-500">Transit stops</dt>
+                      <dd className="font-mono font-medium">{transitScore.stopCount}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-gray-500">Transit score</dt>
+                      <dd className="font-mono font-medium">{transitScore.transitScore}/100</dd>
+                    </div>
+                  </>
+                )}
               </dl>
             )}
           </section>
+
+          {/* Transit accessibility */}
+          {transitScore && transitScore.stopCount > 0 && (
+            <section aria-labelledby="transit-heading" className="rounded-lg bg-indigo-50 border border-indigo-200 p-3">
+              <h2 id="transit-heading" className="text-sm font-medium text-indigo-800 mb-2">
+                Transit Access
+              </h2>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="text-2xl font-bold text-indigo-700">{transitScore.transitScore}</div>
+                <div className="text-xs text-indigo-600">
+                  <span className="block">/ 100</span>
+                  <span className="block">
+                    {transitScore.transitScore > transitScore.cityAverage
+                      ? 'Above city average'
+                      : transitScore.transitScore === transitScore.cityAverage
+                        ? 'At city average'
+                        : 'Below city average'}
+                    {' '}({transitScore.cityAverage})
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-indigo-700">
+                Your neighborhood has <span className="font-semibold">{transitScore.stopCount}</span> transit stop{transitScore.stopCount !== 1 ? 's' : ''} served
+                by <span className="font-semibold">{transitScore.agencyCount}</span> transit agenc{transitScore.agencyCount !== 1 ? 'ies' : 'y'}
+                {transitScore.agencies.length > 0 && (
+                  <> ({transitScore.agencies.join(', ')})</>
+                )}.
+              </p>
+            </section>
+          )}
 
           {/* Good news */}
           {metrics.goodNews.length > 0 && (
