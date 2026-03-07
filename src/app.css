@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Green-tinted marker for rec centers */
+.leaflet-marker-green {
+  filter: hue-rotate(120deg) saturate(1.5);
+}

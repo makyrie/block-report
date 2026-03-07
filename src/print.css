@@ -1,1 +1,20 @@
 /* Print-only styles — brief workstream */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .brief-content,
+  .brief-content * {
+    visibility: visible;
+  }
+  .brief-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 1rem;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
