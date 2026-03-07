@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { fetch311 } from '../services/soda.js';
+import { supabase } from '../services/supabase.js';
 
 const router = Router();
 
@@ -10,70 +10,68 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  try {
-    const rows = await fetch311(community);
+  const { data, error } = await supabase
+    .from('requests_311')
+    .select('*')
+    .ilike('comm_plan_name', community);
 
-    const totalRequests311 = rows.length;
-
-    // Identify closed/resolved rows
-    const closedRows = rows.filter(
-      (row) => (row.status || '').toLowerCase() === 'closed'
-    );
-    const resolvedCount = closedRows.length;
-    const resolutionRate =
-      totalRequests311 > 0
-        ? Math.round((resolvedCount / totalRequests311) * 1000) / 1000
-        : 0;
-
-    // Average days to resolve for closed cases
-    let avgDaysToResolve = 0;
-    if (closedRows.length > 0) {
-      const totalDays = closedRows.reduce((sum, row) => {
-        const days = Number(row.case_age_days) || 0;
-        return sum + days;
-      }, 0);
-      avgDaysToResolve = Math.round((totalDays / closedRows.length) * 10) / 10;
-    }
-
-    // Top issues: group by service_name, count, sort desc, top 5
-    const issueCounts: Record<string, number> = {};
-    for (const row of rows) {
-      const category = row.service_name || 'Unknown';
-      issueCounts[category] = (issueCounts[category] || 0) + 1;
-    }
-    const topIssues = Object.entries(issueCounts)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    // Recently resolved: last 5 closed items sorted by date_closed desc
-    const recentlyResolved = closedRows
-      .filter((row) => row.date_closed)
-      .sort((a, b) => {
-        const dateA = new Date(a.date_closed || '').getTime() || 0;
-        const dateB = new Date(b.date_closed || '').getTime() || 0;
-        return dateB - dateA;
-      })
-      .slice(0, 5)
-      .map((row) => ({
-        category: row.service_name || 'Unknown',
-        date: row.date_closed || '',
-      }));
-
-    const metrics = {
-      totalRequests311,
-      resolvedCount,
-      resolutionRate,
-      avgDaysToResolve,
-      topIssues,
-      recentlyResolved,
-    };
-
-    res.json(metrics);
-  } catch (error) {
-    console.error('Error fetching 311 metrics:', error);
-    res.status(500).json({ error: 'Failed to fetch 311 data' });
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
   }
+
+  const total = data.length;
+  const resolved = data.filter(
+    (r) => r.status === 'Closed' || r.date_closed
+  );
+  const resolvedCount = resolved.length;
+  const resolutionRate = total > 0 ? resolvedCount / total : 0;
+
+  const daysToResolve = resolved
+    .filter((r) => r.date_requested && r.date_closed)
+    .map((r) => {
+      const requested = new Date(r.date_requested).getTime();
+      const closed = new Date(r.date_closed).getTime();
+      return (closed - requested) / (1000 * 60 * 60 * 24);
+    })
+    .filter((d) => d >= 0);
+  const avgDaysToResolve =
+    daysToResolve.length > 0
+      ? daysToResolve.reduce((a, b) => a + b, 0) / daysToResolve.length
+      : 0;
+
+  // Top issues by service_name
+  const issueCounts: Record<string, number> = {};
+  for (const r of data) {
+    const cat = r.service_name || 'Unknown';
+    issueCounts[cat] = (issueCounts[cat] || 0) + 1;
+  }
+  const topIssues = Object.entries(issueCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([category, count]) => ({ category, count }));
+
+  // Recently resolved (last 5)
+  const recentlyResolved = resolved
+    .filter((r) => r.date_closed)
+    .sort(
+      (a, b) =>
+        new Date(b.date_closed).getTime() - new Date(a.date_closed).getTime()
+    )
+    .slice(0, 5)
+    .map((r) => ({
+      category: r.service_name || 'Unknown',
+      date: r.date_closed,
+    }));
+
+  res.json({
+    totalRequests311: total,
+    resolvedCount,
+    resolutionRate,
+    avgDaysToResolve: Math.round(avgDaysToResolve * 10) / 10,
+    topIssues,
+    recentlyResolved,
+  });
 });
 
 export default router;

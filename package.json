@@ -5,9 +5,13 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
-    "dev:server": "tsx watch server/index.ts",
+    "dev:server": "node --env-file=.env --import=tsx --watch server/index.ts",
     "dev:all": "concurrently \"pnpm dev\" \"pnpm dev:server\"",
-    "build": "vite build"
+    "build": "vite build",
+    "db:start": "npx supabase start",
+    "db:stop": "npx supabase stop",
+    "db:reset": "npx supabase db reset",
+    "db:seed": "node --env-file=.env --import=tsx scripts/seed.ts"
   },
   "keywords": [],
   "author": "",
@@ -15,7 +19,9 @@
   "packageManager": "pnpm@10.20.0",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@supabase/supabase-js": "^2.98.0",
     "cors": "^2.8.6",
+    "csv-parse": "^6.1.0",
     "express": "^5.2.1",
     "leaflet": "^1.9.4",
     "react": "^19.2.4",

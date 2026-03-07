@@ -1,36 +1,33 @@
 import { Router } from 'express';
-import { fetchLibraries, fetchRecCenters, fetchTransitStops } from '../services/soda.js';
+import { supabase } from '../services/supabase.js';
 
 const router = Router();
 
 router.get('/libraries', async (_req, res) => {
-  try {
-    const libraries = await fetchLibraries();
-    res.json(libraries);
-  } catch (error) {
-    console.error('Error fetching libraries:', error);
-    res.status(500).json({ error: 'Failed to fetch library data' });
+  const { data, error } = await supabase.from('libraries').select('*');
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
   }
+  res.json(data);
 });
 
 router.get('/rec-centers', async (_req, res) => {
-  try {
-    const centers = await fetchRecCenters();
-    res.json(centers);
-  } catch (error) {
-    console.error('Error fetching rec centers:', error);
-    res.status(500).json({ error: 'Failed to fetch recreation center data' });
+  const { data, error } = await supabase.from('rec_centers').select('*');
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
   }
+  res.json(data);
 });
 
 router.get('/transit-stops', async (_req, res) => {
-  try {
-    const stops = await fetchTransitStops();
-    res.json(stops);
-  } catch (error) {
-    console.error('Error fetching transit stops:', error);
-    res.status(500).json({ error: 'Failed to fetch transit stop data' });
+  const { data, error } = await supabase.from('transit_stops').select('*');
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
   }
+  res.json(data);
 });
 
 export default router;

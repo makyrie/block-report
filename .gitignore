@@ -24,9 +24,8 @@ Thumbs.db
 .claude/settings.local.json
 .claude/todos.local.json
 
-# Server cache
-server/cache/
-!server/cache/.gitkeep
+# Supabase local
+supabase/.temp/
 
 # Vite
 *.local
