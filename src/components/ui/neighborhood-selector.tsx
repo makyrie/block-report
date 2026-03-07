@@ -1,4 +1,4 @@
-const COMMUNITIES = [
+export const COMMUNITIES = [
   'Balboa Park',
   'Barrio Logan',
   'Bay Ho',
