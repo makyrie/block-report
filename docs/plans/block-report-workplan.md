@@ -3,9 +3,9 @@
 
 ## The Pitch (60 seconds)
 
-Every San Diego neighborhood has a library or rec center. But not every neighborhood knows what city services are available, how to participate, or what's already being done. Block Report turns each community anchor into a civic intelligence hub — staff or volunteers can generate a printed brief, in the right language, showing what's happening in their neighborhood, what services are available, and how to get involved.
+San Diego publishes powerful open data — but the neighborhoods that most need it are the least likely to find it on a data portal. Block Report lets anyone enter an address or pick a neighborhood and instantly see what's happening: what residents are reporting, how fast the city responds, what languages the community speaks, and what civic resources are nearby. Then it generates a printable, multilingual community brief — designed to be posted at a library, rec center, laundromat, or anywhere neighbors gather.
 
-We built it because the neighborhoods that most need this information are the ones least likely to find it on a data portal.
+It's not a dashboard for data nerds. It's a tool for community self-advocacy.
 
 ---
 
@@ -27,55 +27,55 @@ Everyone should be in the same repo from the start. Agree on interfaces early (w
 
 ### 11:00–11:30 — Setup & Alignment (all together, 30 min)
 
-- [x] Create repo, set up Vite + React + TypeScript + Tailwind + Leaflet
-- [x] Agree on project structure and file layout
-- [x] Agree on data interfaces (see "Key Interfaces" below)
-- [x] Person A: Census API key registered and added to .env.example
-- [x] Confirm Anthropic API credits are working
-- [x] Each person pulls the repo and confirms they can run `npm run dev`
+- [ ] Create repo, set up Vite + React + TypeScript + Tailwind + Leaflet
+- [ ] Agree on project structure and file layout
+- [ ] Agree on data interfaces (see "Key Interfaces" below)
+- [ ] Person A: register for Census API key now: https://api.census.gov/data/key_signup.html (instant)
+- [ ] Confirm Anthropic API credits are working
+- [ ] Each person pulls the repo and confirms they can run `npm run dev`
 
 ### 11:30–1:30 — Parallel Build, Phase 1 (2 hours)
 
 **Person A — Backend & Data Pipeline:**
-- [x] Set up Express server (`server/index.ts`) with CORS and JSON middleware
-- [x] ~~Implement file-based cache utility (`server/cache.ts`)~~ — Replaced by local Supabase DB + seed script (`scripts/seed.ts`)
-- [x] ~~Build SODA API service (`server/services/soda.ts`)~~ — Replaced by Supabase queries (`server/services/supabase.ts`)
-- [x] Implement `/api/locations/libraries` and `/api/locations/rec-centers` endpoints
-- [x] Implement `/api/311?community={name}` — fetch and aggregate 311 data per community: request count, resolution rate, avg days to close, top problem types
-- [x] Implement `/api/locations/transit-stops` endpoint
-- [x] Configure Vite proxy: `'/api' → 'http://localhost:3001'`
-- [x] Add `dev:all` script using `concurrently` to run frontend + backend
+- [ ] Set up Express server (`server/index.ts`) with CORS and JSON middleware
+- [ ] Implement file-based cache utility (`server/cache.ts`) — 24h TTL, keyed by URL hash
+- [ ] Build SODA API service (`server/services/soda.ts`) with caching
+- [ ] Implement `/api/locations/libraries` and `/api/locations/rec-centers` endpoints
+- [ ] Implement `/api/311?community={name}` — fetch and aggregate 311 data per community: request count, resolution rate, avg days to close, top problem types
+- [ ] Implement `/api/locations/transit-stops` endpoint
+- [ ] Configure Vite proxy: `'/api' → 'http://localhost:3001'`
+- [ ] Add `dev:all` script using `concurrently` to run frontend + backend
 
 **Person B — Map & Frontend:**
-- [x] Build frontend API client (`src/api/client.ts`) — thin fetch wrapper for `/api/*` routes
-- [x] Set up Leaflet map centered on San Diego (32.7157, -117.1611)
-- [x] Add library locations as markers (blue default markers)
-- [x] Add rec center locations as markers (green-tinted markers)
-- [x] Add transit stop layer (small gray circles)
-- [x] Build sidebar/panel UI shell: location name, neighborhood metrics, brief display
-- [x] Neighborhood selector dropdown → call `/api/311?community={name}` → populate panel (uses dropdown instead of marker click)
-- [ ] Community boundary overlay if available (nice to have, not blocking)
+- [ ] Build frontend API client (`src/api/client.ts`) — thin fetch wrapper for `/api/*` routes
+- [ ] Set up Leaflet map centered on San Diego (32.7157, -117.1611)
+- [ ] Build address/neighborhood search input as the primary entry point (geocode to lat/lng → determine community)
+- [ ] On neighborhood selection: show boundary on map, populate sidebar with metrics
+- [ ] Build sidebar/panel UI shell: neighborhood name, metrics placeholder, brief placeholder
+- [ ] Add library + rec center markers as a secondary "nearby resources" layer
+- [ ] Add transit stop layer (small dots or heatmap — keep it lightweight)
+- [ ] Community boundary overlay for selected neighborhood
 
 **Person C — Brief Generator:**
-- [x] Build Claude service (`server/services/claude.ts`) using Anthropic SDK
-- [x] Implement `/api/brief/generate` POST endpoint (`server/routes/brief.ts`)
-- [x] Design the brief prompt template (see "Brief Template" below)
-- [x] Build the printable brief component with CSS `@media print` styling
-- [x] Design the print layout: header, neighborhood name, key stats, good news section, "how to participate" section (QR code not yet added)
+- [ ] Build Claude service (`server/services/claude.ts`) using Anthropic SDK
+- [ ] Implement `/api/brief/generate` POST endpoint (`server/routes/brief.ts`)
+- [ ] Design the brief prompt template (see "Brief Template" below)
+- [ ] Build the printable brief component with CSS `@media print` styling
+- [ ] Design the print layout: header, neighborhood name, key stats, good news section, "how to participate" section, QR code to full app
 
 ### 1:30–2:00 — Lunch + Integration Check
 
-- [x] Merge branches, resolve conflicts
-- [x] Person A's data → Person B's map: do markers load? Does clicking populate data?
-- [x] Person A's data → Person C's brief: does the generator receive the right shape?
-- [x] Identify what's broken and prioritize fixes
+- [ ] Merge branches, resolve conflicts
+- [ ] Person A's data → Person B's map: do markers load? Does clicking populate data?
+- [ ] Person A's data → Person C's brief: does the generator receive the right shape?
+- [ ] Identify what's broken and prioritize fixes
 
 ### 2:00–4:00 — Phase 2: Polish & Features (2 hours)
 
 **Person A:**
-- [x] ~~Implement Census API service (`server/services/census.ts`)~~ — Census data seeded into Supabase `census_language` table
-- [x] Implement `/api/demographics?tract={id}` endpoint — ACS language data by tract
-  - Table C16001: Language spoken at home (B16001 is discontinued)
+- [ ] Implement Census API service (`server/services/census.ts`) with caching
+- [ ] Implement `/api/demographics?tract={id}` endpoint — ACS language data by tract
+  - Table B16001: Language spoken at home
   - Join to neighborhoods via tract-to-community mapping
 - [ ] Compute "access gap" signals: low 311 rate + low transit density + high non-English speaking population
 - [ ] Expose gap scores through an endpoint or as part of the 311 response
@@ -83,24 +83,14 @@ Everyone should be in the same repo from the start. Agree on interfaces early (w
 **Person B:**
 - [ ] Add choropleth or heatmap layer showing access gap score by neighborhood
 - [ ] Add language selector dropdown (populated from Census data for selected area)
-- [x] Polish the UI: loading states, error handling, mobile-responsive basics
-- [x] Add "Generate Brief" button that triggers Person C's module
+- [ ] Polish the UI: loading states, error handling, mobile-responsive basics
+- [ ] Add "Generate Brief" button that triggers Person C's module
 
 **Person C:**
-- [x] Add multilingual brief generation (backend accepts language param; frontend hardcodes `'English'` — needs UI language selector from Person B)
-- [x] Add "good news" section to brief: recently resolved 311 issues included in prompt and display
-- [x] Add "how to get involved" section with concrete next steps (council district contact, 311 info)
+- [ ] Add multilingual brief generation (pass selected language to Claude prompt)
+- [ ] Add "good news" section to brief: recently resolved 311 issues, new permits (if time)
+- [ ] Add "how to get involved" section with concrete next steps (council district contact, 311 info, upcoming meetings)
 - [ ] If time: start MCP server wrapping SODA API (see stretch goals)
-
-### Known Gaps — Data not wired end-to-end
-
-These are things where the backend capability exists but the data doesn't flow through to the brief or UI:
-
-- [ ] **Transit proximity not computed**: `App.tsx` sends `transit: { nearbyStopCount: 0, nearestStopDistance: 0 }` to the brief. Transit stops are loaded on the map but never aggregated per community. Need to compute nearby stop count from transit stop lat/lng vs community anchor lat/lng.
-- [ ] **Demographics not wired into brief**: `App.tsx` sends `demographics: { topLanguages: [] }` to the brief. The `/api/demographics?tract={id}` endpoint works but requires a Census tract ID — there is no tract-to-neighborhood mapping, so the frontend never calls it.
-- [ ] **Library community field missing**: Libraries from the API have no `community`/`neighborhd` field. Clicking a library marker calls `handleAnchorClick` which reads `anchor.community`, but this is empty. Need either a hardcoded mapping or nearest-neighbor lookup against rec centers.
-- [ ] **Language selector in UI**: Backend accepts any language, but frontend hardcodes `'English'` (`App.tsx:98`). Need a dropdown in the sidebar (even a simple static list: English, Spanish, Chinese, Vietnamese, Tagalog).
-- [ ] **Council district not populated**: The brief's `contactInfo.councilDistrict` is generated by Claude from profile data, but 311 records have `council_district` — this could be extracted and passed through in the metrics response.
 
 ### 4:00–4:30 — Demo Prep (30 min)
 
@@ -120,22 +110,15 @@ These are things where the backend capability exists but the data doesn't flow t
 
 ## Key Data Sources
 
-SD open data is **static files on seshat.datasd.org** — NOT a live Socrata/SODA API. No query params, download full files and filter in code.
-
-| Dataset | Download URL | Format | Key Fields |
-|---------|-------------|--------|------------|
-| Get It Done (311) open | `seshat.datasd.org/get_it_done_reports/get_it_done_requests_open_datasd.csv` | CSV | date_requested, service_name, status, lat, lng, comm_plan_name |
-| Get It Done (311) closed | `seshat.datasd.org/get_it_done_reports/get_it_done_requests_closed_{year}_datasd.csv` | CSV | same + date_closed |
-| Library Locations | `seshat.datasd.org/gis_library_locations/libraries_datasd.csv` | CSV, GeoJSON | name, address, lat, lng, phone, website (NO community field) |
-| Recreation Centers | `seshat.datasd.org/gis_recreation_center/rec_centers_datasd.csv` | CSV, GeoJSON | rec_bldg, address, neighborhd (ALL CAPS), lat, lng, facility flags |
-| Transit Stops | `seshat.datasd.org/gis_transit_stops/transit_stops_datasd.csv` | CSV, GeoJSON | stop_name, stop_lat, stop_lon, stop_agncy, lat, lng |
-| Census ACS Language | `api.census.gov/data/2021/acs/acs5` | JSON API | **C16001** table (B16001 is dead). C16001_001E=total, _002E=English, _003E=Spanish, etc. |
+| Dataset | Portal URL | Format | Key Fields |
+|---------|-----------|--------|------------|
+| Get It Done (311) | data.sandiego.gov/datasets/get-it-done-311/ | CSV, API | date, problem_category, lat/lng, status, date_closed |
+| Library Locations | data.sandiego.gov/datasets/library-locations/ | GeoJSON, CSV | name, address, lat/lng, website, phone |
+| Recreation Centers | data.sandiego.gov/datasets/recreation-center-locations/ | GeoJSON, CSV | name, address, community, facilities |
+| Transit Routes | data.sandiego.gov/datasets/transit-routes/ | GeoJSON | route_name, route_type, geometry |
+| Transit Stops (SANDAG) | sdgis-sandag.opendata.arcgis.com | GeoJSON | stop coordinates |
+| Census ACS Language | api.census.gov/data/2022/acs/acs5 | JSON API | B16001 table (language spoken at home by tract) |
 | Permits (stretch) | data.sandiego.gov/datasets/ (search for permits) | CSV | type, date, location, status |
-
-**Important notes:**
-- 311 `comm_plan_name` has mixed case ("Mira Mesa" and "MIRA MESA") — normalize!
-- Libraries have no neighborhood field — infer from lat/lng proximity to rec centers or hardcode
-- Primary test community: **Mira Mesa**
 
 ---
 
@@ -144,23 +127,11 @@ SD open data is **static files on seshat.datasd.org** — NOT a live Socrata/SOD
 Agree on these shapes early so you can work in parallel.
 
 ```typescript
-// Person A produces this, Person B consumes it for the map
-interface CommunityAnchor {
-  id: string;
-  name: string;
-  type: 'library' | 'rec_center';
-  lat: number;
-  lng: number;
-  address: string;
-  phone?: string;
-  website?: string;
-  community: string; // neighborhood name
-}
-
-// Person A produces this, Person B displays it, Person C uses it for briefs
+// The primary object — what the user sees when they search a neighborhood
+// Person A produces this via backend, Person B displays it, Person C uses it for briefs
 interface NeighborhoodProfile {
   communityName: string;
-  anchor: CommunityAnchor;
+  center: { lat: number; lng: number }; // geographic center of the community
   metrics: {
     totalRequests311: number;
     resolvedCount: number;
@@ -170,13 +141,26 @@ interface NeighborhoodProfile {
     recentlyResolved: { category: string; date: string }[]; // good news
   };
   transit: {
-    nearbyStopCount: number;  // within 0.5 mile radius
-    nearestStopDistance: number; // miles
+    nearbyStopCount: number;  // within community boundary
+    routeCount: number;       // unique routes serving the area
   };
   demographics: {
     topLanguages: { language: string; percentage: number }[];
   };
+  nearbyResources: CivicResource[]; // libraries, rec centers, etc.
   accessGapScore?: number; // computed composite, 0-100
+}
+
+// Secondary — nearby civic resources shown on the map and linked in briefs
+interface CivicResource {
+  id: string;
+  name: string;
+  type: 'library' | 'rec_center';
+  lat: number;
+  lng: number;
+  address: string;
+  phone?: string;
+  website?: string;
 }
 
 // Person C produces this from NeighborhoodProfile
@@ -188,10 +172,10 @@ interface CommunityBrief {
   goodNews: string[];     // positive developments
   topIssues: string[];    // what the community is reporting
   howToParticipate: string[]; // concrete next steps
+  nearbyResources: { name: string; address: string; type: string }[];
   contactInfo: {
     councilDistrict: string;
     phone311: string;
-    anchorLocation: string; // the library/rec center
   };
 }
 ```
@@ -201,9 +185,9 @@ interface CommunityBrief {
 ## Brief Prompt Template (Person C)
 
 ```
-You are generating a community brief for residents near {anchorName} in the
-{communityName} neighborhood of San Diego. The brief will be printed and posted
-at {anchorName} for community members to read.
+You are generating a community brief for the {communityName} neighborhood of
+San Diego. The brief will be printed and posted in the community — at a library,
+rec center, laundromat, or wherever neighbors gather.
 
 Write in {language}. Use clear, warm, accessible language at a 6th-grade reading
 level. Avoid jargon.
@@ -212,8 +196,7 @@ Here is the data for this neighborhood:
 {neighborhoodProfile as JSON}
 
 Generate a brief with these sections:
-1. **Welcome** — A 2-sentence greeting that names the neighborhood and the
-   anchor location.
+1. **Welcome** — A 2-sentence greeting that names the neighborhood.
 2. **Good News** — 2-3 positive things happening based on the data (resolved
    issues, investments, improvements).
 3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311,
@@ -222,7 +205,9 @@ Generate a brief with these sections:
 4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report,
    how to attend council meetings, how to contact their council representative,
    where to find more info.
-5. **Transit Info** — How to get to {anchorName} by public transit if applicable.
+5. **Nearby Resources** — List the closest libraries and rec centers with
+   addresses, if available in the data.
+6. **Transit Info** — How many transit stops and routes serve the area.
 
 Keep the total brief under 400 words. It should fit on one printed page.
 ```
@@ -247,13 +232,12 @@ comment, and service utilization. The data shows the gap — but nobody is
 turning that data into action at the neighborhood level.
 
 ## What It Does
-Block Report is a civic intelligence tool centered on San Diego's libraries
-and recreation centers — the physical anchors of community life. It aggregates
-311 data, transit access, and demographic information to generate a
-neighborhood profile, then produces a printable, multilingual community brief
-designed to be posted at these locations. The brief tells residents what's
-happening, what services are available, and how to participate — in the
-language they speak.
+Block Report lets anyone enter an address or pick a San Diego neighborhood and
+instantly see a civic profile: what residents are reporting via 311, how fast the
+city responds, what languages the community speaks, and what resources are
+nearby. It then generates a printable, multilingual community brief designed to
+be posted at a library, rec center, laundromat, or anywhere neighbors gather —
+turning open data into a tool for community self-advocacy.
 
 ## Data Sources
 - Get It Done (311) reports — data.sandiego.gov
@@ -304,9 +288,9 @@ npm run dev
 ## Presentation Tips
 
 **For the judging rubric:**
-- **Civic Impact (5pts):** Lead with the problem and the specific audience. "This is for library staff in Barrio Logan who want to help their neighbors navigate city services." Name a real neighborhood.
+- **Civic Impact (5pts):** Lead with the problem and the specific audience. "This is for anyone in Barrio Logan who wants to know what's happening in their neighborhood and how to get involved — in their language." Name a real neighborhood.
 - **Use of City Data (5pts):** Explicitly name every dataset you joined. The rubric rewards creative combinations. "We joined 311 data with transit stop density and Census language data to identify access gaps."
-- **Technical Execution (5pts):** Demo a complete flow: pick a library → see the profile → generate a brief → show the print layout. One clean path through the app beats showing five half-working features.
+- **Technical Execution (5pts):** Demo a complete flow: search a neighborhood → see the profile → generate a brief → show the print layout. One clean path through the app beats showing five half-working features.
 - **Presentation & Story (5pts):** End with the printable brief. Hold it up (or show it on screen). That physical artifact makes the impact tangible in a way a dashboard doesn't.
 
 **The emotional hook:**
