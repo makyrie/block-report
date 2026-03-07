@@ -65,27 +65,47 @@ IMPORTANT: Respond ONLY with valid JSON matching this exact structure:
       throw new Error('No text content in Claude response');
     }
 
-    const parsed = JSON.parse(textBlock.text) as Omit<CommunityBrief, 'generatedAt'>;
+    let text = textBlock.text.trim();
+    const fenceMatch = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+    if (fenceMatch) {
+      text = fenceMatch[1].trim();
+    }
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      logger.error('Failed to parse JSON from Claude response', {
+        error: 'Response was not valid JSON',
+        responsePreview: text.slice(0, 200),
+        community: profile.communityName,
+      });
+      throw new Error('The AI response was not valid JSON. Please try again.');
+    }
+
+    const missing = ['neighborhoodName', 'summary', 'goodNews', 'topIssues', 'howToParticipate', 'contactInfo']
+      .filter((key) => !(key in parsed));
+    if (missing.length > 0) {
+      logger.error('Claude response missing required fields', {
+        missing,
+        community: profile.communityName,
+      });
+      throw new Error(`Brief is missing required fields: ${missing.join(', ')}. Please try again.`);
+    }
 
     const brief: CommunityBrief = {
-      ...parsed,
+      ...(parsed as Omit<CommunityBrief, 'generatedAt'>),
       generatedAt: new Date().toISOString(),
     };
 
     return brief;
   } catch (error) {
-    if (error instanceof SyntaxError) {
-      logger.error('Failed to parse JSON from Claude response', {
-        error: error.message,
+    if (!(error instanceof Error) || !error.message.startsWith('The AI response') && !error.message.startsWith('Brief is missing')) {
+      logger.error('Claude API call failed', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
         community: profile.communityName,
       });
-      throw new Error('Failed to parse JSON from Claude response');
     }
-    logger.error('Claude API call failed', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      community: profile.communityName,
-    });
     throw error;
   }
 }

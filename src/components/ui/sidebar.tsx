@@ -8,6 +8,7 @@ interface SidebarProps {
   onGenerateBrief: () => void;
   brief: CommunityBrief | null;
   briefLoading: boolean;
+  briefError: string | null;
 }
 
 function LoadingSpinner() {
@@ -25,6 +26,7 @@ export default function Sidebar({
   onGenerateBrief,
   brief,
   briefLoading,
+  briefError,
 }: SidebarProps) {
   if (!community) {
     return (
@@ -111,6 +113,12 @@ export default function Sidebar({
             {briefLoading ? 'Generating...' : 'Generate Brief'}
           </button>
         </>
+      )}
+
+      {briefError && (
+        <div className="rounded bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          {briefError}
+        </div>
       )}
 
       <BriefDisplay brief={brief} loading={briefLoading} />

@@ -25,6 +25,7 @@ function App() {
 
   const [brief, setBrief] = useState<CommunityBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
+  const [briefError, setBriefError] = useState<string | null>(null);
 
   // Fetch map data on mount
   useEffect(() => {
@@ -94,11 +95,13 @@ function App() {
     };
 
     setBriefLoading(true);
+    setBriefError(null);
     try {
       const result = await generateBrief(profile, 'English');
       setBrief(result);
     } catch (err) {
-      console.error('Failed to generate brief:', err);
+      const message = err instanceof Error ? err.message : 'Failed to generate brief';
+      setBriefError(message);
     } finally {
       setBriefLoading(false);
     }
@@ -123,6 +126,7 @@ function App() {
             onGenerateBrief={handleGenerateBrief}
             brief={brief}
             briefLoading={briefLoading}
+            briefError={briefError}
           />
         </div>
       </aside>
