@@ -64,7 +64,7 @@ router.get('/', async (req, res) => {
         logger.error('Failed to fetch demographics', { error: error.message, tract });
       }
       res.status(status).json({
-        error: error.code === 'PGRST116' ? 'Tract not found' : error.message,
+        error: error.code === 'PGRST116' ? 'Tract not found' : 'Internal server error',
       });
       return;
     }
@@ -73,16 +73,23 @@ router.get('/', async (req, res) => {
     return;
   }
 
+  // Strip SQL wildcards and enforce length
+  const cleaned = community!.replace(/[%_]/g, '');
+  if (cleaned.length > 100 || cleaned.length === 0) {
+    res.status(400).json({ error: 'Invalid community name' });
+    return;
+  }
+
   // Community-based lookup: find all tracts for this community
   // Try matching community name in the census data
   const { data, error } = await supabase
     .from('census_language')
     .select('*')
-    .ilike('community', community!);
+    .ilike('community', cleaned);
 
   if (error) {
     logger.error('Failed to fetch demographics by community', { error: error.message, community });
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
     return;
   }
 

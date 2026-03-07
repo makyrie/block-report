@@ -8,14 +8,14 @@ const router = Router();
 const NEIGHBORHOODS_URL =
   'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson';
 const NEIGHBORHOODS_TTL = 24 * 60 * 60 * 1000;
-let neighborhoodsCache: unknown = null;
+let neighborhoodsCache: Record<string, unknown> | null = null;
 let neighborhoodsCachedAt = 0;
 
 router.get('/libraries', async (_req, res) => {
   const { data, error } = await supabase.from('libraries').select('*');
   if (error) {
     logger.error('Failed to fetch libraries', { error: error.message });
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
     return;
   }
   res.json(data);
@@ -25,17 +25,17 @@ router.get('/rec-centers', async (_req, res) => {
   const { data, error } = await supabase.from('rec_centers').select('*');
   if (error) {
     logger.error('Failed to fetch rec centers', { error: error.message });
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
     return;
   }
   res.json(data);
 });
 
 router.get('/transit-stops', async (_req, res) => {
-  const { data, error } = await supabase.from('transit_stops').select('*');
+  const { data, error } = await supabase.from('transit_stops').select('objectid, stop_name, lat, lng');
   if (error) {
     logger.error('Failed to fetch transit stops', { error: error.message });
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
     return;
   }
   res.json(data);
@@ -55,7 +55,8 @@ router.get('/neighborhoods', async (_req, res) => {
     neighborhoodsCachedAt = now;
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    logger.error('Failed to fetch neighborhoods', { error: (err as Error).message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

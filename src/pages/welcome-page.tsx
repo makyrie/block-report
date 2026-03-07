@@ -22,7 +22,7 @@ export default function WelcomePage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 flex flex-col" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+    <div className="h-full overflow-y-auto bg-gray-50 flex flex-col">
       <main id="main-content" className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
 
         {/* Language selector — visible within first 3 seconds */}

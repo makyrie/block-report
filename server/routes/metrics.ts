@@ -11,14 +11,21 @@ router.get('/', async (req, res) => {
     return;
   }
 
+  // Strip SQL wildcards and enforce length
+  const cleaned = community.replace(/[%_]/g, '');
+  if (cleaned.length > 100 || cleaned.length === 0) {
+    res.status(400).json({ error: 'Invalid community name' });
+    return;
+  }
+
   const { data, error } = await supabase
     .from('requests_311')
-    .select('*')
-    .ilike('comm_plan_name', community);
+    .select('service_name, status, date_requested, date_closed, case_age_days')
+    .ilike('comm_plan_name', cleaned);
 
   if (error) {
     logger.error('Failed to fetch 311 data', { error: error.message, community });
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
     return;
   }
 

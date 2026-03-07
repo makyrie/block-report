@@ -5,20 +5,36 @@ import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, CommunityBrief } from '../../src/types/index.js';
 
+let _client: Anthropic | null = null;
 function getClient(): Anthropic {
+  if (_client) return _client;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error(
       'ANTHROPIC_API_KEY is not set. Add it to your .env file.',
     );
   }
-  return new Anthropic({ apiKey });
+  _client = new Anthropic({ apiKey });
+  return _client;
 }
 
 export async function generateBrief(
   profile: NeighborhoodProfile,
   language: string,
 ): Promise<CommunityBrief> {
+  // Validate communityName to prevent prompt injection
+  if (
+    typeof profile.communityName !== 'string' ||
+    profile.communityName.trim().length === 0
+  ) {
+    throw new Error('communityName must be a non-empty string');
+  }
+  if (profile.communityName.length > 100) {
+    throw new Error('communityName must be 100 characters or fewer');
+  }
+  // Strip newlines and control characters
+  profile.communityName = profile.communityName.replace(/[\x00-\x1f\x7f]/g, '');
+
   const client = getClient();
 
   const prompt = `You are generating a community brief for the ${profile.communityName} neighborhood of San Diego. The brief will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.

@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type { CommunityAnchor, CommunityBrief, NeighborhoodProfile } from '../types';
+import type { CommunityAnchor, CommunityBrief, NeighborhoodProfile, TransitStop } from '../types';
 
 const BASE = '/api';
 
@@ -24,7 +24,7 @@ export function getRecCenters(): Promise<CommunityAnchor[]> {
   return fetchJSON(`${BASE}/locations/rec-centers`);
 }
 
-export function getTransitStops(): Promise<unknown[]> {
+export function getTransitStops(): Promise<TransitStop[]> {
   return fetchJSON(`${BASE}/locations/transit-stops`);
 }
 

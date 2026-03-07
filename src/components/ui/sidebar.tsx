@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { NeighborhoodProfile, CommunityBrief } from '../../types';
-import { BriefDisplay } from '../brief/brief-display';
+import BriefDisplay from '../brief/brief-display';
 import { useLanguage } from '../../i18n/context';
 import { SUPPORTED_LANGUAGES, DEMOGRAPHICS_TO_LANG } from '../../i18n/translations';
 
@@ -106,11 +106,9 @@ export default function Sidebar({
         <>
           {/* Narrative summary */}
           <section aria-labelledby="summary-heading">
-            <h3 id="summary-heading" className="sr-only">Neighborhood summary</h3>
+            <h3 id="summary-heading" className="sr-only">{t('sidebar.neighborhoodSummary')}</h3>
             <p className="text-sm text-gray-700 mb-3">
-              Neighbors filed{' '}
-              <strong>{metrics.totalRequests311.toLocaleString()} service requests</strong>{' '}
-              in the past year.
+              {t('sidebar.requestsSummary', { count: metrics.totalRequests311.toLocaleString() })}
             </p>
             <div className="flex flex-wrap gap-2">
               {resolutionBadge(metrics.resolutionRate)}
@@ -124,7 +122,7 @@ export default function Sidebar({
               aria-expanded={showDetails}
               className="mt-2 text-xs text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
             >
-              {showDetails ? 'Hide details' : 'Show data details'}
+              {showDetails ? t('sidebar.hideDetails') : t('sidebar.showDetails')}
             </button>
 
             {showDetails && (
