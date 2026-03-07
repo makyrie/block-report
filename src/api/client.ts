@@ -36,8 +36,8 @@ export function get311(community: string): Promise<NeighborhoodProfile['metrics'
   return fetchJSON(`${BASE}/311?community=${encodeURIComponent(community)}`);
 }
 
-export function getDemographics(tract: string): Promise<NeighborhoodProfile['demographics']> {
-  return fetchJSON(`${BASE}/demographics?tract=${encodeURIComponent(tract)}`);
+export function getDemographics(tractOrCommunity: string): Promise<NeighborhoodProfile['demographics']> {
+  return fetchJSON(`${BASE}/demographics?community=${encodeURIComponent(tractOrCommunity)}`);
 }
 
 export function generateBrief(profile: NeighborhoodProfile, language: string): Promise<CommunityBrief> {

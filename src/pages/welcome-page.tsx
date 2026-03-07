@@ -2,61 +2,68 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { COMMUNITIES } from '../components/ui/neighborhood-selector';
 import { toSlug } from '../utils/slug';
+import { useLanguage } from '../i18n/context';
+import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 
 const QUESTION_TILES = [
-  {
-    icon: '📋',
-    question: 'What are people reporting near me?',
-    description: 'See the top 311 service requests in your neighborhood — from potholes to graffiti.',
-    sample: 'Mira Mesa',
-  },
-  {
-    icon: '⏱️',
-    question: 'How fast does the city respond?',
-    description: 'Find out the average days to resolve issues and the resolution rate in your area.',
-    sample: 'North Park',
-  },
-  {
-    icon: '🏛️',
-    question: 'What resources are nearby?',
-    description: 'Discover libraries, rec centers, and transit stops close to your neighborhood.',
-    sample: 'City Heights',
-  },
-  {
-    icon: '🖨️',
-    question: 'Get a printable community brief',
-    description: 'Generate a one-page brief in plain language — ready to post at a library or laundromat.',
-    sample: 'Barrio Logan',
-  },
+  { icon: '\ud83d\udccb', qKey: 'tile.q1', descKey: 'tile.q1desc', sample: 'Mira Mesa' },
+  { icon: '\u23f1\ufe0f', qKey: 'tile.q2', descKey: 'tile.q2desc', sample: 'North Park' },
+  { icon: '\ud83c\udfdb\ufe0f', qKey: 'tile.q3', descKey: 'tile.q3desc', sample: 'City Heights' },
+  { icon: '\ud83d\udda8\ufe0f', qKey: 'tile.q4', descKey: 'tile.q4desc', sample: 'Barrio Logan' },
 ];
 
 export default function WelcomePage() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState('');
+  const { lang, setLang, t } = useLanguage();
 
   function goToNeighborhood(name: string) {
     if (name) navigate(`/neighborhood/${toSlug(name)}`);
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 flex flex-col">
+    <div className="h-full overflow-y-auto bg-gray-50 flex flex-col" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <main id="main-content" className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
+
+        {/* Language selector — visible within first 3 seconds */}
+        <section aria-labelledby="lang-heading" className="mb-6">
+          <h2 id="lang-heading" className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 text-center">
+            {t('welcome.chooseLanguage')}
+          </h2>
+          <div className="flex flex-wrap justify-center gap-2" role="radiogroup" aria-label={t('welcome.chooseLanguage')}>
+            {SUPPORTED_LANGUAGES.map((l) => (
+              <button
+                key={l.code}
+                type="button"
+                role="radio"
+                aria-checked={lang === l.code}
+                onClick={() => setLang(l.code)}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  lang === l.code
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:border-blue-400 hover:text-blue-700'
+                }`}
+              >
+                {l.nativeLabel}
+              </button>
+            ))}
+          </div>
+        </section>
 
         {/* Hero */}
         <section aria-labelledby="hero-heading" className="text-center mb-8">
           <h2 id="hero-heading" className="text-2xl font-bold text-gray-900 mb-3 leading-snug">
-            What's happening in your<br className="hidden sm:inline" /> San Diego neighborhood?
+            {t('welcome.heading')}
           </h2>
           <p className="text-gray-600 text-sm mb-6 max-w-md mx-auto">
-            Block Report turns city open data into plain-language community profiles —
-            and printable briefs you can share where neighbors gather.
+            {t('welcome.subheading')}
           </p>
 
           {/* Neighborhood picker */}
           <div className="flex gap-2 max-w-sm mx-auto">
             <div className="flex-1">
               <label htmlFor="welcome-neighborhood-select" className="sr-only">
-                Select a neighborhood
+                {t('welcome.pickNeighborhood')}
               </label>
               <select
                 id="welcome-neighborhood-select"
@@ -64,7 +71,7 @@ export default function WelcomePage() {
                 onChange={(e) => setSelected(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Pick a neighborhood...</option>
+                <option value="">{t('welcome.pickNeighborhood')}</option>
                 {COMMUNITIES.map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
@@ -76,7 +83,7 @@ export default function WelcomePage() {
               disabled={!selected}
               className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 shrink-0"
             >
-              Go
+              {t('welcome.go')}
             </button>
           </div>
         </section>
@@ -84,19 +91,19 @@ export default function WelcomePage() {
         {/* Question tiles */}
         <section aria-labelledby="explore-heading" className="mb-10">
           <h2 id="explore-heading" className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            What you can discover
+            {t('welcome.explore')}
           </h2>
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="list">
             {QUESTION_TILES.map((tile) => (
-              <li key={tile.question}>
+              <li key={tile.qKey}>
                 <button
                   type="button"
                   onClick={() => goToNeighborhood(tile.sample)}
                   className="w-full text-left rounded-xl border border-gray-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   <span className="text-xl mb-2 block" aria-hidden="true">{tile.icon}</span>
-                  <span className="font-medium text-gray-900 text-sm block mb-1">{tile.question}</span>
-                  <span className="text-xs text-gray-500">{tile.description}</span>
+                  <span className="font-medium text-gray-900 text-sm block mb-1">{t(tile.qKey)}</span>
+                  <span className="text-xs text-gray-500">{t(tile.descKey)}</span>
                 </button>
               </li>
             ))}
@@ -106,7 +113,7 @@ export default function WelcomePage() {
         {/* A-Z neighborhood list */}
         <section aria-labelledby="browse-heading">
           <h2 id="browse-heading" className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Browse all neighborhoods
+            {t('welcome.browseAll')}
           </h2>
           <nav aria-label="Neighborhood directory">
             <ul className="flex flex-wrap gap-2" role="list">
@@ -126,7 +133,7 @@ export default function WelcomePage() {
       </main>
 
       <footer className="text-center text-xs text-gray-400 py-4 px-4">
-        Data from{' '}
+        {t('footer.dataFrom')}{' '}
         <a href="https://data.sandiego.gov" className="underline hover:text-gray-600" target="_blank" rel="noreferrer">
           data.sandiego.gov
         </a>{' '}

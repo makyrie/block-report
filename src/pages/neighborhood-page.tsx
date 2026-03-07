@@ -3,9 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
-import { getLibraries, getRecCenters, getTransitStops, get311, generateBrief, getNeighborhoodBoundaries } from '../api/client';
+import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateBrief, getNeighborhoodBoundaries } from '../api/client';
 import type { CommunityAnchor, CommunityBrief, NeighborhoodProfile } from '../types';
 import type { FeatureCollection } from 'geojson';
+import { useLanguage } from '../i18n/context';
+import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
 
 interface TransitStop {
@@ -18,6 +20,7 @@ interface TransitStop {
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { lang, setLang, t } = useLanguage();
   const [mobileView, setMobileView] = useState<'map' | 'info'>('map');
 
   const [libraries, setLibraries] = useState<CommunityAnchor[]>([]);
@@ -31,12 +34,13 @@ export default function NeighborhoodPage() {
   const [selectedAnchor, setSelectedAnchor] = useState<CommunityAnchor | null>(null);
   const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
+  const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
 
   const [brief, setBrief] = useState<CommunityBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
 
-  // Sync URL → state when slug changes (e.g. browser back/forward)
+  // Sync URL -> state when slug changes (e.g. browser back/forward)
   useEffect(() => {
     const communityFromUrl = slug ? fromSlug(slug) : null;
     if (communityFromUrl !== selectedCommunity) {
@@ -63,22 +67,33 @@ export default function NeighborhoodPage() {
       .catch(console.error);
   }, []);
 
-  // Fetch 311 metrics when community changes
+  // Fetch 311 metrics and demographics when community changes
   useEffect(() => {
     if (!selectedCommunity) {
       setMetrics(null);
       setBrief(null);
+      setTopLanguages([]);
       return;
     }
 
     setMetricsLoading(true);
     setMetrics(null);
     setBrief(null);
+    setTopLanguages([]);
 
     get311(selectedCommunity)
       .then(setMetrics)
       .catch(console.error)
       .finally(() => setMetricsLoading(false));
+
+    // Try to fetch demographics for language suggestion
+    getDemographics(selectedCommunity)
+      .then((data) => {
+        if (data?.topLanguages) setTopLanguages(data.topLanguages);
+      })
+      .catch(() => {
+        // Demographics may not be available for all communities
+      });
   }, [selectedCommunity]);
 
   const handleCommunityChange = useCallback(
@@ -103,7 +118,7 @@ export default function NeighborhoodPage() {
     [navigate],
   );
 
-  const handleGenerateBrief = useCallback(async () => {
+  const handleGenerateBrief = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
     const anchor = selectedAnchor ?? {
@@ -121,13 +136,13 @@ export default function NeighborhoodPage() {
       anchor,
       metrics,
       transit: { nearbyStopCount: 0, nearestStopDistance: 0 },
-      demographics: { topLanguages: [] },
+      demographics: { topLanguages },
     };
 
     setBriefLoading(true);
     setBriefError(null);
     try {
-      const result = await generateBrief(profile, 'English');
+      const result = await generateBrief(profile, language);
       setBrief(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to generate brief';
@@ -135,10 +150,10 @@ export default function NeighborhoodPage() {
     } finally {
       setBriefLoading(false);
     }
-  }, [selectedCommunity, selectedAnchor, metrics]);
+  }, [selectedCommunity, selectedAnchor, metrics, topLanguages]);
 
   return (
-    <div className="flex flex-col h-full md:flex-row print:block">
+    <div className="flex flex-col h-full md:flex-row print:block" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       {/* Sidebar — full panel on desktop, shown on mobile only in 'info' tab */}
       <aside
         id="panel-info"
@@ -150,8 +165,25 @@ export default function NeighborhoodPage() {
           ${mobileView === 'info' ? 'flex' : 'hidden md:flex'}
         `}
       >
-        {/* Sidebar header with neighborhood selector */}
+        {/* Sidebar header with neighborhood selector + language buttons */}
         <div className="p-4 border-b border-gray-100 shrink-0">
+          <div className="flex flex-wrap gap-1 mb-3">
+            {SUPPORTED_LANGUAGES.map((l) => (
+              <button
+                key={l.code}
+                type="button"
+                onClick={() => setLang(l.code)}
+                title={l.label}
+                className={`px-2 py-1 text-xs rounded transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  lang === l.code
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'
+                }`}
+              >
+                {l.nativeLabel}
+              </button>
+            ))}
+          </div>
           <NeighborhoodSelector
             value={selectedCommunity ?? ''}
             onChange={(c) => { handleCommunityChange(c); if (c) setMobileView('info'); }}
@@ -166,6 +198,7 @@ export default function NeighborhoodPage() {
             brief={brief}
             briefLoading={briefLoading}
             briefError={briefError}
+            topLanguages={topLanguages}
           />
         </div>
       </aside>
@@ -207,7 +240,7 @@ export default function NeighborhoodPage() {
               : 'text-gray-500'
           }`}
         >
-          Map
+          {t('nav.map')}
         </button>
         <button
           type="button"
@@ -221,7 +254,7 @@ export default function NeighborhoodPage() {
               : 'text-gray-500'
           }`}
         >
-          {selectedCommunity ?? 'Info'}
+          {selectedCommunity ?? t('nav.info')}
         </button>
       </div>
     </div>

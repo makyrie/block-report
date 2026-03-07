@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import type { NeighborhoodProfile, CommunityBrief } from '../../types';
 import { BriefDisplay } from '../brief/brief-display';
+import { useLanguage } from '../../i18n/context';
+import { SUPPORTED_LANGUAGES, DEMOGRAPHICS_TO_LANG } from '../../i18n/translations';
 
 interface SidebarProps {
   community: string | null;
   metrics: NeighborhoodProfile['metrics'] | null;
   loading: boolean;
-  onGenerateBrief: () => void;
+  onGenerateBrief: (language: string) => void;
   brief: CommunityBrief | null;
   briefLoading: boolean;
   briefError: string | null;
+  topLanguages?: { language: string; percentage: number }[];
 }
 
 function LoadingSpinner({ label }: { label: string }) {
@@ -63,16 +66,25 @@ export default function Sidebar({
   brief,
   briefLoading,
   briefError,
+  topLanguages,
 }: SidebarProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const { t, briefLang, setBriefLang } = useLanguage();
+
+  // Find the top non-English language for this neighborhood
+  const suggestedLang = topLanguages
+    ?.filter((l) => l.language !== 'English' && l.percentage > 5)
+    ?.[0];
+
+  const suggestedLangCode = suggestedLang ? DEMOGRAPHICS_TO_LANG[suggestedLang.language] : undefined;
+  const suggestedLangMeta = suggestedLangCode
+    ? SUPPORTED_LANGUAGES.find((l) => l.code === suggestedLangCode)
+    : undefined;
 
   if (!community) {
     return (
       <div className="p-4 text-gray-500 text-sm">
-        <p>
-          Select a neighborhood from the dropdown above, or click a library or
-          rec center marker on the map to see what's happening there.
-        </p>
+        <p>{t('sidebar.selectPrompt')}</p>
       </div>
     );
   }
@@ -81,7 +93,7 @@ export default function Sidebar({
     return (
       <div className="p-4">
         <h2 className="text-lg font-semibold mb-2">{community}</h2>
-        <LoadingSpinner label={`Loading data for ${community}`} />
+        <LoadingSpinner label={t('loading.data', { community })} />
       </div>
     );
   }
@@ -118,26 +130,26 @@ export default function Sidebar({
             {showDetails && (
               <dl className="mt-2 rounded-lg bg-gray-50 p-3 text-xs space-y-1.5">
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">Total requests</dt>
+                  <dt className="text-gray-500">{t('sidebar.requests311')}</dt>
                   <dd className="font-mono font-medium">{metrics.totalRequests311.toLocaleString()}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">Resolution rate</dt>
+                  <dt className="text-gray-500">{t('sidebar.resolutionRate')}</dt>
                   <dd className="font-mono font-medium">{(metrics.resolutionRate * 100).toFixed(1)}%</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">Avg. days to resolve</dt>
+                  <dt className="text-gray-500">{t('sidebar.avgDays')}</dt>
                   <dd className="font-mono font-medium">{metrics.avgDaysToResolve.toFixed(1)}</dd>
                 </div>
               </dl>
             )}
           </section>
 
-          {/* Top issues — visual bars, no raw counts by default */}
+          {/* Top issues — visual bars */}
           {metrics.topIssues.length > 0 && (
             <section aria-labelledby="issues-heading">
               <h3 id="issues-heading" className="text-sm font-medium text-gray-700 mb-2">
-                What neighbors are reporting
+                {t('sidebar.topIssues')}
               </h3>
               <ul className="space-y-2.5">
                 {(() => {
@@ -167,7 +179,7 @@ export default function Sidebar({
           {metrics.recentlyResolved.length > 0 && (
             <section aria-labelledby="resolved-heading">
               <h3 id="resolved-heading" className="text-sm font-medium text-gray-700 mb-2">
-                Recently fixed
+                {t('sidebar.recentlyResolved')}
               </h3>
               <ul className="space-y-1 text-sm text-gray-600">
                 {metrics.recentlyResolved.map((item, i) => (
@@ -180,15 +192,58 @@ export default function Sidebar({
             </section>
           )}
 
+          {/* Language suggestion based on demographics */}
+          {suggestedLangMeta && briefLang === 'English' && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <p className="text-sm text-blue-800 mb-2">
+                {t('sidebar.languageSuggestion', { language: suggestedLang!.language })}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setBriefLang(suggestedLangMeta.label);
+                  onGenerateBrief(suggestedLangMeta.label);
+                }}
+                disabled={briefLoading}
+                className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              >
+                {t('sidebar.generateIn', { language: suggestedLangMeta.nativeLabel })}
+              </button>
+            </div>
+          )}
+
+          {/* Brief language selector — visible buttons, not a dropdown */}
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">{t('sidebar.briefLanguage')}</p>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t('sidebar.briefLanguage')}>
+              {SUPPORTED_LANGUAGES.map((l) => (
+                <button
+                  key={l.code}
+                  type="button"
+                  role="radio"
+                  aria-checked={briefLang === l.label}
+                  onClick={() => setBriefLang(l.label)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    briefLang === l.label
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {l.nativeLabel}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Generate brief */}
           <button
             type="button"
-            onClick={onGenerateBrief}
+            onClick={() => onGenerateBrief(briefLang)}
             disabled={briefLoading}
             aria-busy={briefLoading}
             className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
-            {briefLoading ? 'Generating…' : 'Generate printable brief'}
+            {briefLoading ? t('sidebar.generating') : t('sidebar.generateBrief')}
           </button>
         </>
       )}

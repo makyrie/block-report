@@ -1,4 +1,5 @@
 import type { CommunityBrief } from '../../types/index';
+import { useLanguage } from '../../i18n/context';
 
 interface BriefDisplayProps {
   brief: CommunityBrief | null;
@@ -6,9 +7,11 @@ interface BriefDisplayProps {
 }
 
 export function BriefDisplay({ brief, loading }: BriefDisplayProps) {
+  const { t } = useLanguage();
+
   if (loading) {
     return (
-      <div role="status" aria-label="Generating community brief" className="flex flex-col items-center justify-center py-12 text-gray-500">
+      <div role="status" aria-label={t('brief.generating')} className="flex flex-col items-center justify-center py-12 text-gray-500">
         <svg
           aria-hidden="true"
           className="animate-spin h-8 w-8 mb-3 text-blue-600"
@@ -30,8 +33,8 @@ export function BriefDisplay({ brief, loading }: BriefDisplayProps) {
             d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
           />
         </svg>
-        <p className="text-sm" aria-hidden="true">Generating community brief...</p>
-        <span className="sr-only">Generating community brief, please wait.</span>
+        <p className="text-sm" aria-hidden="true">{t('brief.generating')}</p>
+        <span className="sr-only">{t('brief.generatingSr')}</span>
       </div>
     );
   }
@@ -54,7 +57,7 @@ export function BriefDisplay({ brief, loading }: BriefDisplayProps) {
           {brief.neighborhoodName}
         </h2>
         <p className="text-sm text-gray-500 mt-1">
-          Community Brief &middot; {formattedDate} &middot; {brief.language}
+          {t('brief.communityBrief')} &middot; {formattedDate} &middot; {brief.language}
         </p>
       </div>
 
@@ -65,7 +68,7 @@ export function BriefDisplay({ brief, loading }: BriefDisplayProps) {
 
       {/* Good News */}
       <section className="mb-5">
-        <h3 className="text-lg font-semibold text-green-700 mb-2">Good News</h3>
+        <h3 className="text-lg font-semibold text-green-700 mb-2">{t('brief.goodNews')}</h3>
         <ul className="list-disc list-inside space-y-1 text-gray-700">
           {brief.goodNews.map((item, i) => (
             <li key={i}>{item}</li>
@@ -76,7 +79,7 @@ export function BriefDisplay({ brief, loading }: BriefDisplayProps) {
       {/* Top Issues */}
       <section className="mb-5">
         <h3 className="text-lg font-semibold text-amber-700 mb-2">
-          What Your Neighbors Are Reporting
+          {t('brief.topIssues')}
         </h3>
         <ul className="list-disc list-inside space-y-1 text-gray-700">
           {brief.topIssues.map((item, i) => (
@@ -88,7 +91,7 @@ export function BriefDisplay({ brief, loading }: BriefDisplayProps) {
       {/* How to Participate */}
       <section className="mb-5">
         <h3 className="text-lg font-semibold text-blue-700 mb-2">
-          How to Get Involved
+          {t('brief.howTo')}
         </h3>
         <ul className="list-disc list-inside space-y-1 text-gray-700">
           {brief.howToParticipate.map((item, i) => (
@@ -99,18 +102,18 @@ export function BriefDisplay({ brief, loading }: BriefDisplayProps) {
 
       {/* Contact Info */}
       <section className="mb-5 bg-gray-50 rounded-md p-4">
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">Contact Info</h3>
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">{t('brief.contactInfo')}</h3>
         <dl className="space-y-1 text-sm text-gray-700">
           <div className="flex gap-2">
-            <dt className="font-medium">Council District:</dt>
+            <dt className="font-medium">{t('brief.councilDistrict')}</dt>
             <dd>{brief.contactInfo.councilDistrict}</dd>
           </div>
           <div className="flex gap-2">
-            <dt className="font-medium">311 Phone:</dt>
+            <dt className="font-medium">{t('brief.phone311')}</dt>
             <dd>{brief.contactInfo.phone311}</dd>
           </div>
           <div className="flex gap-2">
-            <dt className="font-medium">Nearest Resource:</dt>
+            <dt className="font-medium">{t('brief.nearestResource')}</dt>
             <dd>{brief.contactInfo.anchorLocation}</dd>
           </div>
         </dl>
@@ -123,7 +126,7 @@ export function BriefDisplay({ brief, loading }: BriefDisplayProps) {
           onClick={() => window.print()}
           className="px-5 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
         >
-          Print Brief
+          {t('brief.print')}
         </button>
       </div>
     </div>

@@ -1,11 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-
-const navLinks = [
-  { to: '/', label: 'Home' },
-  { to: '/neighborhood/mira-mesa', label: 'Explore' },
-  { to: '/resources', label: 'Resources' },
-];
+import { useLanguage } from '../../i18n/context';
 
 function linkClass({ isActive }: { isActive: boolean }) {
   return `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -17,13 +12,20 @@ function linkClass({ isActive }: { isActive: boolean }) {
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { t } = useLanguage();
+
+  const navLinks = [
+    { to: '/', label: t('nav.home') || 'Home' },
+    { to: '/neighborhood/mira-mesa', label: t('nav.explore') || 'Explore' },
+    { to: '/resources', label: t('nav.resources') || 'Resources' },
+  ];
 
   return (
     <nav aria-label="Main navigation" className="bg-white border-b border-gray-200 shrink-0 print:hidden">
       <div className="px-4 flex items-center justify-between h-14">
         {/* Brand */}
         <NavLink to="/" className="text-lg font-bold text-gray-900 hover:text-blue-700 transition-colors">
-          Block Report
+          {t('app.title')}
         </NavLink>
 
         {/* Desktop nav links */}
