@@ -47,3 +47,4 @@ pnpm-debug.log*
 
 # Server logs
 server/logs/
+.vercel

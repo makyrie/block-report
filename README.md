@@ -21,8 +21,8 @@ Block Report is a hyperlocal civic intelligence tool for San Diego neighborhoods
 
 ## Links
 
-- **Live app:** Not yet deployed (runs locally)
-- **Demo video:** N/A
+- **Live app:** [https://block-report-weld.vercel.app/](https://block-report-weld.vercel.app/)
+- **Demo video:** [Loom walkthrough](https://www.loom.com/share/fa7d72af51a8478aa06e0b6b8277b735) | [Screencast](https://app.screencast.com/P8VC0Mj68TxaS)
 
 ## Quick Start
 
