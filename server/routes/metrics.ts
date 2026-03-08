@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabase } from '../services/supabase.js';
+import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 
 const router = Router();
@@ -18,17 +18,7 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  const { data, error } = await supabase.rpc('get_community_metrics', {
-    community_name: cleaned,
-  });
-
-  if (error) {
-    logger.error('Failed to fetch 311 metrics', { error: error.message, community });
-    res.status(500).json({ error: 'Internal server error' });
-    return;
-  }
-
-  const metrics = data as {
+  interface CommunityMetrics {
     total_requests: number;
     resolved_count: number;
     avg_days_to_resolve: number;
@@ -39,7 +29,19 @@ router.get('/', async (req, res) => {
     top_recent_category_count: number;
     high_res_categories: { category: string; total: number; resolved: number; resolution_rate: number }[];
     population: number;
-  };
+  }
+
+  let metrics: CommunityMetrics;
+  try {
+    const result = await prisma.$queryRaw<{ get_community_metrics: CommunityMetrics }[]>`
+      SELECT get_community_metrics(${cleaned})
+    `;
+    metrics = result[0].get_community_metrics;
+  } catch (err) {
+    logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community });
+    res.status(500).json({ error: 'Internal server error' });
+    return;
+  }
 
   const total = metrics.total_requests;
   const resolvedCount = metrics.resolved_count;

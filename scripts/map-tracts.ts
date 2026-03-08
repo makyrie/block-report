@@ -1,8 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || 'http://127.0.0.1:54331';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { prisma } from '../server/services/db.js';
 
 type Polygon = number[][][];
 interface CommunityFeature {
@@ -84,10 +80,9 @@ async function main() {
   console.log(`  ${tractCentroids.size} San Diego tract centroids loaded`);
 
   // Get all tracts from DB
-  const { data: dbTracts, error } = await supabase
-    .from('census_language')
-    .select('tract');
-  if (error) throw new Error(`Failed to fetch tracts: ${error.message}`);
+  const dbTracts = await prisma.censusLanguage.findMany({
+    select: { tract: true },
+  });
 
   let mapped = 0;
   for (const row of dbTracts) {
@@ -97,17 +92,20 @@ async function main() {
     const community = findCommunity(centroid.lat, centroid.lng, communities);
     if (!community) continue;
 
-    const { error: updateErr } = await supabase
-      .from('census_language')
-      .update({ community })
-      .eq('tract', row.tract);
-
-    if (!updateErr) mapped++;
+    await prisma.censusLanguage.update({
+      where: { tract: row.tract },
+      data: { community },
+    });
+    mapped++;
   }
   console.log(`\n  Mapped ${mapped} of ${dbTracts.length} tracts to communities`);
 }
 
-main().catch((err) => {
-  console.error('Failed:', err.message);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error('Failed:', err.message);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

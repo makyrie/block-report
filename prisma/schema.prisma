@@ -1,0 +1,103 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+model Library {
+  objectid Int     @id
+  name     String
+  address  String?
+  city     String?
+  zip      String?
+  phone    String?
+  website  String?
+  lat      Float?
+  lng      Float?
+
+  @@map("libraries")
+}
+
+model RecCenter {
+  objectid  Int     @id
+  rec_bldg  String?
+  park_name String?
+  fac_nm_id String?
+  address   String?
+  zip       String?
+  sq_ft     Float?
+  year_built Int?
+  serv_dist String?
+  cd        Int?
+  neighborhd String?
+  lat       Float?
+  lng       Float?
+
+  @@map("rec_centers")
+}
+
+model TransitStop {
+  objectid   Int     @id
+  stop_uid   String?
+  stop_id    String?
+  stop_code  String?
+  stop_name  String?
+  stop_lat   Float?
+  stop_lon   Float?
+  stop_agncy String?
+  wheelchair Int?
+  intersec   String?
+  stop_place String?
+  parent_sta String?
+  lat        Float?
+  lng        Float?
+
+  @@map("transit_stops")
+}
+
+model Request311 {
+  service_request_id String    @id
+  date_requested     DateTime?
+  case_age_days      Int?
+  service_name       String?
+  service_name_detail String?
+  date_closed        DateTime?
+  status             String?
+  lat                Float?
+  lng                Float?
+  street_address     String?
+  zipcode            String?
+  council_district   String?
+  comm_plan_code     String?
+  comm_plan_name     String?
+  case_origin        String?
+  public_description String?
+
+  @@index([comm_plan_name], name: "idx_311_comm_plan")
+  @@index([date_requested], name: "idx_311_date")
+  @@map("requests_311")
+}
+
+model CensusLanguage {
+  tract                String  @id
+  total_pop_5plus      Int?
+  english_only         Int?
+  spanish              Int?
+  french_haitian_cajun Int?
+  german_west_germanic Int?
+  russian_polish_slavic Int?
+  korean               Int?
+  chinese              Int?
+  vietnamese           Int?
+  tagalog              Int?
+  arabic               Int?
+  other_unspecified     Int?
+  community            String?
+
+  @@index([community], name: "idx_census_community")
+  @@map("census_language")
+}

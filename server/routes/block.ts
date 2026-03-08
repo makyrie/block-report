@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabase } from '../services/supabase.js';
+import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 
 const router = Router();
@@ -44,22 +44,30 @@ router.get('/', async (req, res) => {
   const latDelta = radius / MILES_PER_LAT_DEG;
   const lngDelta = radius / MILES_PER_LNG_DEG;
 
-  const { data, error } = await supabase
-    .from('requests_311')
-    .select('service_name, status, date_requested, date_closed, lat, lng')
-    .gte('lat', lat - latDelta)
-    .lte('lat', lat + latDelta)
-    .gte('lng', lng - lngDelta)
-    .lte('lng', lng + lngDelta);
-
-  if (error) {
-    logger.error('Failed to fetch block data', { error: error.message });
+  let data;
+  try {
+    data = await prisma.request311.findMany({
+      select: {
+        service_name: true,
+        status: true,
+        date_requested: true,
+        date_closed: true,
+        lat: true,
+        lng: true,
+      },
+      where: {
+        lat: { gte: lat - latDelta, lte: lat + latDelta },
+        lng: { gte: lng - lngDelta, lte: lng + lngDelta },
+      },
+    });
+  } catch (err) {
+    logger.error('Failed to fetch block data', { error: (err as Error).message });
     res.status(500).json({ error: 'Internal server error' });
     return;
   }
 
   // Refine with exact Haversine distance
-  const nearby = (data ?? []).filter(
+  const nearby = data.filter(
     (r) => r.lat != null && r.lng != null &&
       haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= radius,
   );
@@ -75,8 +83,8 @@ router.get('/', async (req, res) => {
   const resolvedWithDates = resolved.filter((r) => r.date_requested && r.date_closed);
   if (resolvedWithDates.length > 0) {
     const totalDays = resolvedWithDates.reduce((sum, r) => {
-      const requested = new Date(r.date_requested).getTime();
-      const closed = new Date(r.date_closed).getTime();
+      const requested = r.date_requested!.getTime();
+      const closed = r.date_closed!.getTime();
       return sum + (closed - requested) / (1000 * 60 * 60 * 24);
     }, 0);
     avgDaysToResolve = Math.round((totalDays / resolvedWithDates.length) * 10) / 10;
@@ -95,9 +103,9 @@ router.get('/', async (req, res) => {
 
   const recentlyResolved = resolved
     .filter((r) => r.date_closed)
-    .sort((a, b) => new Date(b.date_closed).getTime() - new Date(a.date_closed).getTime())
+    .sort((a, b) => b.date_closed!.getTime() - a.date_closed!.getTime())
     .slice(0, 5)
-    .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed as string }));
+    .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
 
   res.json({
     totalRequests: nearby.length,

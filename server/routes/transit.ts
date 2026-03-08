@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabase } from '../services/supabase.js';
+import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 
 const router = Router();
@@ -86,11 +86,9 @@ const NEIGHBORHOODS_URL =
 
 async function computeAllScores(): Promise<Map<string, TransitScore>> {
   // Fetch all transit stops with location and agency data
-  const { data: stops, error } = await supabase
-    .from('transit_stops')
-    .select('lat, lng, stop_agncy');
-
-  if (error) throw new Error(`Failed to fetch transit stops: ${error.message}`);
+  const stops = await prisma.transitStop.findMany({
+    select: { lat: true, lng: true, stop_agncy: true },
+  });
 
   // Fetch community boundaries
   const response = await fetch(NEIGHBORHOODS_URL);
@@ -121,7 +119,7 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
       if (stop.lat == null || stop.lng == null) continue;
       // GeoJSON coordinates are [lng, lat]
       if (pointInFeature(stop.lat, stop.lng, feature.geometry)) {
-        stopsInCommunity.push(stop);
+        stopsInCommunity.push({ lat: stop.lat, lng: stop.lng, stop_agncy: stop.stop_agncy });
       }
     }
 

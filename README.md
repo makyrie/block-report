@@ -17,7 +17,7 @@ Block Report is a hyperlocal civic intelligence tool for San Diego neighborhoods
 
 - **San Diego Open Data Portal** — library locations, recreation centers, transit stops, and 311/Get It Done service requests
 - **U.S. Census ACS** — language spoken at home by census tract (table C16001)
-- **Supabase** — local database layer for server-side aggregation of city data
+- **NeonDB (PostgreSQL)** — cloud database layer for server-side aggregation of city data
 
 ## Links
 
@@ -48,7 +48,7 @@ Copy the example env file and add your Anthropic API key:
 cp .env.example .env
 ```
 
-Edit `.env` and set `ANTHROPIC_API_KEY` to your key. The Census API key and local Supabase credentials are pre-filled with development defaults.
+Edit `.env` and set `ANTHROPIC_API_KEY` to your key and `DATABASE_URL` to your Neon PostgreSQL connection string. The Census API key is pre-filled with a development default.
 
 ### Run
 
@@ -70,23 +70,14 @@ pnpm dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-### Local Database (optional)
+### Database Setup
 
-The app can use a local Supabase instance for data storage. This requires:
-
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) running on your machine (Supabase runs Postgres and other services as containers)
-- [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) — install with `brew install supabase/tap/supabase` (macOS) or `npx supabase`
-
-Then:
+The app uses [Neon](https://neon.tech/) (serverless PostgreSQL) via Prisma ORM. Create a free Neon project and add the connection string to your `.env` as `DATABASE_URL`.
 
 ```bash
-pnpm db:start   # Start local Supabase (pulls Docker images on first run)
+pnpm db:push    # Push schema to Neon (creates tables)
 pnpm db:seed    # Seed with San Diego open data
-pnpm db:reset   # Reset database to clean state
-pnpm db:stop    # Stop local Supabase
 ```
-
-The first `db:start` will download several Docker images, which may take a few minutes.
 
 ## How It Works
 
@@ -107,7 +98,7 @@ React + Vite (SPA)  →  Express (API)  →  External APIs
 
 - The frontend never talks to external APIs directly — everything flows through the Express backend
 - API keys stay server-side only
-- SODA and Census responses are cached to disk for 24 hours (`server/cache/`)
+- Data is stored in NeonDB (PostgreSQL) via Prisma ORM with a Neon serverless adapter
 - **Claude's role:** The backend sends aggregated civic data (311 trends, nearby resources, language demographics) to Claude, which synthesizes it into a printable, plain-language community brief. Briefs can be generated in multiple languages based on the neighborhood's demographic profile.
 
 ## Project Structure
@@ -134,7 +125,8 @@ block-report/
 ## Tech Stack
 
 - **Frontend:** React 19, Vite, Tailwind CSS, Leaflet, React Router
-- **Backend:** Express 5, TypeScript
+- **Backend:** Express 5, TypeScript, Prisma ORM
+- **Database:** NeonDB (serverless PostgreSQL)
 - **AI:** Anthropic Claude API
 - **Data:** San Diego Open Data Portal, U.S. Census ACS
 

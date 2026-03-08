@@ -1,13 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+import { prisma } from '../server/services/db.js';
 import { parse } from 'csv-parse/sync';
-
-const supabaseUrl = process.env.SUPABASE_URL || 'http://127.0.0.1:54331';
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  '';
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- Helpers ---
 
@@ -17,17 +9,6 @@ async function fetchCsv(url: string): Promise<Record<string, string>[]> {
   if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
   const text = await res.text();
   return parse(text, { columns: true, skip_empty_lines: true, relax_column_count: true });
-}
-
-async function batchInsert(table: string, rows: Record<string, unknown>[], batchSize = 500) {
-  let inserted = 0;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
-    const { error } = await supabase.from(table).insert(batch);
-    if (error) throw new Error(`Insert into ${table} failed at batch ${i}: ${error.message}`);
-    inserted += batch.length;
-  }
-  return inserted;
 }
 
 function toTitleCase(str: string): string {
@@ -88,8 +69,8 @@ async function seedLibraries() {
   console.log('Seeding libraries...');
   const rows = await fetchCsv('https://seshat.datasd.org/gis_library_locations/libraries_datasd.csv');
   const mapped = rows.map((r) => ({
-    objectid: parseInt_(r.objectid),
-    name: r.name || null,
+    objectid: parseInt_(r.objectid)!,
+    name: r.name || '',
     address: r.address || null,
     city: r.city || null,
     zip: r.zip || null,
@@ -98,15 +79,15 @@ async function seedLibraries() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const count = await batchInsert('libraries', mapped);
-  console.log(`  ✓ ${count} libraries`);
+  const result = await prisma.library.createMany({ data: mapped });
+  console.log(`  ✓ ${result.count} libraries`);
 }
 
 async function seedRecCenters() {
   console.log('Seeding rec centers...');
   const rows = await fetchCsv('https://seshat.datasd.org/gis_recreation_center/rec_centers_datasd.csv');
   const mapped = rows.map((r) => ({
-    objectid: parseInt_(r.objectid),
+    objectid: parseInt_(r.objectid)!,
     rec_bldg: r.rec_bldg || null,
     park_name: r.park_name || null,
     fac_nm_id: r.fac_nm_id || null,
@@ -120,15 +101,15 @@ async function seedRecCenters() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const count = await batchInsert('rec_centers', mapped);
-  console.log(`  ✓ ${count} rec centers`);
+  const result = await prisma.recCenter.createMany({ data: mapped });
+  console.log(`  ✓ ${result.count} rec centers`);
 }
 
 async function seedTransitStops() {
   console.log('Seeding transit stops...');
   const rows = await fetchCsv('https://seshat.datasd.org/gis_transit_stops/transit_stops_datasd.csv');
   const mapped = rows.map((r) => ({
-    objectid: parseInt_(r.objectid),
+    objectid: parseInt_(r.objectid)!,
     stop_uid: r.stop_uid || null,
     stop_id: r.stop_id || null,
     stop_code: r.stop_code || null,
@@ -143,8 +124,8 @@ async function seedTransitStops() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const count = await batchInsert('transit_stops', mapped);
-  console.log(`  ✓ ${count} transit stops`);
+  const result = await prisma.transitStop.createMany({ data: mapped });
+  console.log(`  ✓ ${result.count} transit stops`);
 }
 
 async function seed311() {
@@ -163,7 +144,7 @@ async function seed311() {
     yearsToFetch.push(y);
   }
 
-  const allRows: Record<string, unknown>[] = [];
+  const allRows: ReturnType<typeof mapRequest311>[] = [];
 
   // Fetch open requests
   const openRows = await fetchCsv(
@@ -196,18 +177,25 @@ async function seed311() {
     }
   }
 
-  const count = await batchInsert('requests_311', allRows, 1000);
-  console.log(`  ✓ ${count} total 311 requests`);
+  // Batch insert in chunks (Prisma has limits on query size)
+  const batchSize = 1000;
+  let inserted = 0;
+  for (let i = 0; i < allRows.length; i += batchSize) {
+    const batch = allRows.slice(i, i + batchSize);
+    const result = await prisma.request311.createMany({ data: batch });
+    inserted += result.count;
+  }
+  console.log(`  ✓ ${inserted} total 311 requests`);
 }
 
-function mapRequest311(r: Record<string, string>): Record<string, unknown> {
+function mapRequest311(r: Record<string, string>) {
   return {
     service_request_id: r.service_request_id,
-    date_requested: r.date_requested || null,
+    date_requested: r.date_requested ? new Date(r.date_requested) : null,
     case_age_days: parseInt_(r.case_age_days),
     service_name: r.service_name || null,
     service_name_detail: r.service_name_detail || null,
-    date_closed: r.date_closed || null,
+    date_closed: r.date_closed ? new Date(r.date_closed) : null,
     status: r.status || null,
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
@@ -260,14 +248,14 @@ async function seedCensusLanguage() {
     other_unspecified: parseInt_(row[11]),
   }));
 
-  const count = await batchInsert('census_language', mapped);
-  console.log(`  ✓ ${count} Census tracts`);
+  const result = await prisma.censusLanguage.createMany({ data: mapped });
+  console.log(`  ✓ ${result.count} Census tracts`);
 
   // Map tracts to communities using centroids + community boundaries
-  await mapTractsToCommunitites(censusKey, rows);
+  await mapTractsToCommunitites(rows);
 }
 
-async function mapTractsToCommunitites(censusKey: string, censusRows: string[][]) {
+async function mapTractsToCommunitites(censusRows: string[][]) {
   console.log('Mapping Census tracts to communities...');
 
   // Fetch community boundaries GeoJSON
@@ -325,12 +313,11 @@ async function mapTractsToCommunitites(censusKey: string, censusRows: string[][]
     const community = findCommunity(centroid.lat, centroid.lng, communities);
     if (!community) continue;
 
-    const { error } = await supabase
-      .from('census_language')
-      .update({ community })
-      .eq('tract', tract);
-
-    if (!error) mapped++;
+    await prisma.censusLanguage.update({
+      where: { tract },
+      data: { community },
+    });
+    mapped++;
   }
   console.log(`  ✓ ${mapped} tracts mapped to communities`);
 }
@@ -341,11 +328,9 @@ async function main() {
   console.log('Starting seed...\n');
 
   console.log('Truncating tables...');
-  const { error } = await supabase.rpc('truncate_seed_tables');
-  if (error) {
-    console.error('Failed to truncate:', error.message);
-    process.exit(1);
-  }
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language'
+  );
   console.log('  ✓ Tables truncated\n');
 
   await seedLibraries();
@@ -357,7 +342,11 @@ async function main() {
   console.log('\nSeed complete.');
 }
 
-main().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error('Seed failed:', err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

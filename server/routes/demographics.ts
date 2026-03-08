@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabase } from '../services/supabase.js';
+import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 
 const router = Router();
@@ -52,25 +52,19 @@ router.get('/', async (req, res) => {
 
   // Single tract lookup
   if (tract) {
-    const { data, error } = await supabase
-      .from('census_language')
-      .select('*')
-      .eq('tract', tract)
-      .single();
-
-    if (error) {
-      const status = error.code === 'PGRST116' ? 404 : 500;
-      if (status === 500) {
-        logger.error('Failed to fetch demographics', { error: error.message, tract });
+    try {
+      const data = await prisma.censusLanguage.findUnique({ where: { tract } });
+      if (!data) {
+        res.status(404).json({ error: 'Tract not found' });
+        return;
       }
-      res.status(status).json({
-        error: error.code === 'PGRST116' ? 'Tract not found' : 'Internal server error',
-      });
+      res.json({ topLanguages: computeTopLanguages([data as Record<string, unknown>]) });
+      return;
+    } catch (err) {
+      logger.error('Failed to fetch demographics', { error: (err as Error).message, tract });
+      res.status(500).json({ error: 'Internal server error' });
       return;
     }
-
-    res.json({ topLanguages: computeTopLanguages([data]) });
-    return;
   }
 
   // TODO: community-to-tract crosswalk not yet implemented.

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabase } from '../services/supabase.js';
+import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 
 const router = Router();
@@ -12,33 +12,35 @@ let neighborhoodsCache: Record<string, unknown> | null = null;
 let neighborhoodsCachedAt = 0;
 
 router.get('/libraries', async (_req, res) => {
-  const { data, error } = await supabase.from('libraries').select('*');
-  if (error) {
-    logger.error('Failed to fetch libraries', { error: error.message });
+  try {
+    const data = await prisma.library.findMany();
+    res.json(data);
+  } catch (err) {
+    logger.error('Failed to fetch libraries', { error: (err as Error).message });
     res.status(500).json({ error: 'Internal server error' });
-    return;
   }
-  res.json(data);
 });
 
 router.get('/rec-centers', async (_req, res) => {
-  const { data, error } = await supabase.from('rec_centers').select('*');
-  if (error) {
-    logger.error('Failed to fetch rec centers', { error: error.message });
+  try {
+    const data = await prisma.recCenter.findMany();
+    res.json(data);
+  } catch (err) {
+    logger.error('Failed to fetch rec centers', { error: (err as Error).message });
     res.status(500).json({ error: 'Internal server error' });
-    return;
   }
-  res.json(data);
 });
 
 router.get('/transit-stops', async (_req, res) => {
-  const { data, error } = await supabase.from('transit_stops').select('objectid, stop_name, lat, lng');
-  if (error) {
-    logger.error('Failed to fetch transit stops', { error: error.message });
+  try {
+    const data = await prisma.transitStop.findMany({
+      select: { objectid: true, stop_name: true, lat: true, lng: true },
+    });
+    res.json(data);
+  } catch (err) {
+    logger.error('Failed to fetch transit stops', { error: (err as Error).message });
     res.status(500).json({ error: 'Internal server error' });
-    return;
   }
-  res.json(data);
 });
 
 router.get('/neighborhoods', async (_req, res) => {

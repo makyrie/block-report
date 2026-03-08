@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { prisma } from './db.js';
 import { logger } from '../logger.js';
 
 export interface AccessGapResult {
@@ -30,11 +30,9 @@ function normalize(value: number, min: number, max: number): number {
 
 // Fetch 311 engagement rates for all communities from the requests_311 table
 async function fetchEngagementRates(): Promise<Map<string, number>> {
-  const { data: requests, error: reqErr } = await supabase
-    .from('requests_311')
-    .select('comm_plan_name');
-
-  if (reqErr) throw new Error(`Failed to fetch 311 data: ${reqErr.message}`);
+  const requests = await prisma.request311.findMany({
+    select: { comm_plan_name: true },
+  });
 
   // Count requests per community (normalize names to uppercase)
   const counts = new Map<string, number>();
@@ -45,11 +43,9 @@ async function fetchEngagementRates(): Promise<Map<string, number>> {
   }
 
   // Fetch population per community from census data
-  const { data: censusRows, error: censusErr } = await supabase
-    .from('census_language')
-    .select('community, total_pop_5plus');
-
-  if (censusErr) throw new Error(`Failed to fetch census data: ${censusErr.message}`);
+  const censusRows = await prisma.censusLanguage.findMany({
+    select: { community: true, total_pop_5plus: true },
+  });
 
   const populations = new Map<string, number>();
   for (const row of censusRows) {
@@ -71,11 +67,9 @@ async function fetchEngagementRates(): Promise<Map<string, number>> {
 
 // Fetch transit scores for all communities
 async function fetchTransitScores(): Promise<Map<string, number>> {
-  const { data: stops, error } = await supabase
-    .from('transit_stops')
-    .select('lat, lng, stop_agncy');
-
-  if (error) throw new Error(`Failed to fetch transit stops: ${error.message}`);
+  const stops = await prisma.transitStop.findMany({
+    select: { lat: true, lng: true, stop_agncy: true },
+  });
 
   const boundaryRes = await fetch(
     'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson'
@@ -115,11 +109,9 @@ async function fetchTransitScores(): Promise<Map<string, number>> {
 
 // Fetch non-English speaking percentage per community
 async function fetchNonEnglishPct(): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from('census_language')
-    .select('community, total_pop_5plus, english_only');
-
-  if (error) throw new Error(`Failed to fetch language data: ${error.message}`);
+  const data = await prisma.censusLanguage.findMany({
+    select: { community: true, total_pop_5plus: true, english_only: true },
+  });
 
   // Aggregate by community
   const agg = new Map<string, { totalPop: number; englishOnly: number }>();

@@ -24,8 +24,8 @@ Thumbs.db
 .claude/settings.local.json
 .claude/todos.local.json
 
-# Supabase local
-supabase/.temp/
+# Prisma
+prisma/migrations/*/migration_lock.toml
 
 # Vite
 *.local

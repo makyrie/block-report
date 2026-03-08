@@ -1,6 +1,6 @@
 -- RPC function to aggregate 311 metrics for a community server-side.
--- This avoids Supabase's default 1,000-row limit by computing all
--- aggregates in Postgres and returning a single JSONB result.
+-- This runs as raw SQL via prisma.$queryRaw since Prisma doesn't manage functions.
+-- To apply: run this SQL directly against your Neon database.
 
 CREATE OR REPLACE FUNCTION get_community_metrics(community_name TEXT)
 RETURNS JSONB AS $$
@@ -23,7 +23,6 @@ BEGIN
     'population', COALESCE(pop.total, 0)
   ) INTO result
   FROM
-    -- Basic aggregates
     (SELECT
       COUNT(*) AS total,
       COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL) AS resolved,
@@ -33,8 +32,6 @@ BEGIN
     FROM requests_311
     WHERE LOWER(comm_plan_name) = LOWER(cleaned)
     ) agg,
-
-    -- Top 10 issues by service_name
     LATERAL (
       SELECT jsonb_agg(row_to_json(t)::jsonb) AS items FROM (
         SELECT service_name AS category, COUNT(*) AS count
@@ -45,8 +42,6 @@ BEGIN
         LIMIT 10
       ) t
     ) ti,
-
-    -- Last 5 recently resolved
     LATERAL (
       SELECT jsonb_agg(row_to_json(t)::jsonb) AS items FROM (
         SELECT service_name AS category, date_closed AS date
@@ -58,8 +53,6 @@ BEGIN
         LIMIT 5
       ) t
     ) rr,
-
-    -- Resolved in last 90 days + top category
     LATERAL (
       SELECT
         cnt,
@@ -83,8 +76,6 @@ BEGIN
         LIMIT 1
       ) tc
     ) r90,
-
-    -- Categories with >= 90% resolution rate and >= 10 reports
     LATERAL (
       SELECT jsonb_agg(row_to_json(t)::jsonb) AS items FROM (
         SELECT
@@ -105,8 +96,6 @@ BEGIN
               / COUNT(*)::numeric DESC
       ) t
     ) hrc,
-
-    -- Population from census
     LATERAL (
       SELECT COALESCE(SUM(total_pop_5plus), 0) AS total
       FROM census_language
@@ -115,7 +104,4 @@ BEGIN
 
   RETURN result;
 END;
-$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
-
--- Allow anon to call this function
-GRANT EXECUTE ON FUNCTION get_community_metrics(TEXT) TO anon;
+$$ LANGUAGE plpgsql STABLE;
