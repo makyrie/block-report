@@ -152,7 +152,7 @@ function BlockPopupContent({
         onClick={() => window.print()}
         className="w-full mt-1 rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600"
       >
-        Print brief for this area
+        Print flyer for this area
       </button>
     </div>
   );

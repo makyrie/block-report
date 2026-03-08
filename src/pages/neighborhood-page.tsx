@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
-import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateBrief, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
-import type { BlockMetrics, CommunityAnchor, CommunityBrief, NeighborhoodProfile, TransitStop } from '../types';
+import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
+import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
 import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
@@ -37,9 +37,9 @@ export default function NeighborhoodPage() {
 
   const [dataError, setDataError] = useState<string | null>(null);
 
-  const [brief, setBrief] = useState<CommunityBrief | null>(null);
-  const [briefLoading, setBriefLoading] = useState(false);
-  const [briefError, setBriefError] = useState<string | null>(null);
+  const [report, setReport] = useState<CommunityReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   // Sync URL -> state when slug changes (e.g. browser back/forward)
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function NeighborhoodPage() {
   useEffect(() => {
     if (!selectedCommunity) {
       setMetrics(null);
-      setBrief(null);
+      setReport(null);
       setTopLanguages([]);
       setTransitScore(null);
       setAccessGap(null);
@@ -73,7 +73,7 @@ export default function NeighborhoodPage() {
 
     setMetricsLoading(true);
     setMetrics(null);
-    setBrief(null);
+    setReport(null);
     setTopLanguages([]);
     setTransitScore(null);
     setAccessGap(null);
@@ -137,7 +137,7 @@ export default function NeighborhoodPage() {
     }
   }, []);
 
-  const handleGenerateBrief = useCallback(async (language: string) => {
+  const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
     const anchor = selectedAnchor ?? {
@@ -159,16 +159,16 @@ export default function NeighborhoodPage() {
       accessGap: accessGap ?? null,
     };
 
-    setBriefLoading(true);
-    setBriefError(null);
+    setReportLoading(true);
+    setReportError(null);
     try {
-      const result = await generateBrief(profile, language);
-      setBrief(result);
+      const result = await generateReport(profile, language);
+      setReport(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate brief';
-      setBriefError(message);
+      const message = err instanceof Error ? err.message : 'Failed to generate report';
+      setReportError(message);
     } finally {
-      setBriefLoading(false);
+      setReportLoading(false);
     }
   }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
 
@@ -219,10 +219,10 @@ export default function NeighborhoodPage() {
             community={selectedCommunity}
             metrics={metrics}
             loading={metricsLoading}
-            onGenerateBrief={handleGenerateBrief}
-            brief={brief}
-            briefLoading={briefLoading}
-            briefError={briefError}
+            onGenerateReport={handleGenerateReport}
+            report={report}
+            reportLoading={reportLoading}
+            reportError={reportError}
             topLanguages={topLanguages}
             transitScore={transitScore}
             accessGap={accessGap}

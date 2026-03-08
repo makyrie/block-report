@@ -1,4 +1,4 @@
-/* Print-only styles — brief workstream */
+/* Print-only styles — report/flyer workstream */
 @media print {
   @page {
     size: letter portrait;
@@ -17,7 +17,7 @@
   }
 
   /* The flyer has display:none from Tailwind's "hidden" class — override it */
-  .brief-flyer {
+  .flyer-layout {
     display: block !important;
     visibility: visible;
     position: absolute;
@@ -31,13 +31,13 @@
   }
 
   /* Make all flyer children visible */
-  .brief-flyer * {
+  .flyer-layout * {
     visibility: visible;
   }
 
   /* Fully remove elements that shouldn't occupy space */
   .no-print,
-  .brief-content,
+  .report-content,
   nav[aria-label="Main navigation"],
   main[aria-label="Neighborhood map"],
   [role="tablist"] {

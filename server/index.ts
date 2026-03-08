@@ -6,7 +6,7 @@ import { logger } from './logger.js';
 import locationsRouter from './routes/locations.js';
 import metricsRouter from './routes/metrics.js';
 import demographicsRouter from './routes/demographics.js';
-import briefRouter from './routes/brief.js';
+import reportRouter from './routes/report.js';
 import transitRouter from './routes/transit.js';
 import gapAnalysisRouter from './routes/gap-analysis.js';
 import blockRouter from './routes/block.js';
@@ -21,12 +21,12 @@ app.use(cors({
 }));
 
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
-const briefLimiter = rateLimit({
+const reportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: { error: 'Too many brief generation requests, please try again later' },
+  message: { error: 'Too many report generation requests, please try again later' },
 });
-app.use('/api/brief', briefLimiter);
+app.use('/api/report', reportLimiter);
 app.use('/api', apiLimiter);
 
 app.use(express.json());
@@ -47,7 +47,7 @@ app.use((req, res, next) => {
 app.use('/api/locations', locationsRouter);
 app.use('/api/311', metricsRouter);
 app.use('/api/demographics', demographicsRouter);
-app.use('/api/brief', briefRouter);
+app.use('/api/report', reportRouter);
 app.use('/api/transit', transitRouter);
 app.use('/api/access-gap', gapAnalysisRouter);
 app.use('/api/block', blockRouter);

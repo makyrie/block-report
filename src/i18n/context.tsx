@@ -7,20 +7,20 @@ interface LanguageContextValue {
   lang: LanguageCode;
   setLang: (code: LanguageCode) => void;
   t: (key: string, vars?: Record<string, string>) => string;
-  briefLang: string;
-  setBriefLang: (label: string) => void;
+  reportLang: string;
+  setReportLang: (label: string) => void;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<LanguageCode>('en');
-  const [briefLang, setBriefLang] = useState('English');
+  const [reportLang, setReportLang] = useState('English');
 
   const setLang = useCallback((code: LanguageCode) => {
     setLangState(code);
     const match = SUPPORTED_LANGUAGES.find((l) => l.code === code);
-    if (match) setBriefLang(match.label);
+    if (match) setReportLang(match.label);
   }, []);
 
   const t = useCallback(
@@ -37,7 +37,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t, briefLang, setBriefLang }}>
+    <LanguageContext.Provider value={{ lang, setLang, t, reportLang, setReportLang }}>
       {children}
     </LanguageContext.Provider>
   );

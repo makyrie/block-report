@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, CommunityBrief, NeighborhoodProfile, TransitStop } from '../types';
+import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
 
 const BASE = '/api';
 
@@ -58,8 +58,8 @@ export function getBlockData(lat: number, lng: number, radius = 0.25): Promise<B
   return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`);
 }
 
-export function generateBrief(profile: NeighborhoodProfile, language: string): Promise<CommunityBrief> {
-  return fetchJSON(`${BASE}/brief/generate`, {
+export function generateReport(profile: NeighborhoodProfile, language: string): Promise<CommunityReport> {
+  return fetchJSON(`${BASE}/report/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile, language }),

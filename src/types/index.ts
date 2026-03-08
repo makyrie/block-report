@@ -64,7 +64,7 @@ export interface BlockMetrics {
   radiusMiles: number;
 }
 
-export interface CommunityBrief {
+export interface CommunityReport {
   neighborhoodName: string;
   language: string;
   generatedAt: string;

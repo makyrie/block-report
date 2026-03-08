@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { NeighborhoodProfile, CommunityBrief } from '../../types';
-import BriefDisplay from '../brief/brief-display';
+import type { NeighborhoodProfile, CommunityReport } from '../../types';
+import ReportView from '../report/report-view';
 import { useLanguage } from '../../i18n/context';
 import { SUPPORTED_LANGUAGES, DEMOGRAPHICS_TO_LANG } from '../../i18n/translations';
 
@@ -8,10 +8,10 @@ interface SidebarProps {
   community: string | null;
   metrics: NeighborhoodProfile['metrics'] | null;
   loading: boolean;
-  onGenerateBrief: (language: string) => void;
-  brief: CommunityBrief | null;
-  briefLoading: boolean;
-  briefError: string | null;
+  onGenerateReport: (language: string) => void;
+  report: CommunityReport | null;
+  reportLoading: boolean;
+  reportError: string | null;
   topLanguages?: { language: string; percentage: number }[];
   transitScore?: NeighborhoodProfile['transit'] | null;
   accessGap?: NeighborhoodProfile['accessGap'];
@@ -64,16 +64,16 @@ export default function Sidebar({
   community,
   metrics,
   loading,
-  onGenerateBrief,
-  brief,
-  briefLoading,
-  briefError,
+  onGenerateReport,
+  report,
+  reportLoading,
+  reportError,
   topLanguages,
   transitScore,
   accessGap,
 }: SidebarProps) {
   const [showDetails, setShowDetails] = useState(false);
-  const { t, briefLang, setBriefLang } = useLanguage();
+  const { t, reportLang, setReportLang } = useLanguage();
 
   // Find the top non-English language for this neighborhood
   const suggestedLang = topLanguages
@@ -316,7 +316,7 @@ export default function Sidebar({
           )}
 
           {/* Language suggestion based on demographics */}
-          {suggestedLangMeta && briefLang === 'English' && (
+          {suggestedLangMeta && reportLang === 'English' && (
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
               <p className="text-sm text-blue-800 mb-2">
                 {t('sidebar.languageSuggestion', { language: suggestedLang!.language })}
@@ -324,30 +324,30 @@ export default function Sidebar({
               <button
                 type="button"
                 onClick={() => {
-                  setBriefLang(suggestedLangMeta.label);
-                  onGenerateBrief(suggestedLangMeta.label);
+                  setReportLang(suggestedLangMeta.label);
+                  onGenerateReport(suggestedLangMeta.label);
                 }}
-                disabled={briefLoading}
+                disabled={reportLoading}
                 className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
-                {t('sidebar.generateIn', { language: suggestedLangMeta.nativeLabel })}
+                {t('sidebar.generateReportIn', { language: suggestedLangMeta.nativeLabel })}
               </button>
             </div>
           )}
 
           {/* Brief language selector — visible buttons, not a dropdown */}
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">{t('sidebar.briefLanguage')}</p>
-            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t('sidebar.briefLanguage')}>
+            <p className="text-sm font-medium text-gray-700 mb-2">{t('sidebar.reportLanguage')}</p>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t('sidebar.reportLanguage')}>
               {SUPPORTED_LANGUAGES.map((l) => (
                 <button
                   key={l.code}
                   type="button"
                   role="radio"
-                  aria-checked={briefLang === l.label}
-                  onClick={() => setBriefLang(l.label)}
+                  aria-checked={reportLang === l.label}
+                  onClick={() => setReportLang(l.label)}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                    briefLang === l.label
+                    reportLang === l.label
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
@@ -361,23 +361,23 @@ export default function Sidebar({
           {/* Generate brief */}
           <button
             type="button"
-            onClick={() => onGenerateBrief(briefLang)}
-            disabled={briefLoading}
-            aria-busy={briefLoading}
+            onClick={() => onGenerateReport(reportLang)}
+            disabled={reportLoading}
+            aria-busy={reportLoading}
             className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
-            {briefLoading ? t('sidebar.generating') : t('sidebar.generateBrief')}
+            {reportLoading ? t('sidebar.generating') : t('sidebar.generateReport')}
           </button>
         </>
       )}
 
-      {briefError && (
+      {reportError && (
         <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700" role="alert">
-          {briefError}
+          {reportError}
         </div>
       )}
 
-      <BriefDisplay brief={brief} loading={briefLoading} metrics={metrics} topLanguages={topLanguages} />
+      <ReportView report={report} loading={reportLoading} metrics={metrics} topLanguages={topLanguages} />
     </div>
   );
 }

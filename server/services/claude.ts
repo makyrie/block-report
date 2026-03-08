@@ -1,9 +1,9 @@
-// Anthropic Claude API client for brief generation
-// Brief workstream owns this file
+// Anthropic Claude API client for report generation
+// Report/flyer workstream owns this file
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile, CommunityBrief } from '../../src/types/index.js';
+import type { NeighborhoodProfile, CommunityReport } from '../../src/types/index.js';
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -18,10 +18,10 @@ function getClient(): Anthropic {
   return _client;
 }
 
-export async function generateBrief(
+export async function generateReport(
   profile: NeighborhoodProfile,
   language: string,
-): Promise<CommunityBrief> {
+): Promise<CommunityReport> {
   // Validate communityName to prevent prompt injection
   if (
     typeof profile.communityName !== 'string' ||
@@ -37,14 +37,14 @@ export async function generateBrief(
 
   const client = getClient();
 
-  const prompt = `You are generating a community brief for the ${profile.communityName} neighborhood of San Diego. The brief will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
+  const prompt = `You are generating a community report for the ${profile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
 
 Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the data for this neighborhood:
 ${JSON.stringify(profile, null, 2)}
 
-Generate a brief with these sections:
+Generate a report with these sections:
 1. **Welcome** — A 2-sentence greeting that names the neighborhood.
 2. **Good News** — 2-3 positive things happening based on the data (resolved issues, investments, improvements).
 3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311, framed constructively (not as complaints, but as things the community is working on).
@@ -52,11 +52,11 @@ Generate a brief with these sections:
 5. **Nearby Resources** — List the closest libraries and rec centers with addresses, if available in the data.
 6. **Transit Info** — How many transit stops and routes serve the area.
 
-Keep the total brief under 400 words. It should fit on one printed page.`;
+Keep the total report under 400 words. It should fit on one printed page.`;
 
-  const briefTool: Anthropic.Messages.Tool = {
-    name: 'community_brief',
-    description: 'Output a structured community brief for a San Diego neighborhood',
+  const reportTool: Anthropic.Messages.Tool = {
+    name: 'community_report',
+    description: 'Output a structured community report for a San Diego neighborhood',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -97,8 +97,8 @@ Keep the total brief under 400 words. It should fit on one printed page.`;
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }],
-      tools: [briefTool],
-      tool_choice: { type: 'tool', name: 'community_brief' },
+      tools: [reportTool],
+      tool_choice: { type: 'tool', name: 'community_report' },
     });
 
     const toolBlock = message.content.find((block) => block.type === 'tool_use');
@@ -106,12 +106,12 @@ Keep the total brief under 400 words. It should fit on one printed page.`;
       throw new Error('No tool use block in response');
     }
 
-    const brief: CommunityBrief = {
-      ...(toolBlock.input as Omit<CommunityBrief, 'generatedAt'>),
+    const report: CommunityReport = {
+      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
       generatedAt: new Date().toISOString(),
     };
 
-    return brief;
+    return report;
   } catch (error) {
     logger.error('Claude API call failed', {
       error: error instanceof Error ? error.message : String(error),

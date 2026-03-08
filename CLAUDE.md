@@ -3,15 +3,15 @@
 ## Project
 
 Block Report — hyperlocal civic intelligence for San Diego neighborhoods.
-Enter an address or pick a neighborhood to see a civic profile and generate a printable, multilingual community brief.
-Monorepo with a React frontend and Express backend. Anthropic Claude API for brief generation.
+Enter an address or pick a neighborhood to see a civic profile and generate a printable, multilingual community report.
+Monorepo with a React frontend and Express backend. Anthropic Claude API for report generation.
 
 ## Architecture
 
 ```
 Client (React + Vite)  →  Backend (Express + Node)  →  External APIs
                                     │
-                                    ├── Anthropic Claude API (brief generation)
+                                    ├── Anthropic Claude API (report generation)
                                     ├── SODA API (city open data)
                                     └── Census API (language demographics)
 ```
@@ -29,7 +29,7 @@ Client (React + Vite)  →  Backend (Express + Node)  →  External APIs
 | GET | `/api/locations/transit-stops` | Transit stop data | Yes (24h) |
 | GET | `/api/311?community={name}` | 311 data aggregated by community | Yes (24h) |
 | GET | `/api/demographics?tract={id}` | Census language data by tract | Yes (24h) |
-| POST | `/api/brief/generate` | Generate community brief via Claude | No |
+| POST | `/api/report/generate` | Generate community report via Claude | No |
 
 ### Caching
 
@@ -51,7 +51,7 @@ This avoids hitting SODA/Census rate limits during rapid development and means t
 ### Branching
 
 - Never commit directly to `main`.
-- Use feature branches named `{workstream}/{description}`, e.g. `data/311-endpoint`, `map/leaflet-setup`, `brief/print-layout`.
+- Use feature branches named `{workstream}/{description}`, e.g. `data/311-endpoint`, `map/leaflet-setup`, `report/print-layout`.
 - Keep branches short-lived. Merge to main via PR (or fast-forward merge if no conflicts) frequently — at least once per hour.
 - Pull from main before starting new work. Rebase onto main if your branch has drifted.
 
@@ -63,7 +63,7 @@ Three parallel workstreams. Stay in your lane to avoid merge conflicts.
 |------------|----------------------|----------------------|
 | `data` | `server/routes/`, `server/services/`, `server/cache.ts`, `src/types/` | Backend API routes, SODA/Census clients, caching, aggregation |
 | `map` | `src/components/map/`, `src/components/ui/`, `src/App.tsx` | Leaflet map, sidebar, layout, UI shell, frontend API client |
-| `brief` | `src/components/brief/`, `server/routes/brief.ts`, `server/services/claude.ts` | Claude integration, brief generation endpoint, print layout |
+| `report` | `src/components/report/`, `src/components/flyer/`, `server/routes/report.ts`, `server/services/claude.ts` | Claude integration, report generation endpoint, flyer print layout |
 
 Shared files (`src/types/index.ts`, `server/index.ts`, config files) require coordination. Call out before editing them.
 
@@ -120,24 +120,25 @@ block-report/
 │   │   ├── locations.ts   # /api/locations/* endpoints (data workstream)
 │   │   ├── metrics.ts     # /api/311 endpoint (data workstream)
 │   │   ├── demographics.ts # /api/demographics endpoint (data workstream)
-│   │   └── brief.ts       # /api/brief/generate endpoint (brief workstream)
+│   │   └── report.ts      # /api/report/generate endpoint (report workstream)
 │   ├── services/
 │   │   ├── soda.ts        # SODA API client (data workstream)
 │   │   ├── census.ts      # Census API client (data workstream)
-│   │   └── claude.ts      # Anthropic client (brief workstream)
+│   │   └── claude.ts      # Anthropic client (report workstream)
 │   └── cache/             # Cached JSON files (gitignored)
 ├── src/                   # React frontend
 │   ├── api/
 │   │   └── client.ts      # Frontend fetch wrapper for /api/* (map workstream)
 │   ├── components/
 │   │   ├── map/           # Leaflet map, markers, overlays (map workstream)
-│   │   ├── brief/         # Brief display, print layout (brief workstream)
+│   │   ├── report/        # Report display (report workstream)
+│   │   ├── flyer/         # Printable flyer layout (report workstream)
 │   │   └── ui/            # Sidebar, panels, selectors (map workstream)
 │   ├── types/
 │   │   └── index.ts       # Shared interfaces (all — coordinate changes)
 │   ├── App.tsx            # Main app shell (map workstream)
 │   ├── main.tsx
-│   └── print.css          # Print-only styles (brief workstream)
+│   └── print.css          # Print-only styles (report/flyer workstream)
 ├── .env.example
 ├── .gitignore             # Must include: .env, server/cache/
 ├── CLAUDE.md

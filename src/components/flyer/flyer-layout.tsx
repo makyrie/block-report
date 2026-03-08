@@ -1,5 +1,5 @@
 import { QRCodeSVG } from 'qrcode.react';
-import type { CommunityBrief, NeighborhoodProfile } from '../../types/index';
+import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
 import {
   CheckCircleIcon,
   SmartphoneIcon,
@@ -8,8 +8,8 @@ import {
   GlobeIcon,
 } from './flyer-icons';
 
-interface BriefFlyerProps {
-  brief: CommunityBrief;
+interface FlyerLayoutProps {
+  report: CommunityReport;
   neighborhoodSlug: string;
   metrics?: NeighborhoodProfile['metrics'] | null;
   topLanguages?: { language: string; percentage: number }[];
@@ -22,8 +22,8 @@ function truncateSentences(text: string, max: number): string {
   return sentences.slice(0, max).join('').trim();
 }
 
-export function BriefFlyer({ brief, neighborhoodSlug, metrics, topLanguages }: BriefFlyerProps) {
-  const formattedDate = new Date(brief.generatedAt).toLocaleDateString('en-US', {
+export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages }: FlyerLayoutProps) {
+  const formattedDate = new Date(report.generatedAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -41,13 +41,13 @@ export function BriefFlyer({ brief, neighborhoodSlug, metrics, topLanguages }: B
     .slice(0, 4);
 
   return (
-    <div className="brief-flyer hidden text-black font-sans">
+    <div className="flyer-layout hidden text-black font-sans">
 
       {/* ── TOP BANNER ── */}
       <div className="border-b-4 border-black pb-3 mb-4">
         <p className="text-[11px] font-bold uppercase tracking-[0.35em] mb-1">Block Report</p>
         <h1 className="text-[32px] font-black leading-none">
-          {brief.neighborhoodName}
+          {report.neighborhoodName}
         </h1>
         <p className="text-[15px] mt-1.5 font-medium">
           {formattedDate}
@@ -56,7 +56,7 @@ export function BriefFlyer({ brief, neighborhoodSlug, metrics, topLanguages }: B
 
       {/* ── NARRATIVE HOOK ── */}
       <p className="text-[13px] leading-relaxed mb-4">
-        {truncateSentences(brief.summary, 2)}
+        {truncateSentences(report.summary, 2)}
       </p>
 
       {/* ── BIG NUMBER CARDS ── */}
@@ -115,7 +115,7 @@ export function BriefFlyer({ brief, neighborhoodSlug, metrics, topLanguages }: B
             </div>
           ) : (
             <ul className="text-[13px] space-y-1.5 list-none">
-              {brief.topIssues.slice(0, 3).map((item, i) => (
+              {report.topIssues.slice(0, 3).map((item, i) => (
                 <li key={i} className="flex gap-1">
                   <span className="font-bold flex-shrink-0">&bull;</span>
                   <span>{item}</span>
@@ -132,7 +132,7 @@ export function BriefFlyer({ brief, neighborhoodSlug, metrics, topLanguages }: B
             <h2 className="text-[15px] font-black uppercase tracking-widest">Good News</h2>
           </div>
           <ul className="text-[12px] space-y-2 list-none">
-            {(metrics?.goodNews ?? brief.goodNews).slice(0, 2).map((item, i) => (
+            {(metrics?.goodNews ?? report.goodNews).slice(0, 2).map((item, i) => (
               <li key={i} className="flex gap-2">
                 <span className="font-bold flex-shrink-0 text-[15px] leading-none">{'\u2713'}</span>
                 <span>{item}</span>
@@ -165,10 +165,10 @@ export function BriefFlyer({ brief, neighborhoodSlug, metrics, topLanguages }: B
       {/* ── GET INVOLVED ── */}
       <div className="flyer-section border-2 border-black rounded-lg p-4 mb-5">
         <h2 className="text-[15px] font-black uppercase tracking-widest border-b border-black pb-1.5 mb-3">
-          Get Involved in {brief.neighborhoodName}
+          Get Involved in {report.neighborhoodName}
         </h2>
         <ul className="text-[12px] space-y-2 list-none mb-3">
-          {brief.howToParticipate.slice(0, 2).map((item, i) => (
+          {report.howToParticipate.slice(0, 2).map((item, i) => (
             <li key={i} className="flex gap-2">
               <span className="font-bold flex-shrink-0">{'\u25B8'}</span>
               <span>{item}</span>
@@ -187,14 +187,14 @@ export function BriefFlyer({ brief, neighborhoodSlug, metrics, topLanguages }: B
             <BuildingIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <div>
               <div className="font-bold">Council Rep</div>
-              <div>{brief.contactInfo.councilDistrict}</div>
+              <div>{report.contactInfo.councilDistrict}</div>
             </div>
           </div>
           <div className="flex items-start gap-1.5">
             <MapPinIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <div>
               <div className="font-bold">Nearest Resource</div>
-              <div>{brief.contactInfo.anchorLocation}</div>
+              <div>{report.contactInfo.anchorLocation}</div>
             </div>
           </div>
         </div>
