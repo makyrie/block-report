@@ -18,7 +18,7 @@ type TypeConfig = {
 const TYPE_CONFIG: Record<'library' | 'rec_center' | 'transit', TypeConfig> = {
   library:    { dot: 'bg-blue-500',  label: 'Library',      text: 'text-blue-700'  },
   rec_center: { dot: 'bg-green-500', label: 'Rec Center',   text: 'text-green-700' },
-  transit:    { dot: 'bg-gray-400',  label: 'Transit Stop', text: 'text-gray-600'  },
+  transit:    { dot: 'bg-violet-600', label: 'Transit Stop', text: 'text-violet-700' },
 };
 
 function TypeBadge({ type }: { type: keyof typeof TYPE_CONFIG }) {
@@ -305,7 +305,7 @@ function SanDiegoMap({
           <span className="text-gray-700">Rec Center</span>
         </li>
         <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-gray-400 shrink-0" />
+          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
           <span className="text-gray-700">Transit Stop</span>
         </li>
         <li className="flex items-center gap-2">
@@ -354,13 +354,13 @@ function SanDiegoMap({
         />
       )}
 
-      {/* Transit stops — small gray circles */}
+      {/* Transit stops — violet circles */}
       {transitStops.map((stop) => (
         <CircleMarker
           key={stop.id}
           center={[stop.lat, stop.lng]}
           radius={4}
-          pathOptions={{ color: '#9ca3af', fillColor: '#9ca3af', fillOpacity: 0.6, weight: 1 }}
+          pathOptions={{ color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.8, weight: 1 }}
         >
           <Popup>
             <TransitPopupContent name={stop.name} />
