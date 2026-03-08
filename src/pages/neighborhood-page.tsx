@@ -34,6 +34,7 @@ export default function NeighborhoodPage() {
   const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [blockData, setBlockData] = useState<BlockMetrics | null>(null);
   const [blockLoading, setBlockLoading] = useState(false);
+  const [blockRadius, setBlockRadius] = useState(0.25);
 
   const [dataError, setDataError] = useState<string | null>(null);
 
@@ -128,14 +129,24 @@ export default function NeighborhoodPage() {
     setBlockData(null);
     setBlockLoading(true);
     try {
-      const data = await getBlockData(lat, lng);
+      const data = await getBlockData(lat, lng, blockRadius);
       setBlockData(data);
     } catch (err) {
       console.error('Failed to fetch block data', err);
     } finally {
       setBlockLoading(false);
     }
-  }, []);
+  }, [blockRadius]);
+
+  // Re-fetch block data when radius changes
+  useEffect(() => {
+    if (!pinnedLocation) return;
+    setBlockLoading(true);
+    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
+      .then(setBlockData)
+      .catch((err) => console.error('Failed to fetch block data', err))
+      .finally(() => setBlockLoading(false));
+  }, [blockRadius, pinnedLocation]);
 
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
@@ -235,10 +246,31 @@ export default function NeighborhoodPage() {
         id="main-content"
         aria-label="Neighborhood map"
         className={`
-          flex-1 print:hidden
+          relative flex-1 print:hidden
           ${mobileView === 'map' ? 'block' : 'hidden md:block'}
         `}
       >
+        {pinnedLocation && (
+          <div className="absolute top-2 right-2 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2">
+            <p className="text-xs font-medium text-gray-600 mb-1.5">Block radius</p>
+            <div className="flex gap-1">
+              {([0.1, 0.25, 0.5, 1] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setBlockRadius(r)}
+                  className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
+                    blockRadius === r
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {r} mi
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <SanDiegoMap
           libraries={libraries}
           recCenters={recCenters}
@@ -250,6 +282,7 @@ export default function NeighborhoodPage() {
           pinnedLocation={pinnedLocation}
           blockData={blockData}
           blockLoading={blockLoading}
+          blockRadius={blockRadius}
         />
       </main>
 

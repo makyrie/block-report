@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
@@ -105,15 +105,18 @@ function BlockPopupContent({
       <div className="min-w-[200px] text-sm text-gray-500 py-1">No data available.</div>
     );
   }
+  const resRate = data.totalRequests > 0 ? data.resolutionRate : 0;
+  const resColor = resRate >= 0.75 ? 'text-green-700' : resRate >= 0.5 ? 'text-yellow-700' : 'text-red-700';
+
   return (
-    <div className="min-w-[220px] max-w-[280px]">
+    <div className="min-w-[220px] max-w-[300px]">
       <div className="flex items-center gap-1.5 mb-2">
         <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0 bg-orange-500" />
         <span className="text-xs font-semibold uppercase tracking-wide text-orange-700">
           Your Block · {data.radiusMiles} mi radius
         </span>
       </div>
-      <div className="flex gap-3 mb-3">
+      <div className="flex gap-3 mb-2">
         <div className="text-center">
           <p className="text-xl font-bold text-gray-900">{data.openCount}</p>
           <p className="text-xs text-gray-500">open</p>
@@ -127,10 +130,28 @@ function BlockPopupContent({
           <p className="text-xs text-gray-500">total</p>
         </div>
       </div>
-      {data.topCategory && (
-        <p className="text-xs text-gray-700 mb-2">
-          <span className="font-medium">Top issue:</span> {data.topCategory}
-        </p>
+      <div className="flex gap-3 text-xs mb-3">
+        <span className={`font-medium ${resColor}`}>
+          {(resRate * 100).toFixed(0)}% resolved
+        </span>
+        {data.avgDaysToResolve != null && (
+          <span className="text-gray-500">
+            ~{data.avgDaysToResolve} days avg
+          </span>
+        )}
+      </div>
+      {data.topIssues.length > 0 && (
+        <div className="mb-2">
+          <p className="text-xs font-medium text-gray-700 mb-1">Top issues nearby</p>
+          <ul className="space-y-1">
+            {data.topIssues.slice(0, 4).map((issue) => (
+              <li key={issue.category} className="text-xs text-gray-600 flex justify-between gap-2">
+                <span className="truncate">{issue.category}</span>
+                <span className="shrink-0 text-gray-400 font-mono">{issue.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {data.recentlyResolved.length > 0 && (
         <div className="mb-2">
@@ -192,6 +213,7 @@ interface SanDiegoMapProps {
   pinnedLocation?: { lat: number; lng: number } | null;
   blockData?: BlockMetrics | null;
   blockLoading?: boolean;
+  blockRadius?: number;
 }
 
 // Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
@@ -279,6 +301,7 @@ function SanDiegoMap({
   pinnedLocation,
   blockData,
   blockLoading = false,
+  blockRadius = 0.25,
 }: SanDiegoMapProps) {
   const handleMarkerClick = useCallback(
     (anchor: CommunityAnchor) => () => {
@@ -327,6 +350,22 @@ function SanDiegoMap({
 
       {/* Click-to-explore handler */}
       {onMapClick && <MapClickHandler onClick={onMapClick} />}
+
+      {/* Radius circle around pinned location */}
+      {pinnedLocation && (
+        <Circle
+          center={[pinnedLocation.lat, pinnedLocation.lng]}
+          radius={blockRadius * 1609.34}
+          pathOptions={{
+            color: '#f97316',
+            weight: 2,
+            opacity: 0.7,
+            fillColor: '#f97316',
+            fillOpacity: 0.08,
+            dashArray: '6 4',
+          }}
+        />
+      )}
 
       {/* Pinned location marker — auto-opens popup when dropped */}
       {pinnedLocation && (

@@ -67,25 +67,45 @@ router.get('/', async (req, res) => {
   const open = nearby.filter((r) => r.status !== 'Closed' && !r.date_closed);
   const resolved = nearby.filter((r) => r.status === 'Closed' || r.date_closed);
 
+  // Resolution rate
+  const resolutionRate = nearby.length > 0 ? resolved.length / nearby.length : 0;
+
+  // Average days to resolve
+  let avgDaysToResolve: number | null = null;
+  const resolvedWithDates = resolved.filter((r) => r.date_requested && r.date_closed);
+  if (resolvedWithDates.length > 0) {
+    const totalDays = resolvedWithDates.reduce((sum, r) => {
+      const requested = new Date(r.date_requested).getTime();
+      const closed = new Date(r.date_closed).getTime();
+      return sum + (closed - requested) / (1000 * 60 * 60 * 24);
+    }, 0);
+    avgDaysToResolve = Math.round((totalDays / resolvedWithDates.length) * 10) / 10;
+  }
+
+  // Top issues (full list, sorted)
   const issueCounts: Record<string, number> = {};
   for (const r of nearby) {
     const cat = r.service_name || 'Unknown';
     issueCounts[cat] = (issueCounts[cat] || 0) + 1;
   }
-  const topCategory =
-    Object.entries(issueCounts).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
+  const topIssues = Object.entries(issueCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 6)
+    .map(([category, count]) => ({ category, count }));
 
   const recentlyResolved = resolved
     .filter((r) => r.date_closed)
     .sort((a, b) => new Date(b.date_closed).getTime() - new Date(a.date_closed).getTime())
-    .slice(0, 3)
+    .slice(0, 5)
     .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed as string }));
 
   res.json({
     totalRequests: nearby.length,
     openCount: open.length,
     resolvedCount: resolved.length,
-    topCategory,
+    resolutionRate,
+    avgDaysToResolve,
+    topIssues,
     recentlyResolved,
     radiusMiles: radius,
   });

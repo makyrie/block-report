@@ -60,7 +60,9 @@ export interface BlockMetrics {
   totalRequests: number;
   openCount: number;
   resolvedCount: number;
-  topCategory: string | null;
+  resolutionRate: number;
+  avgDaysToResolve: number | null;
+  topIssues: { category: string; count: number }[];
   recentlyResolved: { category: string; date: string }[];
   radiusMiles: number;
 }
