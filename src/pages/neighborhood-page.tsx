@@ -154,7 +154,7 @@ export default function NeighborhoodPage() {
       communityName: selectedCommunity,
       anchor,
       metrics,
-      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0 },
+      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
       demographics: { topLanguages },
       accessGap: accessGap ?? null,
     };

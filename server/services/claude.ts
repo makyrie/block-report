@@ -50,7 +50,7 @@ Generate a report with these sections:
 3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311, framed constructively (not as complaints, but as things the community is working on).
 4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report, how to attend council meetings, how to contact their council representative, where to find more info.
 5. **Nearby Resources** — List the closest libraries and rec centers with addresses, if available in the data.
-6. **Transit Info** — How many transit stops and routes serve the area.
+6. **Transit Info** — How many transit stops and routes serve the area, and the estimated transit travel time to City Hall if available.
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 

@@ -203,6 +203,12 @@ export default function Sidebar({
                   <> ({transitScore.agencies.join(', ')})</>
                 )}.
               </p>
+              {transitScore.travelTimeToCityHall != null && transitScore.travelTimeToCityHall > 0 && (
+                <p className="text-sm text-indigo-700 mt-1">
+                  Estimated travel time to City Hall:{' '}
+                  <span className="font-semibold">~{transitScore.travelTimeToCityHall} min</span>
+                </p>
+              )}
             </section>
           )}
 

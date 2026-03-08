@@ -32,6 +32,7 @@ export interface NeighborhoodProfile {
     agencies: string[];
     transitScore: number;
     cityAverage: number;
+    travelTimeToCityHall: number | null;
   };
   demographics: {
     topLanguages: { language: string; percentage: number }[];
