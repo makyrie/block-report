@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { COMMUNITIES } from '../components/ui/neighborhood-selector';
 import { toSlug } from '../utils/slug';
 import { useLanguage } from '../i18n/context';
@@ -167,6 +167,26 @@ export default function WelcomePage() {
               )}
             </div>
           )}
+        </section>
+
+        {/* Flyer shortcut card */}
+        <section aria-labelledby="flyer-heading" className="mb-8">
+          <Link
+            to="/flyer"
+            className="block rounded-xl border-2 border-blue-200 bg-blue-50 p-5 hover:border-blue-400 hover:bg-blue-100 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <div className="flex items-start gap-4">
+              <span className="text-3xl shrink-0" aria-hidden="true">{'\uD83D\uDDA8\uFE0F'}</span>
+              <div>
+                <h2 id="flyer-heading" className="text-base font-bold text-gray-900 mb-1 group-hover:text-blue-800">
+                  {t('flyer.cardTitle')}
+                </h2>
+                <p className="text-sm text-gray-600">
+                  {t('flyer.cardDescription')}
+                </p>
+              </div>
+            </div>
+          </Link>
         </section>
 
         {/* Question tiles */}
