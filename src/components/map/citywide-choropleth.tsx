@@ -18,9 +18,23 @@ interface CitywideChoroplethProps {
 function FitBounds({ boundaries }: { boundaries: FeatureCollection }) {
   const map = useMap();
   useEffect(() => {
-    if (boundaries.features.length > 0) {
-      const layer = L.geoJSON(boundaries as GeoJSON.FeatureCollection);
-      map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+    if (boundaries.features.length === 0) return;
+    // Compute bounds directly from coordinates instead of creating a throwaway layer
+    const bounds = L.latLngBounds([]);
+    for (const feature of boundaries.features) {
+      const geom = feature.geometry;
+      if (!geom || !('coordinates' in geom)) continue;
+      const coords = geom.type === 'MultiPolygon'
+        ? (geom.coordinates as number[][][][]).flat(2)
+        : geom.type === 'Polygon'
+          ? (geom.coordinates as number[][][]).flat()
+          : [];
+      for (const [lng, lat] of coords) {
+        bounds.extend([lat, lng]);
+      }
+    }
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [20, 20] });
     }
   }, [boundaries, map]);
   return null;
