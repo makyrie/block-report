@@ -52,7 +52,7 @@ router.get('/', async (req, res) => {
         service_name: true,
         service_name_detail: true,
         street_address: true,
-        public_description: true,
+
         status: true,
         date_requested: true,
         date_closed: true,
@@ -106,12 +106,6 @@ router.get('/', async (req, res) => {
     .slice(0, 6)
     .map(([category, count]) => ({ category, count }));
 
-  const recentlyResolved = resolved
-    .filter((r) => r.date_closed)
-    .sort((a, b) => b.date_closed!.getTime() - a.date_closed!.getTime())
-    .slice(0, 5)
-    .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
-
   // Nearby open issues with details (top 5 closest)
   const nearbyOpenIssues = open
     .map((r) => ({
@@ -119,7 +113,7 @@ router.get('/', async (req, res) => {
       serviceName: r.service_name || 'Unknown',
       serviceNameDetail: r.service_name_detail || undefined,
       streetAddress: r.street_address || undefined,
-      publicDescription: r.public_description || undefined,
+
       dateRequested: r.date_requested?.toISOString() || '',
       daysOpen: r.date_requested
         ? Math.floor((Date.now() - r.date_requested.getTime()) / (1000 * 60 * 60 * 24))
@@ -205,7 +199,7 @@ router.get('/', async (req, res) => {
     resolutionRate,
     avgDaysToResolve,
     topIssues,
-    recentlyResolved,
+    recentlyResolved: [],
     radiusMiles: radius,
     nearbyOpenIssues,
     nearbyResources,

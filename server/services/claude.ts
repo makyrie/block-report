@@ -3,7 +3,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor, NearbyOpenIssue, NearbyResource } from '../../src/types/index.js';
+import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
