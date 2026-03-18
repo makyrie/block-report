@@ -20,14 +20,27 @@ app.use(cors({
 }));
 
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
-const reportGenerateLimiter = rateLimit({
+const communityReportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { error: 'Too many report generation requests, please try again later' },
 });
-const blockLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
-app.use('/api/report/generate', reportGenerateLimiter);
-app.use('/api/block', blockLimiter);
+const blockReportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many block report generation requests, please try again later' },
+});
+const addressBlockReportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many address block report generation requests, please try again later' },
+});
+const blockDataLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+// Use exact-path matching to prevent prefix overlap (generate vs generate-block)
+app.post('/api/report/generate', communityReportLimiter);
+app.post('/api/report/generate-block', blockReportLimiter);
+app.post('/api/report/generate-address-block', addressBlockReportLimiter);
+app.use('/api/block', blockDataLimiter);
 app.use('/api', apiLimiter);
 
 app.use(express.json({ limit: '50kb' }));
