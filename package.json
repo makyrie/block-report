@@ -15,7 +15,9 @@
     "db:seed": "node --env-file=.env --import=tsx scripts/seed.ts",
     "generate-reports": "node --env-file=.env --import=tsx server/scripts/generate-reports.ts",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
+    "lint:fix": "eslint src/ --fix",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -60,6 +62,7 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4"
   }
 }

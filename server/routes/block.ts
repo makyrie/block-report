@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG } from '../utils/geo.js';
+import { classifyStatus } from '../utils/status.js';
 
 // ── In-memory LRU cache for block queries (keyed by rounded lat/lng/radius) ─
 interface BlockResponse {
@@ -56,14 +57,6 @@ function setCachedBlock(key: string, data: BlockResponse): void {
     if (oldestKey) blockCache.delete(oldestKey);
   }
   blockCache.set(key, { data, cachedAt: Date.now() });
-}
-
-const REFERRED_RE = /referred/i;
-
-function classifyStatus(status: string | null, dateClosed: Date | null): 'open' | 'resolved' | 'referred' {
-  if (status === 'Closed' || !!dateClosed) return 'resolved';
-  if (REFERRED_RE.test(status || '')) return 'referred';
-  return 'open';
 }
 
 const router = Router();
