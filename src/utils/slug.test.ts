@@ -25,4 +25,18 @@ describe('fromSlug', () => {
   it('handles single word', () => {
     expect(fromSlug('downtown')).toBe('Downtown');
   });
+
+  it('truncates slugs longer than 100 characters', () => {
+    const longSlug = 'a'.repeat(150);
+    const result = fromSlug(longSlug);
+    expect(result.length).toBeLessThanOrEqual(100);
+  });
+
+  it('strips non-alphanumeric non-hyphen characters', () => {
+    expect(fromSlug('mira<script>mesa')).toBe('Mirascriptmesa');
+  });
+
+  it('handles empty slug', () => {
+    expect(fromSlug('')).toBe('');
+  });
 });

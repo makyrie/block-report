@@ -4,7 +4,7 @@ import L from 'leaflet';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { CitywideCommunity } from '../../types';
 import { useLanguage } from '../../i18n/context';
-import { scoreToColor, norm, escapeHtml, ACCESS_GAP_COLORS, NO_DATA_COLOR } from '../../utils/community';
+import { scoreToColor, norm, escapeHtml, ACCESS_GAP_COLORS, NO_DATA_COLOR, VALID_FACTORS } from '../../utils/community';
 
 interface CitywideChoroplethProps {
   boundaries: FeatureCollection;
@@ -95,7 +95,7 @@ export default function CitywideChoropleth({
       // Tooltip — escape external data to prevent XSS
       const safeName = escapeHtml(displayName);
       const tooltipContent = entry
-        ? `<strong>${safeName}</strong><br/>Score: ${entry.accessGapScore}/100${entry.topFactors.length > 0 ? '<br/>' + entry.topFactors.map(escapeHtml).join(', ') : ''}`
+        ? `<strong>${safeName}</strong><br/>Score: ${entry.accessGapScore}/100${entry.topFactors.filter((f) => VALID_FACTORS.has(f)).length > 0 ? '<br/>' + entry.topFactors.filter((f) => VALID_FACTORS.has(f)).map(escapeHtml).join(', ') : ''}`
         : `<strong>${safeName}</strong><br/>${escapeHtml(t('citywide.noScore'))}`;
       layer.bindTooltip(tooltipContent, { sticky: true, direction: 'top' });
 

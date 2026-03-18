@@ -26,6 +26,9 @@ export function titleCase(name: string): string {
     .replace(/(^|\s|[-:])(\w)/g, (_, sep, char) => sep + char.toUpperCase());
 }
 
+// Allowlist of valid factor keys from the access gap scoring system
+export const VALID_FACTORS = new Set(['factor.lowEngagement', 'factor.lowTransit', 'factor.highNonEnglish']);
+
 // Escape HTML entities to prevent XSS in Leaflet tooltips
 export function escapeHtml(str: string): string {
   return str

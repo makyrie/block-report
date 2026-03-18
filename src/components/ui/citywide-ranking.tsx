@@ -1,9 +1,7 @@
 import { useRef, useEffect, memo, useMemo } from 'react';
 import type { CitywideCommunity } from '../../types';
 import { useLanguage } from '../../i18n/context';
-import { scoreToColor, norm, titleCase } from '../../utils/community';
-
-const VALID_FACTORS = new Set(['factor.lowEngagement', 'factor.lowTransit', 'factor.highNonEnglish']);
+import { scoreToColor, norm, titleCase, VALID_FACTORS } from '../../utils/community';
 
 interface RankingRowProps {
   entry: CitywideCommunity;

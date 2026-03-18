@@ -29,9 +29,14 @@ export function getTransitStops(): Promise<TransitStop[]> {
 }
 
 let boundaryPromise: Promise<FeatureCollection> | null = null;
+let boundaryCachedAt = 0;
+const BOUNDARY_CLIENT_TTL = 60 * 60 * 1000; // 1 hour
 
 export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
-  if (boundaryPromise) return boundaryPromise;
+  if (boundaryPromise && Date.now() - boundaryCachedAt < BOUNDARY_CLIENT_TTL) {
+    return boundaryPromise;
+  }
+  boundaryCachedAt = Date.now();
   boundaryPromise = fetchJSON<FeatureCollection>(
     `${BASE}/locations/neighborhoods`,
   ).catch((err) => {
