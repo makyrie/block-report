@@ -191,14 +191,18 @@ export const STATUS_COLORS = {
   referred: '#9ca3af',
 } as const;
 
-export function reportStatus(status: string, dateClosed: string | null): { color: string; label: string } {
-  if (status === 'Closed' || dateClosed) return { color: STATUS_COLORS.resolved, label: 'Resolved' };
-  if (/referred/i.test(status)) return { color: STATUS_COLORS.referred, label: 'Referred' };
-  return { color: STATUS_COLORS.open, label: 'Open' };
+const STATUS_DETAILS: Record<'open' | 'resolved' | 'referred', { color: string; label: string }> = {
+  open: { color: STATUS_COLORS.open, label: 'Open' },
+  resolved: { color: STATUS_COLORS.resolved, label: 'Resolved' },
+  referred: { color: STATUS_COLORS.referred, label: 'Referred' },
+};
+
+export function reportStatus(statusCategory: 'open' | 'resolved' | 'referred'): { color: string; label: string } {
+  return STATUS_DETAILS[statusCategory];
 }
 
 export function ReportPopupContent({ report }: { report: Block311Report }) {
-  const { color, label } = reportStatus(report.status, report.dateClosed);
+  const { color, label } = reportStatus(report.statusCategory);
   const dateStr = report.dateRequested
     ? new Date(report.dateRequested).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'Unknown';

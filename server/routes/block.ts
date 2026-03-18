@@ -168,17 +168,27 @@ router.get('/', async (req, res) => {
       return bTime - aTime;
     })
     .slice(0, MAX_REPORTS)
-    .map((r) => ({
-      id: r.service_request_id,
-      lat: Number(r.lat),
-      lng: Number(r.lng),
-      category: r.service_name || 'Unknown',
-      categoryDetail: r.service_name_detail || null,
-      status: r.status || 'Unknown',
-      dateRequested: r.date_requested?.toISOString() ?? '',
-      dateClosed: r.date_closed?.toISOString() ?? null,
-      address: r.street_address || null,
-    }));
+    .map((r) => {
+      const isClosed = r.status === 'Closed' || !!r.date_closed;
+      const isReferred = !isClosed && /referred/i.test(r.status || '');
+      const statusCategory: 'open' | 'resolved' | 'referred' = isClosed
+        ? 'resolved'
+        : isReferred
+          ? 'referred'
+          : 'open';
+      return {
+        id: r.service_request_id,
+        lat: Number(r.lat),
+        lng: Number(r.lng),
+        category: r.service_name || 'Unknown',
+        categoryDetail: r.service_name_detail || null,
+        status: r.status || 'Unknown',
+        statusCategory,
+        dateRequested: r.date_requested?.toISOString() ?? '',
+        dateClosed: r.date_closed?.toISOString() ?? null,
+        address: r.street_address || null,
+      };
+    });
 
   const result = {
     totalReports: nearby.length,

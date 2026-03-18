@@ -250,7 +250,7 @@ function SanDiegoMap({
           pathOptions={{
             color: '#fff',
             weight: 1.5,
-            fillColor: reportStatus(report.status, report.dateClosed).color,
+            fillColor: reportStatus(report.statusCategory).color,
             fillOpacity: 0.85,
           }}
           bubblingMouseEvents={false}

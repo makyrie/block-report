@@ -63,6 +63,7 @@ export interface Block311Report {
   category: string;
   categoryDetail: string | null;
   status: string;
+  statusCategory: 'open' | 'resolved' | 'referred';
   dateRequested: string;
   dateClosed: string | null;
   address: string | null;
