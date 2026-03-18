@@ -59,12 +59,14 @@ export default function NeighborhoodPage() {
 
   // Fetch map data on mount
   useEffect(() => {
-    getLibraries().then(setLibraries).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
-    getRecCenters().then(setRecCenters).catch(console.error);
-    getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch(console.error);
-    getTransitStops()
-      .then(setTransitStops)
-      .catch(console.error);
+    const handleError = (label: string) => (err: unknown) => {
+      console.error(`${label}:`, err);
+      setDataError('Failed to load map data');
+    };
+    getLibraries().then(setLibraries).catch(handleError('libraries'));
+    getRecCenters().then(setRecCenters).catch(handleError('rec centers'));
+    getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch(handleError('boundaries'));
+    getTransitStops().then(setTransitStops).catch(handleError('transit stops'));
   }, []);
 
   // Fetch 311 metrics and demographics when community changes
