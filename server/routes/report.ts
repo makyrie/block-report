@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport, generateAddressBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
+import { getCachedReport, saveCachedReport, buildBlockCacheKey, getCachedReportByKey, saveCachedReportByKey } from '../services/report-cache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
@@ -87,8 +87,8 @@ router.get('/', async (req: Request, res: Response) => {
 
       // Try deterministic cache key for address block reports first (O(1) lookup)
       const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
-      const cacheKey = `addr_${lat.toFixed(4)}_${lng.toFixed(4)}_${radius}_${langCode}`;
-      const cached = await getCachedReport(cacheKey, language);
+      const cacheKey = buildBlockCacheKey(lat, lng, radius, langCode);
+      const cached = await getCachedReportByKey(cacheKey);
       if (cached) {
         logger.info('Serving cached address block report', { lat, lng, radius, language });
         res.json({ ...cached, preGenerated: true });
@@ -277,9 +277,10 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
     );
 
     // Cache the generated block report for future instant access
-    const cacheKey = `addr_${lat.toFixed(4)}_${lng.toFixed(4)}_${blockMetrics.radiusMiles}_${LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2)}`;
+    const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
+    const cacheKey = buildBlockCacheKey(lat, lng, blockMetrics.radiusMiles, langCode);
     try {
-      await saveCachedReport(cacheKey, language, report);
+      await saveCachedReportByKey(cacheKey, report);
     } catch (err) {
       logger.error('Failed to cache address block report', { error: err instanceof Error ? err.message : String(err) });
     }
