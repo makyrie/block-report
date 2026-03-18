@@ -11,6 +11,35 @@ import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
 
+const DEFAULT_TRANSIT = { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [] as string[], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null };
+
+function buildProfile(
+  communityName: string,
+  selectedAnchor: CommunityAnchor | null,
+  metrics: NeighborhoodProfile['metrics'],
+  transitScore: NeighborhoodProfile['transit'] | null,
+  topLanguages: { language: string; percentage: number }[],
+  accessGap: NeighborhoodProfile['accessGap'],
+): NeighborhoodProfile {
+  const anchor = selectedAnchor ?? {
+    id: '',
+    name: communityName,
+    type: 'library' as const,
+    lat: 0,
+    lng: 0,
+    address: '',
+    community: communityName,
+  };
+  return {
+    communityName,
+    anchor,
+    metrics,
+    transit: transitScore ?? DEFAULT_TRANSIT,
+    demographics: { topLanguages },
+    accessGap: accessGap ?? null,
+  };
+}
+
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -143,24 +172,7 @@ export default function NeighborhoodPage() {
 
       generatingRef.current = true;
 
-      const anchor = selectedAnchor ?? {
-        id: '',
-        name: selectedCommunity,
-        type: 'library' as const,
-        lat: 0,
-        lng: 0,
-        address: '',
-        community: selectedCommunity,
-      };
-
-      const profile: NeighborhoodProfile = {
-        communityName: selectedCommunity,
-        anchor,
-        metrics,
-        transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-        demographics: { topLanguages },
-        accessGap: accessGap ?? null,
-      };
+      const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
 
       try {
         const result = await generateReport(profile, reportLang);
@@ -195,30 +207,37 @@ export default function NeighborhoodPage() {
       setSelectedAnchor(anchor);
       setSelectedCommunity(anchor.community);
       navigate(`/neighborhood/${toSlug(anchor.community)}`);
+      setMobileView('info');
     },
     [navigate],
   );
 
   const blockAbortRef = useRef<AbortController | null>(null);
 
-  const handleMapClick = useCallback(async (lat: number, lng: number) => {
+  const fetchBlockData = useCallback(async (lat: number, lng: number, radius: number) => {
     blockAbortRef.current?.abort();
     const controller = new AbortController();
     blockAbortRef.current = controller;
 
-    setPinnedLocation({ lat, lng });
-    setBlockData(null);
     setBlockLoading(true);
+    setDataError(null);
     try {
-      const data = await getBlockData(lat, lng, blockRadius, controller.signal);
+      const data = await getBlockData(lat, lng, radius, controller.signal);
       setBlockData(data);
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       console.error('Failed to fetch block data', err);
+      setDataError('Failed to load block data. Please try again.');
     } finally {
       if (!controller.signal.aborted) setBlockLoading(false);
     }
-  }, [blockRadius]);
+  }, []);
+
+  const handleMapClick = useCallback(async (lat: number, lng: number) => {
+    setPinnedLocation({ lat, lng });
+    setBlockData(null);
+    fetchBlockData(lat, lng, blockRadius);
+  }, [blockRadius, fetchBlockData]);
 
   // Re-fetch block data when radius changes (pinnedLocation changes are handled by handleMapClick)
   const prevRadiusRef = useRef(blockRadius);
@@ -227,38 +246,13 @@ export default function NeighborhoodPage() {
     if (prevRadiusRef.current === blockRadius) return;
     prevRadiusRef.current = blockRadius;
 
-    blockAbortRef.current?.abort();
-    const controller = new AbortController();
-    blockAbortRef.current = controller;
-
-    setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
-      .then(setBlockData)
-      .catch((err) => { if ((err as Error).name !== 'AbortError') console.error('Failed to fetch block data', err); })
-      .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
-  }, [blockRadius, pinnedLocation]);
+    fetchBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius);
+  }, [blockRadius, pinnedLocation, fetchBlockData]);
 
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
-    const anchor = selectedAnchor ?? {
-      id: '',
-      name: selectedCommunity,
-      type: 'library' as const,
-      lat: 0,
-      lng: 0,
-      address: '',
-      community: selectedCommunity,
-    };
-
-    const profile: NeighborhoodProfile = {
-      communityName: selectedCommunity,
-      anchor,
-      metrics,
-      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-      demographics: { topLanguages },
-      accessGap: accessGap ?? null,
-    };
+    const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
 
     setReportLoading(true);
     setReportError(null);
@@ -367,7 +361,7 @@ export default function NeighborhoodPage() {
           transitStops={transitStops}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
-          onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}
+          onAnchorClick={handleAnchorClick}
           onMapClick={handleMapClick}
           pinnedLocation={pinnedLocation}
           blockData={blockData}
