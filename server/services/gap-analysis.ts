@@ -257,9 +257,9 @@ export async function getTopUnderserved(limit = 10): Promise<
   { community: string; accessGapScore: number; signals: AccessGapResult['signals']; topFactors: string[]; rank: number; totalCommunities: number }[]
 > {
   const scores = await getAccessGapScores();
-  const sorted = Array.from(scores.entries())
-    .sort(([, a], [, b]) => b.accessGapScore - a.accessGapScore);
-  const sliced = limit === 0 ? sorted : sorted.slice(0, limit);
+  // Map is already in rank order (inserted from sorted array in computeAllScores)
+  const entries = Array.from(scores.entries());
+  const sliced = limit === 0 ? entries : entries.slice(0, limit);
   return sliced.map(([community, data]) => ({
     community,
     accessGapScore: data.accessGapScore,
