@@ -60,6 +60,25 @@ function makeReportTool(description: string, fieldOverrides?: Record<string, { d
   };
 }
 
+/** Validate that Claude's tool_use response matches CommunityReport shape */
+function validateReportShape(input: unknown): input is Omit<CommunityReport, 'generatedAt'> {
+  if (typeof input !== 'object' || input === null) return false;
+  const obj = input as Record<string, unknown>;
+  return (
+    typeof obj.neighborhoodName === 'string' &&
+    typeof obj.language === 'string' &&
+    typeof obj.summary === 'string' &&
+    Array.isArray(obj.goodNews) &&
+    Array.isArray(obj.topIssues) &&
+    Array.isArray(obj.howToParticipate) &&
+    typeof obj.contactInfo === 'object' &&
+    obj.contactInfo !== null &&
+    typeof (obj.contactInfo as Record<string, unknown>).councilDistrict === 'string' &&
+    typeof (obj.contactInfo as Record<string, unknown>).phone311 === 'string' &&
+    typeof (obj.contactInfo as Record<string, unknown>).anchorLocation === 'string'
+  );
+}
+
 // Shared Claude API call + response extraction
 async function callClaudeForReport(prompt: string, tool: Anthropic.Messages.Tool, logContext: Record<string, string>): Promise<CommunityReport> {
   const client = getClient();
@@ -77,8 +96,16 @@ async function callClaudeForReport(prompt: string, tool: Anthropic.Messages.Tool
       throw new Error('No tool use block in response');
     }
 
+    if (!validateReportShape(toolBlock.input)) {
+      logger.error('Claude response does not match expected report structure', {
+        keys: Object.keys(toolBlock.input as object),
+        ...logContext,
+      });
+      throw new Error('Claude response does not match expected report structure');
+    }
+
     return {
-      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
+      ...toolBlock.input,
       generatedAt: new Date().toISOString(),
     };
   } catch (error) {
@@ -248,7 +275,7 @@ Keep the total report under 400 words. It should fit on one printed page.`;
   return callClaudeForReport(prompt, tool, { anchor: anchorName, community: anchorCommunity });
 }
 
-function sanitizeString(value: unknown, maxLen: number): string {
+export function sanitizeString(value: unknown, maxLen: number): string {
   if (typeof value !== 'string') return '';
   // Strip control characters and common prompt-injection delimiters
   return value
@@ -258,7 +285,7 @@ function sanitizeString(value: unknown, maxLen: number): string {
 }
 
 /** Stricter sanitizer for values interpolated directly into Claude prompts (addresses, community names). */
-function sanitizePromptValue(value: unknown, maxLen: number): string {
+export function sanitizePromptValue(value: unknown, maxLen: number): string {
   if (typeof value !== 'string') return '';
   // Allow only alphanumeric, spaces, commas, periods, hyphens, slashes, #, apostrophes, parentheses
   return value
@@ -267,7 +294,7 @@ function sanitizePromptValue(value: unknown, maxLen: number): string {
     .slice(0, maxLen);
 }
 
-function sanitizeBlockMetrics(raw: BlockMetrics): BlockMetrics {
+export function sanitizeBlockMetrics(raw: BlockMetrics): BlockMetrics {
   return {
     totalRequests: Math.max(0, Math.floor(Number(raw.totalRequests) || 0)),
     openCount: Math.max(0, Math.floor(Number(raw.openCount) || 0)),
