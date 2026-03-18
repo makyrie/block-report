@@ -78,10 +78,11 @@ export default function CitywideChoropleth({
       const entry = getScore(feature);
       const displayName = feature.properties?.cpname ?? 'Unknown';
 
-      // Tooltip
+      // Tooltip — escape external data to prevent XSS
+      const safeName = escapeHtml(displayName);
       const tooltipContent = entry
-        ? `<strong>${displayName}</strong><br/>Score: ${entry.accessGapScore}/100${entry.topFactors.length > 0 ? '<br/>' + entry.topFactors.join(', ') : ''}`
-        : `<strong>${displayName}</strong><br/>${t('citywide.noScore')}`;
+        ? `<strong>${safeName}</strong><br/>Score: ${entry.accessGapScore}/100${entry.topFactors.length > 0 ? '<br/>' + entry.topFactors.map(escapeHtml).join(', ') : ''}`
+        : `<strong>${safeName}</strong><br/>${escapeHtml(t('citywide.noScore'))}`;
       layer.bindTooltip(tooltipContent, { sticky: true, direction: 'top' });
 
       layer.on({
