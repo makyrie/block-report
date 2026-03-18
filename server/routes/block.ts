@@ -58,6 +58,14 @@ function setCachedBlock(key: string, data: BlockResponse): void {
   blockCache.set(key, { data, cachedAt: Date.now() });
 }
 
+const REFERRED_RE = /referred/i;
+
+function classifyStatus(status: string | null, dateClosed: Date | null): 'open' | 'resolved' | 'referred' {
+  if (status === 'Closed' || !!dateClosed) return 'resolved';
+  if (REFERRED_RE.test(status || '')) return 'referred';
+  return 'open';
+}
+
 const router = Router();
 
 router.get('/', async (req, res) => {
@@ -76,20 +84,24 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  if (radius < 0.1 || radius > 2) {
-    res.status(400).json({ error: 'Radius must be between 0.1 and 2 miles' });
-    return;
-  }
+  const ALLOWED_RADII = [0.1, 0.25, 0.5, 1, 2];
+  const snappedRadius = ALLOWED_RADII.reduce((best, r) =>
+    Math.abs(r - radius) < Math.abs(best - radius) ? r : best,
+  );
+  // Use snappedRadius for all downstream logic
+  const radius_ = snappedRadius;
 
-  const cacheKey = blockCacheKey(lat, lng, radius);
+  const cacheKey = blockCacheKey(lat, lng, radius_);
   const cached = getCachedBlock(cacheKey);
   if (cached) {
     res.json(cached);
     return;
   }
 
-  const latDelta = radius / MILES_PER_LAT_DEG;
-  const lngDelta = radius / MILES_PER_LNG_DEG;
+  const latDelta = radius_ / MILES_PER_LAT_DEG;
+  const lngDelta = radius_ / MILES_PER_LNG_DEG;
+
+  const QUERY_SAFETY_CAP = 10_000;
 
   let data;
   try {
@@ -110,7 +122,14 @@ router.get('/', async (req, res) => {
         lng: { gte: lng - lngDelta, lte: lng + lngDelta },
       },
       orderBy: { date_requested: 'desc' },
+      take: QUERY_SAFETY_CAP,
     });
+
+    if (data.length >= QUERY_SAFETY_CAP) {
+      logger.warn('Block query hit safety cap — aggregates may be incomplete', {
+        lat, lng, radius: radius_, resultCount: data.length, cap: QUERY_SAFETY_CAP,
+      });
+    }
   } catch (err) {
     logger.error('Failed to fetch block data', { error: (err as Error).message });
     res.status(500).json({ error: 'Internal server error' });
@@ -120,7 +139,7 @@ router.get('/', async (req, res) => {
   // Refine with exact Haversine distance
   const nearby = data.filter(
     (r) => r.lat != null && r.lng != null &&
-      haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= radius,
+      haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= radius_,
   );
 
   // Single pass: compute all aggregate stats + collect resolved-with-dates
@@ -133,10 +152,8 @@ router.get('/', async (req, res) => {
   const resolvedWithClosed: typeof nearby = [];
 
   for (const r of nearby) {
-    // Three-way classification matching frontend display
-    const isClosed = r.status === 'Closed' || !!r.date_closed;
-    const isReferred = !isClosed && /referred/i.test(r.status || '');
-    if (isClosed) {
+    const statusCat = classifyStatus(r.status, r.date_closed);
+    if (statusCat === 'resolved') {
       resolvedCount++;
       if (r.date_closed) {
         resolvedWithClosed.push(r);
@@ -145,15 +162,15 @@ router.get('/', async (req, res) => {
           resolvedWithDatesCount++;
         }
       }
-    } else if (isReferred) {
+    } else if (statusCat === 'referred') {
       referredCount++;
     } else {
       openCount++;
     }
 
     // Issue counts
-    const cat = r.service_name || 'Unknown';
-    issueCounts[cat] = (issueCounts[cat] || 0) + 1;
+    const issueName = r.service_name || 'Unknown';
+    issueCounts[issueName] = (issueCounts[issueName] || 0) + 1;
   }
 
   const resolutionRate = nearby.length > 0 ? resolvedCount / nearby.length : 0;
@@ -181,13 +198,7 @@ router.get('/', async (req, res) => {
     })
     .slice(0, MAX_REPORTS)
     .map((r) => {
-      const isClosed = r.status === 'Closed' || !!r.date_closed;
-      const isReferred = !isClosed && /referred/i.test(r.status || '');
-      const statusCategory: 'open' | 'resolved' | 'referred' = isClosed
-        ? 'resolved'
-        : isReferred
-          ? 'referred'
-          : 'open';
+      const statusCategory = classifyStatus(r.status, r.date_closed);
       return {
         id: r.service_request_id,
         lat: Number(r.lat),
@@ -211,7 +222,7 @@ router.get('/', async (req, res) => {
     avgDaysToResolve,
     topIssues,
     recentlyResolved,
-    radiusMiles: radius,
+    radiusMiles: radius_,
     reports,
   };
 
