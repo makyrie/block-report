@@ -18,6 +18,79 @@ function getClient(): Anthropic {
   return _client;
 }
 
+// Shared tool schema — used by all report generation functions
+function makeReportTool(description: string, fieldOverrides?: Record<string, { description: string }>): Anthropic.Messages.Tool {
+  const overrides = fieldOverrides ?? {};
+  return {
+    name: 'community_report',
+    description,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        neighborhoodName: { type: 'string', description: overrides.neighborhoodName?.description ?? 'Name of the neighborhood' },
+        language: { type: 'string', description: overrides.language?.description ?? 'Language the report is written in' },
+        summary: { type: 'string', description: overrides.summary?.description ?? 'A 2-sentence welcome greeting' },
+        goodNews: {
+          type: 'array',
+          items: { type: 'string' },
+          description: overrides.goodNews?.description ?? '2-3 positive things happening based on the data',
+        },
+        topIssues: {
+          type: 'array',
+          items: { type: 'string' },
+          description: overrides.topIssues?.description ?? 'Top 3 issues being reported via 311, framed constructively',
+        },
+        howToParticipate: {
+          type: 'array',
+          items: { type: 'string' },
+          description: overrides.howToParticipate?.description ?? '3-4 concrete actions residents can take to get involved',
+        },
+        contactInfo: {
+          type: 'object',
+          properties: {
+            councilDistrict: { type: 'string' },
+            phone311: { type: 'string' },
+            anchorLocation: { type: 'string', description: overrides.anchorLocation?.description ?? 'Nearest library or rec center with address' },
+          },
+          required: ['councilDistrict', 'phone311', 'anchorLocation'],
+        },
+      },
+      required: ['neighborhoodName', 'language', 'summary', 'goodNews', 'topIssues', 'howToParticipate', 'contactInfo'],
+    },
+  };
+}
+
+// Shared Claude API call + response extraction
+async function callClaudeForReport(prompt: string, tool: Anthropic.Messages.Tool, logContext: Record<string, string>): Promise<CommunityReport> {
+  const client = getClient();
+  try {
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+      tools: [tool],
+      tool_choice: { type: 'tool', name: 'community_report' },
+    });
+
+    const toolBlock = message.content.find((block) => block.type === 'tool_use');
+    if (!toolBlock || toolBlock.type !== 'tool_use') {
+      throw new Error('No tool use block in response');
+    }
+
+    return {
+      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    logger.error('Claude API call failed', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      ...logContext,
+    });
+    throw error;
+  }
+}
+
 export async function generateReport(
   profile: NeighborhoodProfile,
   language: string,
@@ -34,8 +107,6 @@ export async function generateReport(
   }
   // Strip newlines and control characters
   profile.communityName = profile.communityName.replace(/[\x00-\x1f\x7f]/g, '');
-
-  const client = getClient();
 
   const prompt = `You are generating a community report for the ${profile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
 
@@ -54,72 +125,12 @@ Generate a report with these sections:
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 
-  const reportTool: Anthropic.Messages.Tool = {
-    name: 'community_report',
-    description: 'Output a structured community report for a San Diego neighborhood',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        neighborhoodName: { type: 'string', description: 'Name of the neighborhood' },
-        language: { type: 'string', description: 'Language the brief is written in' },
-        summary: { type: 'string', description: 'A 2-sentence welcome greeting that names the neighborhood' },
-        goodNews: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '2-3 positive things happening based on the data',
-        },
-        topIssues: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Top 3 issues being reported via 311, framed constructively',
-        },
-        howToParticipate: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '3-4 concrete actions residents can take to get involved',
-        },
-        contactInfo: {
-          type: 'object',
-          properties: {
-            councilDistrict: { type: 'string' },
-            phone311: { type: 'string' },
-            anchorLocation: { type: 'string', description: 'Nearest library or rec center with address' },
-          },
-          required: ['councilDistrict', 'phone311', 'anchorLocation'],
-        },
-      },
-      required: ['neighborhoodName', 'language', 'summary', 'goodNews', 'topIssues', 'howToParticipate', 'contactInfo'],
-    },
-  };
+  const tool = makeReportTool(
+    'Output a structured community report for a San Diego neighborhood',
+    { summary: { description: 'A 2-sentence welcome greeting that names the neighborhood' } },
+  );
 
-  try {
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
-      tools: [reportTool],
-      tool_choice: { type: 'tool', name: 'community_report' },
-    });
-
-    const toolBlock = message.content.find((block) => block.type === 'tool_use');
-    if (!toolBlock || toolBlock.type !== 'tool_use') {
-      throw new Error('No tool use block in response');
-    }
-
-    const report: CommunityReport = {
-      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
-      generatedAt: new Date().toISOString(),
-    };
-
-    return report;
-  } catch (error) {
-    logger.error('Claude API call failed', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      community: profile.communityName,
-    });
-    throw error;
-  }
+  return callClaudeForReport(prompt, tool, { community: profile.communityName });
 }
 
 export async function generateBlockReport(
@@ -128,8 +139,6 @@ export async function generateBlockReport(
   language: string,
   demographics?: { topLanguages: { language: string; percentage: number }[] },
 ): Promise<CommunityReport> {
-  const client = getClient();
-
   const anchorLabel = anchor.type === 'library' ? 'library' : 'recreation center';
 
   const prompt = `You are generating a block-level community report for the area around ${anchor.name} (a ${anchorLabel}) in the ${anchor.community} neighborhood of San Diego. The report covers a ${blockMetrics.radiusMiles}-mile radius around this location at ${anchor.address}.
@@ -152,72 +161,16 @@ Generate a report with these sections:
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 
-  const reportTool: Anthropic.Messages.Tool = {
-    name: 'community_report',
-    description: 'Output a structured block-level community report centered on a civic anchor location',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        neighborhoodName: { type: 'string', description: 'Name of the anchor location and neighborhood' },
-        language: { type: 'string', description: 'Language the report is written in' },
-        summary: { type: 'string', description: 'A 2-sentence welcome greeting naming the anchor location' },
-        goodNews: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '2-3 positive things happening based on the data',
-        },
-        topIssues: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Top 3 issues being reported via 311, framed constructively',
-        },
-        howToParticipate: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '3-4 concrete actions residents can take to get involved',
-        },
-        contactInfo: {
-          type: 'object',
-          properties: {
-            councilDistrict: { type: 'string' },
-            phone311: { type: 'string' },
-            anchorLocation: { type: 'string', description: 'The anchor location name and address' },
-          },
-          required: ['councilDistrict', 'phone311', 'anchorLocation'],
-        },
-      },
-      required: ['neighborhoodName', 'language', 'summary', 'goodNews', 'topIssues', 'howToParticipate', 'contactInfo'],
+  const tool = makeReportTool(
+    'Output a structured block-level community report centered on a civic anchor location',
+    {
+      neighborhoodName: { description: 'Name of the anchor location and neighborhood' },
+      summary: { description: 'A 2-sentence welcome greeting naming the anchor location' },
+      anchorLocation: { description: 'The anchor location name and address' },
     },
-  };
+  );
 
-  try {
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
-      tools: [reportTool],
-      tool_choice: { type: 'tool', name: 'community_report' },
-    });
-
-    const toolBlock = message.content.find((block) => block.type === 'tool_use');
-    if (!toolBlock || toolBlock.type !== 'tool_use') {
-      throw new Error('No tool use block in response');
-    }
-
-    const report: CommunityReport = {
-      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
-      generatedAt: new Date().toISOString(),
-    };
-
-    return report;
-  } catch (error) {
-    logger.error('Claude API call failed for block report', {
-      error: error instanceof Error ? error.message : String(error),
-      anchor: anchor.name,
-      community: anchor.community,
-    });
-    throw error;
-  }
+  return callClaudeForReport(prompt, tool, { anchor: anchor.name, community: anchor.community });
 }
 
 function sanitizeString(value: unknown, maxLen: number): string {
@@ -299,8 +252,6 @@ export async function generateAddressBlockReport(
     };
   }
 
-  const client = getClient();
-
   // Format nearby open issues for the prompt
   const openIssuesList = (blockMetrics.nearbyOpenIssues ?? [])
     .map((issue) => {
@@ -353,70 +304,15 @@ Generate a report with these sections:
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 
-  const reportTool: Anthropic.Messages.Tool = {
-    name: 'community_report',
-    description: 'Output a structured block-level community report for a specific address',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        neighborhoodName: { type: 'string', description: 'Formatted as "Around {address}, {communityName}"' },
-        language: { type: 'string', description: 'Language the report is written in' },
-        summary: { type: 'string', description: 'A 2-sentence welcome greeting referencing the specific address' },
-        goodNews: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '2-3 positive things happening based on the data',
-        },
-        topIssues: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '3-5 specific open issues nearby with street addresses, or note that few issues are reported',
-        },
-        howToParticipate: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '3-4 concrete actions residents can take to get involved',
-        },
-        contactInfo: {
-          type: 'object',
-          properties: {
-            councilDistrict: { type: 'string' },
-            phone311: { type: 'string' },
-            anchorLocation: { type: 'string', description: 'Nearest library or rec center with address and distance' },
-          },
-          required: ['councilDistrict', 'phone311', 'anchorLocation'],
-        },
-      },
-      required: ['neighborhoodName', 'language', 'summary', 'goodNews', 'topIssues', 'howToParticipate', 'contactInfo'],
+  const tool = makeReportTool(
+    'Output a structured block-level community report for a specific address',
+    {
+      neighborhoodName: { description: 'Formatted as "Around {address}, {communityName}"' },
+      summary: { description: 'A 2-sentence welcome greeting referencing the specific address' },
+      topIssues: { description: '3-5 specific open issues nearby with street addresses, or note that few issues are reported' },
+      anchorLocation: { description: 'Nearest library or rec center with address and distance' },
     },
-  };
+  );
 
-  try {
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
-      tools: [reportTool],
-      tool_choice: { type: 'tool', name: 'community_report' },
-    });
-
-    const toolBlock = message.content.find((block) => block.type === 'tool_use');
-    if (!toolBlock || toolBlock.type !== 'tool_use') {
-      throw new Error('No tool use block in response');
-    }
-
-    const report: CommunityReport = {
-      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
-      generatedAt: new Date().toISOString(),
-    };
-
-    return report;
-  } catch (error) {
-    logger.error('Claude API call failed for address block report', {
-      error: error instanceof Error ? error.message : String(error),
-      address,
-      community: communityName,
-    });
-    throw error;
-  }
+  return callClaudeForReport(prompt, tool, { address, community: communityName });
 }
