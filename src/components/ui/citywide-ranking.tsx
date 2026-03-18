@@ -93,7 +93,7 @@ export default function CitywideRanking({
                         key={factor}
                         className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
                       >
-                        {factor}
+                        {t(factor)}
                       </span>
                     ))}
                   </div>

@@ -301,13 +301,13 @@ export async function getAccessGapScore(community: string): Promise<AccessGapRes
 export function describeTopFactors(signals: AccessGapResult['signals']): string[] {
   const factors: string[] = [];
   if (signals.lowEngagement !== null && signals.lowEngagement > 0.5) {
-    factors.push('low civic engagement');
+    factors.push('factor.lowEngagement');
   }
   if (signals.lowTransit !== null && signals.lowTransit > 0.5) {
-    factors.push('limited transit access');
+    factors.push('factor.lowTransit');
   }
   if (signals.highNonEnglish !== null && signals.highNonEnglish > 0.5) {
-    factors.push(`${Math.round(signals.highNonEnglish * 100)}% non-English speaking`);
+    factors.push('factor.highNonEnglish');
   }
   return factors;
 }
