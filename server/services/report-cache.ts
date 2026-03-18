@@ -49,6 +49,9 @@ export async function getCachedReport(community: string, language: string): Prom
     const filePath = join(CACHE_DIR, cacheKey(community, language));
     const raw = await readFile(filePath, 'utf-8');
     const report: CommunityReport = JSON.parse(raw);
+    // Enforce TTL — ignore stale cached reports
+    const age = Date.now() - new Date(report.generatedAt).getTime();
+    if (age > CACHE_TTL_MS) return null;
     return report;
   } catch {
     return null;
