@@ -183,12 +183,22 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // Fall back to on-demand generation
-    logger.info('No pre-generated report found, generating on-demand', {
-      community: profile.communityName,
-      language,
-    });
-    const report = await generateReport(profile, language);
+    // Fall back to on-demand generation with request coalescing
+    const coalescingKey = `community_${sanitizeFilename(profile.communityName)}_${getLangCode(language)}`;
+    let reportPromise = inFlightGenerations.get(coalescingKey);
+    if (!reportPromise) {
+      logger.info('No pre-generated report found, generating on-demand', {
+        community: profile.communityName,
+        language,
+      });
+      reportPromise = generateReport(profile, language);
+      inFlightGenerations.set(coalescingKey, reportPromise);
+      reportPromise.finally(() => inFlightGenerations.delete(coalescingKey));
+    } else {
+      logger.info('Coalescing duplicate community report request', { coalescingKey });
+    }
+
+    const report = await reportPromise;
 
     // Cache the generated report for future instant access
     try {
@@ -242,12 +252,22 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       // No cached version — generate on-demand
     }
 
-    logger.info('Generating block report on-demand', {
-      anchor: anchor.name,
-      language,
-    });
+    // Coalesce duplicate in-flight requests for same anchor
+    const coalescingKey = `block_${sanitizeFilename(anchor.id || anchor.name)}_${langCode}`;
+    let reportPromise = inFlightGenerations.get(coalescingKey);
+    if (!reportPromise) {
+      logger.info('Generating block report on-demand', {
+        anchor: anchor.name,
+        language,
+      });
+      reportPromise = generateBlockReport(anchor, blockMetrics, language, demographics);
+      inFlightGenerations.set(coalescingKey, reportPromise);
+      reportPromise.finally(() => inFlightGenerations.delete(coalescingKey));
+    } else {
+      logger.info('Coalescing duplicate block report request', { coalescingKey });
+    }
 
-    const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
+    const report = await reportPromise;
 
     // Cache the generated block report for future instant access
     try {
