@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { classifyStatus } from '../status.js';
 
 describe('classifyStatus', () => {
-  it('returns "resolved" for Closed status', () => {
+  it('returns "resolved" for Closed status (case-insensitive)', () => {
     expect(classifyStatus('Closed', null)).toBe('resolved');
+    expect(classifyStatus('closed', null)).toBe('resolved');
+    expect(classifyStatus('CLOSED', null)).toBe('resolved');
   });
 
   it('returns "resolved" when date_closed is set regardless of status', () => {
@@ -20,6 +22,8 @@ describe('classifyStatus', () => {
   it('returns "open" for all other statuses', () => {
     expect(classifyStatus('Open', null)).toBe('open');
     expect(classifyStatus('In Progress', null)).toBe('open');
+    expect(classifyStatus('New', null)).toBe('open');
+    expect(classifyStatus('Cancelled', null)).toBe('open');
     expect(classifyStatus(null, null)).toBe('open');
     expect(classifyStatus('', null)).toBe('open');
   });
