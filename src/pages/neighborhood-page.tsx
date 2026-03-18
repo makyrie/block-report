@@ -204,30 +204,23 @@ export default function NeighborhoodPage() {
     [navigate],
   );
 
-  const handleMapClick = useCallback(async (lat: number, lng: number) => {
+  const handleMapClick = useCallback((lat: number, lng: number) => {
     setPinnedLocation({ lat, lng });
     setBlockData(null);
     setBlockReport(null);
     setBlockReportError(null);
-    setBlockLoading(true);
-    try {
-      const data = await getBlockData(lat, lng, blockRadius);
-      setBlockData(data);
-    } catch (err) {
-      console.error('Failed to fetch block data', err);
-    } finally {
-      setBlockLoading(false);
-    }
-  }, [blockRadius]);
+  }, []);
 
-  // Re-fetch block data when radius changes
+  // Fetch block data when pinned location or radius changes (single source of truth)
   useEffect(() => {
     if (!pinnedLocation) return;
+    let cancelled = false;
     setBlockLoading(true);
     getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
-      .then(setBlockData)
-      .catch((err) => console.error('Failed to fetch block data', err))
-      .finally(() => setBlockLoading(false));
+      .then((data) => { if (!cancelled) setBlockData(data); })
+      .catch((err) => { if (!cancelled) console.error('Failed to fetch block data', err); })
+      .finally(() => { if (!cancelled) setBlockLoading(false); });
+    return () => { cancelled = true; };
   }, [blockRadius, pinnedLocation]);
 
   const handleGenerateReport = useCallback(async (language: string) => {
