@@ -32,10 +32,8 @@ describe('scoreToColor', () => {
     expect(scoreToColor(-100)).toBe(ACCESS_GAP_COLORS[0]);
   });
 
-  it('handles NaN gracefully', () => {
-    // NaN comparisons are all false, so it falls through to the last return
-    const result = scoreToColor(NaN);
-    expect(ACCESS_GAP_COLORS).toContain(result);
+  it('returns NO_DATA_COLOR for NaN', () => {
+    expect(scoreToColor(NaN)).toBe(NO_DATA_COLOR);
   });
 });
 

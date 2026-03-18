@@ -39,9 +39,9 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/access-gap/ranking?limit={n}  (limit=0 returns all, capped at 200)
-router.get('/ranking', async (_req, res) => {
+router.get('/ranking', async (req, res) => {
   const MAX_RESULTS = 200;
-  const rawLimit = _req.query.limit;
+  const rawLimit = req.query.limit;
   const parsed = Number(rawLimit);
   const limit = (rawLimit === '0' || rawLimit === 'all')
     ? MAX_RESULTS
