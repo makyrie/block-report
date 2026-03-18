@@ -48,12 +48,6 @@ export function getAccessGap(community: string): Promise<NonNullable<Neighborhoo
   return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`);
 }
 
-export function getAccessGapRanking(limit = 10): Promise<{
-  ranking: { community: string; accessGapScore: number; signals: NonNullable<NeighborhoodProfile['accessGap']>['signals'] }[];
-}> {
-  return fetchJSON(`${BASE}/access-gap/ranking?limit=${limit}`);
-}
-
 export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: AbortSignal): Promise<BlockMetrics> {
   return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`, { signal });
 }
@@ -74,11 +68,3 @@ export function generateReport(profile: NeighborhoodProfile, language: string): 
   });
 }
 
-export function getBlockReport(
-  lat: number,
-  lng: number,
-  radius = 0.25,
-  language = 'en',
-): Promise<CommunityReport & { preGenerated?: boolean; anchorName?: string; anchorType?: string }> {
-  return fetchJSON(`${BASE}/report?lat=${lat}&lng=${lng}&radius=${radius}&language=${language}`);
-}

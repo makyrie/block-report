@@ -62,9 +62,9 @@ function setCachedBlock(key: string, data: BlockResponse): void {
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const lat = parseFloat(req.query.lat as string);
-  const lng = parseFloat(req.query.lng as string);
-  const radius = parseFloat(req.query.radius as string) || 0.25;
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  const radius = Number(req.query.radius) || 0.25;
 
   if (isNaN(lat) || isNaN(lng)) {
     res.status(400).json({ error: 'lat and lng query parameters are required' });
@@ -181,14 +181,9 @@ router.get('/', async (req, res) => {
     .slice(0, 5)
     .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
 
-  // Individual reports: sort copy by most recent, cap at 500
+  // Cap individual reports — nearby preserves Prisma's date_requested DESC order
   const MAX_REPORTS = 500;
-  const reports = [...nearby]
-    .sort((a, b) => {
-      const aTime = a.date_requested?.getTime() ?? 0;
-      const bTime = b.date_requested?.getTime() ?? 0;
-      return bTime - aTime;
-    })
+  const reports = nearby
     .slice(0, MAX_REPORTS)
     .map((r) => {
       const statusCategory = classifyStatus(r.status, r.date_closed);
