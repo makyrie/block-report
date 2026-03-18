@@ -20,13 +20,16 @@ export default function CitywideRanking({
   const listRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
-  // Auto-scroll to hovered community (from map hover)
+  // Auto-scroll to hovered community (from map hover), debounced to prevent jitter
   useEffect(() => {
     if (!hoveredCommunity || !listRef.current) return;
-    const el = rowRefs.current.get(norm(hoveredCommunity));
-    if (el) {
-      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    const timer = setTimeout(() => {
+      const el = rowRefs.current.get(norm(hoveredCommunity));
+      if (el) {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }, 150);
+    return () => clearTimeout(timer);
   }, [hoveredCommunity]);
 
   return (
