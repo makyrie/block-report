@@ -5,7 +5,7 @@ import type { CommunityReport } from '../../src/types/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
-const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function sanitizeKeyPart(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -29,6 +29,9 @@ export async function getCachedReportByKey(key: string): Promise<CommunityReport
     const filePath = join(CACHE_DIR, `${sanitizeKeyPart(key)}.json`);
     const raw = await readFile(filePath, 'utf-8');
     const report: CommunityReport = JSON.parse(raw);
+    // Enforce TTL — ignore stale cached reports
+    const age = Date.now() - new Date(report.generatedAt).getTime();
+    if (age > CACHE_TTL_MS) return null;
     return report;
   } catch {
     return null;
@@ -46,14 +49,6 @@ export async function getCachedReport(community: string, language: string): Prom
     const filePath = join(CACHE_DIR, cacheKey(community, language));
     const raw = await readFile(filePath, 'utf-8');
     const report: CommunityReport = JSON.parse(raw);
-
-    // Check staleness — still return stale reports but mark them
-    const age = Date.now() - new Date(report.generatedAt).getTime();
-    if (age > STALE_THRESHOLD_MS) {
-      // Return stale report — caller can decide to regenerate in background
-      return report;
-    }
-
     return report;
   } catch {
     return null;

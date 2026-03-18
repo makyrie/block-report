@@ -195,10 +195,6 @@ function sanitizeBlockMetrics(raw: BlockMetrics): BlockMetrics {
       category: sanitizeString(i.category, 100),
       count: Math.max(0, Math.floor(Number(i.count) || 0)),
     })),
-    recentlyResolved: (Array.isArray(raw.recentlyResolved) ? raw.recentlyResolved : []).slice(0, 10).map((r) => ({
-      category: sanitizeString(r.category, 100),
-      date: sanitizeString(r.date, 30),
-    })),
     radiusMiles: Math.min(2, Math.max(0.1, Number(raw.radiusMiles) || 0.25)),
     nearbyOpenIssues: (Array.isArray(raw.nearbyOpenIssues) ? raw.nearbyOpenIssues : []).slice(0, 10).map((issue) => ({
       serviceRequestId: sanitizeString(issue.serviceRequestId, 50),
