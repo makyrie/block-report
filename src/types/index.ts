@@ -82,12 +82,12 @@ export interface BlockMetrics {
   resolutionRate: number;
   avgDaysToResolve: number | null;
   topIssues: { category: string; count: number }[];
-  recentlyResolved?: { category: string; date: string }[];
   radiusMiles: number;
   nearbyOpenIssues?: NearbyOpenIssue[];
   nearbyResources?: NearbyResource[];
   nearestAddress?: string | null;
   communityName?: string | null;
+  truncated?: boolean;
 }
 
 export interface CommunityReport {

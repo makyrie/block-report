@@ -30,7 +30,7 @@ app.use('/api/report/generate', reportGenerateLimiter);
 app.use('/api/block', blockLimiter);
 app.use('/api', apiLimiter);
 
-app.use(express.json());
+app.use(express.json({ limit: '50kb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
