@@ -1,25 +1,20 @@
 import { Router } from 'express';
 import { logger } from '../logger.js';
 import { getTransitScores, getCityAverage } from '../services/transit-scores.js';
+import { validateCommunityParam, communityKey } from '../utils/community.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const community = req.query.community as string | undefined;
-  if (!community) {
+  const cleaned = validateCommunityParam(req.query.community as string | undefined);
+  if (!cleaned) {
     res.status(400).json({ error: 'community query parameter is required' });
-    return;
-  }
-
-  const cleaned = community.replace(/[%_]/g, '');
-  if (cleaned.length > 100 || cleaned.length === 0) {
-    res.status(400).json({ error: 'Invalid community name' });
     return;
   }
 
   try {
     const scores = await getTransitScores();
-    const key = cleaned.toUpperCase();
+    const key = communityKey(cleaned);
     const score = scores.get(key);
 
     if (!score) {

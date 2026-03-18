@@ -2,6 +2,7 @@ import { prisma } from './db.js';
 import { logger } from '../logger.js';
 import { getTransitScoreValues } from './transit-scores.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
+import { communityKey } from '../utils/community.js';
 
 export interface AccessGapResult {
   accessGapScore: number;
@@ -43,14 +44,14 @@ async function fetchEngagementRates(censusRows: CensusRow[]): Promise<Map<string
   const counts = new Map<string, number>();
   for (const row of grouped) {
     if (!row.comm_plan_name) continue;
-    const key = row.comm_plan_name.toUpperCase().trim();
+    const key = communityKey(row.comm_plan_name);
     counts.set(key, (counts.get(key) || 0) + row._count._all);
   }
 
   const populations = new Map<string, number>();
   for (const row of censusRows) {
     if (!row.community) continue;
-    const key = row.community.toUpperCase().trim();
+    const key = communityKey(row.community);
     populations.set(key, (populations.get(key) || 0) + (Number(row.total_pop_5plus) || 0));
   }
 
@@ -68,7 +69,7 @@ function computeNonEnglishPct(censusRows: CensusRow[]): Map<string, number> {
   const agg = new Map<string, { totalPop: number; englishOnly: number }>();
   for (const row of censusRows) {
     if (!row.community) continue;
-    const key = row.community.toUpperCase().trim();
+    const key = communityKey(row.community);
     const existing = agg.get(key) || { totalPop: 0, englishOnly: 0 };
     existing.totalPop += Number(row.total_pop_5plus) || 0;
     existing.englishOnly += Number(row.english_only) || 0;
@@ -219,7 +220,7 @@ export function getAccessGapScores(): Promise<Map<string, AccessGapResult>> {
 
 export async function getAccessGapScore(community: string): Promise<AccessGapResult | null> {
   const scores = await getAccessGapScores();
-  return scores.get(community.toUpperCase().trim()) ?? null;
+  return scores.get(communityKey(community)) ?? null;
 }
 
 export function describeTopFactors(signals: AccessGapResult['signals']): string[] {

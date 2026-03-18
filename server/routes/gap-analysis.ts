@@ -1,20 +1,15 @@
 import { Router } from 'express';
 import { getAccessGapScore, getAccessGapScores, getTopUnderserved } from '../services/gap-analysis.js';
 import { logger } from '../logger.js';
+import { validateCommunityParam } from '../utils/community.js';
 
 const router = Router();
 
 // GET /api/access-gap?community={name}
 router.get('/', async (req, res) => {
-  const community = req.query.community as string | undefined;
-  if (!community) {
+  const cleaned = validateCommunityParam(req.query.community as string | undefined);
+  if (!cleaned) {
     res.status(400).json({ error: 'community query parameter is required' });
-    return;
-  }
-
-  const cleaned = community.replace(/[%_]/g, '');
-  if (cleaned.length > 100 || cleaned.length === 0) {
-    res.status(400).json({ error: 'Invalid community name' });
     return;
   }
 
