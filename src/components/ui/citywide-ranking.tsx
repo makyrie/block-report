@@ -3,6 +3,8 @@ import type { CitywideCommunity } from '../../types';
 import { useLanguage } from '../../i18n/context';
 import { scoreToColor, norm, titleCase } from '../../utils/community';
 
+const VALID_FACTORS = new Set(['factor.lowEngagement', 'factor.lowTransit', 'factor.highNonEnglish']);
+
 interface CitywideRankingProps {
   ranking: CitywideCommunity[];
   hoveredCommunity: string | null;
@@ -86,9 +88,9 @@ export default function CitywideRanking({
                     </span>
                   )}
                 </div>
-                {entry.topFactors.length > 0 && (
+                {entry.topFactors.filter((f) => VALID_FACTORS.has(f)).length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {entry.topFactors.map((factor) => (
+                    {entry.topFactors.filter((f) => VALID_FACTORS.has(f)).map((factor) => (
                       <span
                         key={factor}
                         className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
