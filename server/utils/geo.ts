@@ -2,7 +2,7 @@
 
 import type { Polygon, MultiPolygon } from 'geojson';
 
-type PolygonLike = Polygon | MultiPolygon | { type: string; coordinates: number[][][] | number[][][][] };
+type PolygonLike = Polygon | MultiPolygon;
 
 // Ray-casting point-in-polygon test
 // Coordinates: lat/lng for the point, polygon ring as [lng, lat] pairs (GeoJSON convention)

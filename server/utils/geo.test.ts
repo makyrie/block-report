@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { Polygon, MultiPolygon } from 'geojson';
 import { pointInPolygon, pointInFeature, computeBBox, pointInBBox, haversineDistanceMiles, computeCentroid } from './geo';
 
 // A simple square polygon: [lng, lat] pairs forming a square from (0,0) to (10,10)
@@ -24,37 +25,29 @@ describe('pointInPolygon', () => {
 
 describe('pointInFeature', () => {
   it('works with Polygon geometry', () => {
-    const geometry = {
+    const geometry: Polygon = {
       type: 'Polygon',
-      coordinates: [squareRing] as number[][][],
+      coordinates: [squareRing],
     };
     expect(pointInFeature(5, 5, geometry)).toBe(true);
     expect(pointInFeature(15, 15, geometry)).toBe(false);
   });
 
   it('works with MultiPolygon geometry', () => {
-    const geometry = {
+    const geometry: MultiPolygon = {
       type: 'MultiPolygon',
-      coordinates: [[squareRing]] as number[][][][],
+      coordinates: [[squareRing]],
     };
     expect(pointInFeature(5, 5, geometry)).toBe(true);
     expect(pointInFeature(15, 15, geometry)).toBe(false);
-  });
-
-  it('returns false for unsupported geometry types', () => {
-    const geometry = {
-      type: 'Point',
-      coordinates: [5, 5] as unknown as number[][][],
-    };
-    expect(pointInFeature(5, 5, geometry)).toBe(false);
   });
 });
 
 describe('computeBBox', () => {
   it('computes bounding box for a Polygon', () => {
-    const geometry = {
+    const geometry: Polygon = {
       type: 'Polygon',
-      coordinates: [squareRing] as number[][][],
+      coordinates: [squareRing],
     };
     const bbox = computeBBox(geometry);
     expect(bbox.minLat).toBe(0);
@@ -65,9 +58,9 @@ describe('computeBBox', () => {
 
   it('computes bounding box for a MultiPolygon', () => {
     const ring2 = [[20, 20], [30, 20], [30, 30], [20, 30], [20, 20]];
-    const geometry = {
+    const geometry: MultiPolygon = {
       type: 'MultiPolygon',
-      coordinates: [[squareRing], [ring2]] as number[][][][],
+      coordinates: [[squareRing], [ring2]],
     };
     const bbox = computeBBox(geometry);
     expect(bbox.minLat).toBe(0);
@@ -107,9 +100,9 @@ describe('haversineDistanceMiles', () => {
 
 describe('computeCentroid', () => {
   it('returns centroid of a simple polygon', () => {
-    const geometry = {
+    const geometry: Polygon = {
       type: 'Polygon',
-      coordinates: [squareRing] as number[][][],
+      coordinates: [squareRing],
     };
     const centroid = computeCentroid(geometry);
     expect(centroid).not.toBeNull();
@@ -119,7 +112,7 @@ describe('computeCentroid', () => {
   });
 
   it('returns null for empty geometry', () => {
-    const geometry = { type: 'Polygon', coordinates: [[]] as number[][][] };
+    const geometry: Polygon = { type: 'Polygon', coordinates: [[]] };
     expect(computeCentroid(geometry)).toBeNull();
   });
 });
