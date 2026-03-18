@@ -17,8 +17,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:node": "node --import=tsx --test src/**/*.test.ts server/**/*.test.ts"
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",

@@ -142,7 +142,7 @@ export default function CitywidePage() {
       {/* Mobile bottom tab bar */}
       <div
         role="tablist"
-        aria-label="Citywide views"
+        aria-label={t('citywide.title')}
         className="md:hidden flex shrink-0 border-t border-gray-200 bg-white"
       >
         <button
