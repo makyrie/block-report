@@ -98,7 +98,6 @@ router.get('/', async (req, res) => {
         lng: { gte: lng - lngDelta, lte: lng + lngDelta },
       },
       orderBy: { date_requested: 'desc' },
-      take: 5000,
     });
   } catch (err) {
     logger.error('Failed to fetch block data', { error: (err as Error).message });
