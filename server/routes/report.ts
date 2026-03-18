@@ -229,6 +229,18 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     }
     if (!validateLanguage(language, res)) return;
 
+    // Validate anchor lat/lng
+    const anchorLat = Number(anchor.lat);
+    const anchorLng = Number(anchor.lng);
+    if (isNaN(anchorLat) || isNaN(anchorLng)) {
+      res.status(400).json({ error: 'anchor.lat and anchor.lng must be valid numbers' });
+      return;
+    }
+    if (anchorLat < SD_BOUNDS.latMin || anchorLat > SD_BOUNDS.latMax || anchorLng < SD_BOUNDS.lngMin || anchorLng > SD_BOUNDS.lngMax) {
+      res.status(400).json({ error: 'Anchor coordinates outside San Diego area' });
+      return;
+    }
+
     // Check for a pre-generated block report first
     const langCode = getLangCode(language);
     const filename = `${sanitizeFilename(anchor.id || anchor.name)}_${langCode}.json`;
@@ -272,8 +284,8 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     // Cache the generated block report for future instant access
     try {
       const cacheKey = buildBlockCacheKey(
-        anchor.lat,
-        anchor.lng,
+        anchorLat,
+        anchorLng,
         blockMetrics.radiusMiles || 0.25,
         langCode,
       );
