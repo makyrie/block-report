@@ -271,7 +271,7 @@ export default function NeighborhoodPage() {
         pinnedLocation.lat,
         pinnedLocation.lng,
         community,
-        blockData,
+        blockRadius,
         reportLang,
         metrics ? { resolutionRate: metrics.resolutionRate, totalRequests: metrics.totalRequests311 } : null,
       );
@@ -282,7 +282,7 @@ export default function NeighborhoodPage() {
       blockReportGeneratingRef.current = false;
       setBlockReportLoading(false);
     }
-  }, [pinnedLocation, blockData, selectedCommunity, reportLang, metrics]);
+  }, [pinnedLocation, blockData, blockRadius, selectedCommunity, reportLang, metrics]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">

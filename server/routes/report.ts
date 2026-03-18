@@ -9,6 +9,7 @@ import type { CommunityReport, NeighborhoodProfile, StoredBlockReport } from '..
 import { getCachedReport, saveCachedReport, CACHE_TTL_MS, buildBlockCacheKey, getCachedReportByKey, saveCachedReportByKey } from '../services/report-cache.js';
 import { VALID_LANGUAGES, getLangCode, sanitizeFilename } from '../utils/language.js';
 import { SD_BOUNDS } from '../utils/geo.js';
+import { fetchBlockData } from '../services/block-data.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
@@ -286,7 +287,7 @@ router.post('/generate-block', async (req: Request, res: Response) => {
 // POST /api/report/generate-address-block — Generate an address-anchored block report
 router.post('/generate-address-block', async (req: Request, res: Response) => {
   try {
-    const { address, lat, lng, communityName, blockMetrics, language, communityMetrics } = req.body;
+    const { address, lat, lng, language, communityMetrics } = req.body;
 
     if (!address || lat == null || lng == null) {
       res.status(400).json({ error: 'Missing required fields: address, lat, lng' });
@@ -304,20 +305,26 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
       return;
     }
 
-    if (!blockMetrics || !language) {
-      res.status(400).json({ error: 'Missing required fields: blockMetrics, language' });
+    if (!language) {
+      res.status(400).json({ error: 'Missing required field: language' });
       return;
     }
     if (!validateLanguage(language, res)) return;
 
+    const radiusMiles = Math.min(2, Math.max(0.1, Number(req.body.radiusMiles) || 0.25));
+
+    // Fetch block data server-side instead of trusting client-supplied blockMetrics
+    const blockMetrics = await fetchBlockData(latNum, lngNum, radiusMiles);
+    const communityName = blockMetrics.communityName || req.body.communityName || 'San Diego';
+
     const langCode = getLangCode(language);
-    const cacheKey = buildBlockCacheKey(latNum, lngNum, blockMetrics.radiusMiles, langCode);
+    const cacheKey = buildBlockCacheKey(latNum, lngNum, radiusMiles, langCode);
 
     const report = await coalesceAndGenerate(
       cacheKey,
       () => generateAddressBlockReport(
         address, latNum, lngNum,
-        communityName || 'San Diego',
+        communityName,
         blockMetrics, communityMetrics || null, language,
       ),
       (r) => saveCachedReportByKey(cacheKey, r),
