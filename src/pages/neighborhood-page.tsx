@@ -358,6 +358,8 @@ export default function NeighborhoodPage() {
           blockData={blockData}
           blockLoading={blockLoading}
           blockRadius={blockRadius}
+          reports={blockData?.reports}
+          totalReportsAvailable={blockData?.totalReportsAvailable}
         />
       </main>
 

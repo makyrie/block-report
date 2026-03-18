@@ -5,7 +5,7 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
+import type { Block311Report, BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
 
 // ── Popup content components ─────────────────────────────────────────────────
 
@@ -168,6 +168,9 @@ function BlockPopupContent({
           </ul>
         </div>
       )}
+      {data.totalRequests > 0 && (
+        <p className="text-xs text-gray-400 italic mb-1">Click markers to see individual reports</p>
+      )}
       <button
         type="button"
         onClick={() => window.print()}
@@ -214,6 +217,8 @@ interface SanDiegoMapProps {
   blockData?: BlockMetrics | null;
   blockLoading?: boolean;
   blockRadius?: number;
+  reports?: Block311Report[];
+  totalReportsAvailable?: number;
 }
 
 // Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
@@ -290,6 +295,60 @@ function MapController({ feature }: { feature: Feature | null }) {
   return null;
 }
 
+// ── 311 report status colors ────────────────────────────────────────────────
+
+function reportStatusColor(status: string, dateClosed: string | null): string {
+  if (status === 'Closed' || dateClosed) return '#22c55e'; // green — resolved
+  if (/referred/i.test(status)) return '#9ca3af';          // gray — referred
+  return '#ef4444';                                         // red — open
+}
+
+function reportStatusLabel(status: string, dateClosed: string | null): string {
+  if (status === 'Closed' || dateClosed) return 'Resolved';
+  if (/referred/i.test(status)) return 'Referred';
+  return 'Open';
+}
+
+function ReportPopupContent({ report }: { report: Block311Report }) {
+  const color = reportStatusColor(report.status, report.dateClosed);
+  const label = reportStatusLabel(report.status, report.dateClosed);
+  const dateStr = report.dateRequested
+    ? new Date(report.dateRequested).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : 'Unknown';
+  const closedStr = report.dateClosed
+    ? new Date(report.dateClosed).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+
+  return (
+    <div className="min-w-[180px] max-w-[260px]">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span
+          aria-hidden="true"
+          className="w-2.5 h-2.5 rounded-full shrink-0"
+          style={{ backgroundColor: color }}
+        />
+        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color }}>
+          {label}
+        </span>
+      </div>
+      <p className="font-semibold text-gray-900 text-sm leading-snug mb-1">{report.category}</p>
+      {report.categoryDetail && (
+        <p className="text-xs text-gray-500 mb-1">{report.categoryDetail}</p>
+      )}
+      <p className="text-xs text-gray-600 mb-0.5">Reported: {dateStr}</p>
+      {closedStr && (
+        <p className="text-xs text-gray-600 mb-0.5">Resolved: {closedStr}</p>
+      )}
+      {report.address && (
+        <p className="text-xs text-gray-500 mt-1 flex items-start gap-1">
+          <span aria-hidden="true" className="mt-px shrink-0">📍</span>
+          <span>{report.address}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SanDiegoMap({
   libraries,
   recCenters,
@@ -302,6 +361,8 @@ function SanDiegoMap({
   blockData,
   blockLoading = false,
   blockRadius = 0.25,
+  reports = [],
+  totalReportsAvailable = 0,
 }: SanDiegoMapProps) {
   const handleMarkerClick = useCallback(
     (anchor: CommunityAnchor) => () => {
@@ -316,6 +377,13 @@ function SanDiegoMap({
 
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
+    {/* Report count indicator — shown when results are capped */}
+    {pinnedLocation && totalReportsAvailable > reports.length && (
+      <div className="absolute top-14 right-2 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-1.5 text-xs text-gray-600">
+        Showing <span className="font-semibold text-gray-900">{reports.length}</span> of{' '}
+        <span className="font-semibold text-gray-900">{totalReportsAvailable}</span> reports
+      </div>
+    )}
     {/* Legend */}
     <nav aria-label="Map legend" className="absolute bottom-8 left-2 z-[1000] bg-white/90 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 text-xs print:hidden">
       <ul className="space-y-1.5">
@@ -335,6 +403,22 @@ function SanDiegoMap({
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-orange-500 shrink-0" />
           <span className="text-gray-700">Your Block</span>
         </li>
+        {pinnedLocation && reports.length > 0 && (
+          <>
+            <li className="border-t border-gray-200 pt-1.5 mt-1 flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#ef4444' }} />
+              <span className="text-gray-700">311 Open</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#22c55e' }} />
+              <span className="text-gray-700">311 Resolved</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#9ca3af' }} />
+              <span className="text-gray-700">311 Referred</span>
+            </li>
+          </>
+        )}
       </ul>
     </nav>
     <MapContainer
@@ -376,6 +460,26 @@ function SanDiegoMap({
           data={blockData ?? null}
         />
       )}
+
+      {/* 311 report markers — color-coded by status */}
+      {pinnedLocation && reports.map((report) => (
+        <CircleMarker
+          key={report.id}
+          center={[report.lat, report.lng]}
+          radius={6}
+          pathOptions={{
+            color: '#fff',
+            weight: 1.5,
+            fillColor: reportStatusColor(report.status, report.dateClosed),
+            fillOpacity: 0.85,
+          }}
+          bubblingMouseEvents={false}
+        >
+          <Popup>
+            <ReportPopupContent report={report} />
+          </Popup>
+        </CircleMarker>
+      ))}
 
       {/* Zoom to selected community + highlight its boundary */}
       <MapController feature={selectedFeature} />

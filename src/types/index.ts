@@ -56,6 +56,18 @@ export interface TransitStop {
   lng: number;
 }
 
+export interface Block311Report {
+  id: string;
+  lat: number;
+  lng: number;
+  category: string;
+  categoryDetail: string | null;
+  status: string;
+  dateRequested: string;
+  dateClosed: string | null;
+  address: string | null;
+}
+
 export interface BlockMetrics {
   totalRequests: number;
   openCount: number;
@@ -65,6 +77,8 @@ export interface BlockMetrics {
   topIssues: { category: string; count: number }[];
   recentlyResolved: { category: string; date: string }[];
   radiusMiles: number;
+  reports: Block311Report[];
+  totalReportsAvailable: number;
 }
 
 export interface CommunityReport {

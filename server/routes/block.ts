@@ -48,12 +48,15 @@ router.get('/', async (req, res) => {
   try {
     data = await prisma.request311.findMany({
       select: {
+        service_request_id: true,
         service_name: true,
+        service_name_detail: true,
         status: true,
         date_requested: true,
         date_closed: true,
         lat: true,
         lng: true,
+        street_address: true,
       },
       where: {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
@@ -107,6 +110,29 @@ router.get('/', async (req, res) => {
     .slice(0, 5)
     .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
 
+  // Individual reports: sort by most recent, cap at 500
+  const MAX_REPORTS = 500;
+  const totalReportsAvailable = nearby.length;
+  const sortedNearby = [...nearby]
+    .sort((a, b) => {
+      const aTime = a.date_requested?.getTime() ?? 0;
+      const bTime = b.date_requested?.getTime() ?? 0;
+      return bTime - aTime;
+    })
+    .slice(0, MAX_REPORTS);
+
+  const reports = sortedNearby.map((r) => ({
+    id: r.service_request_id,
+    lat: Number(r.lat),
+    lng: Number(r.lng),
+    category: r.service_name || 'Unknown',
+    categoryDetail: r.service_name_detail || null,
+    status: r.status || 'Unknown',
+    dateRequested: r.date_requested?.toISOString() ?? '',
+    dateClosed: r.date_closed?.toISOString() ?? null,
+    address: r.street_address || null,
+  }));
+
   res.json({
     totalRequests: nearby.length,
     openCount: open.length,
@@ -116,6 +142,8 @@ router.get('/', async (req, res) => {
     topIssues,
     recentlyResolved,
     radiusMiles: radius,
+    reports,
+    totalReportsAvailable,
   });
 });
 
