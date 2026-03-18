@@ -56,6 +56,26 @@ export interface TransitStop {
   lng: number;
 }
 
+export interface NearbyOpenIssue {
+  serviceRequestId: string;
+  serviceName: string;
+  serviceNameDetail?: string;
+  streetAddress?: string;
+  publicDescription?: string;
+  dateRequested: string;
+  daysOpen: number;
+  distanceMiles: number;
+}
+
+export interface NearbyResource {
+  name: string;
+  type: 'library' | 'rec_center';
+  address: string;
+  distanceMiles: number;
+  phone?: string;
+  website?: string;
+}
+
 export interface BlockMetrics {
   totalRequests: number;
   openCount: number;
@@ -65,6 +85,10 @@ export interface BlockMetrics {
   topIssues: { category: string; count: number }[];
   recentlyResolved: { category: string; date: string }[];
   radiusMiles: number;
+  nearbyOpenIssues?: NearbyOpenIssue[];
+  nearbyResources?: NearbyResource[];
+  nearestAddress?: string | null;
+  communityName?: string | null;
 }
 
 export interface CommunityReport {

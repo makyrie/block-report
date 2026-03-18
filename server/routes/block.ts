@@ -48,12 +48,17 @@ router.get('/', async (req, res) => {
   try {
     data = await prisma.request311.findMany({
       select: {
+        service_request_id: true,
         service_name: true,
+        service_name_detail: true,
+        street_address: true,
+        public_description: true,
         status: true,
         date_requested: true,
         date_closed: true,
         lat: true,
         lng: true,
+        comm_plan_name: true,
       },
       where: {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
@@ -107,6 +112,78 @@ router.get('/', async (req, res) => {
     .slice(0, 5)
     .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
 
+  // Nearby open issues with details (top 5 closest)
+  const nearbyOpenIssues = open
+    .map((r) => ({
+      serviceRequestId: r.service_request_id,
+      serviceName: r.service_name || 'Unknown',
+      serviceNameDetail: r.service_name_detail || undefined,
+      streetAddress: r.street_address || undefined,
+      publicDescription: r.public_description || undefined,
+      dateRequested: r.date_requested?.toISOString() || '',
+      daysOpen: r.date_requested
+        ? Math.floor((Date.now() - r.date_requested.getTime()) / (1000 * 60 * 60 * 24))
+        : 0,
+      distanceMiles: haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)),
+    }))
+    .sort((a, b) => a.distanceMiles - b.distanceMiles)
+    .slice(0, 5);
+
+  // Nearby resources (libraries + rec centers)
+  let nearbyResources: {
+    name: string;
+    type: 'library' | 'rec_center';
+    address: string;
+    distanceMiles: number;
+    phone?: string;
+    website?: string;
+  }[] = [];
+
+  try {
+    const [libs, recs] = await Promise.all([
+      prisma.library.findMany({ where: { lat: { not: null }, lng: { not: null } } }),
+      prisma.recCenter.findMany({ where: { lat: { not: null }, lng: { not: null } } }),
+    ]);
+
+    nearbyResources = [
+      ...libs.map((l) => ({
+        name: l.name,
+        type: 'library' as const,
+        address: l.address || '',
+        distanceMiles: haversineDistanceMiles(lat, lng, l.lat!, l.lng!),
+        phone: l.phone || undefined,
+        website: l.website || undefined,
+      })),
+      ...recs.map((r) => ({
+        name: r.rec_bldg || r.park_name || 'Recreation Center',
+        type: 'rec_center' as const,
+        address: r.address || '',
+        distanceMiles: haversineDistanceMiles(lat, lng, r.lat!, r.lng!),
+      })),
+    ]
+      .sort((a, b) => a.distanceMiles - b.distanceMiles)
+      .slice(0, 5);
+  } catch (err) {
+    logger.error('Failed to fetch nearby resources', { error: (err as Error).message });
+  }
+
+  // Nearest address from closest 311 record with a street_address
+  const nearestAddress = nearby
+    .filter((r) => r.street_address)
+    .sort((a, b) =>
+      haversineDistanceMiles(lat, lng, Number(a.lat), Number(a.lng)) -
+      haversineDistanceMiles(lat, lng, Number(b.lat), Number(b.lng))
+    )[0]?.street_address || null;
+
+  // Community name from most common comm_plan_name
+  const communityName = (() => {
+    const counts: Record<string, number> = {};
+    for (const r of nearby) {
+      if (r.comm_plan_name) counts[r.comm_plan_name] = (counts[r.comm_plan_name] || 0) + 1;
+    }
+    return Object.entries(counts).sort(([, a], [, b]) => b - a)[0]?.[0] || null;
+  })();
+
   res.json({
     totalRequests: nearby.length,
     openCount: open.length,
@@ -116,6 +193,10 @@ router.get('/', async (req, res) => {
     topIssues,
     recentlyResolved,
     radiusMiles: radius,
+    nearbyOpenIssues,
+    nearbyResources,
+    nearestAddress,
+    communityName,
   });
 });
 

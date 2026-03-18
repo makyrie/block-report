@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { generateReport, generateBlockReport } from '../services/claude.js';
+import { generateReport, generateBlockReport, generateAddressBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
@@ -197,11 +197,38 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/report/generate-block — Generate a block-level report for an anchor location
+// POST /api/report/generate-block — Generate a block-level report for an anchor or address
 router.post('/generate-block', async (req: Request, res: Response) => {
   try {
-    const { anchor, blockMetrics, language, demographics } = req.body;
+    const { anchor, address, lat, lng, communityName, blockMetrics, language, demographics, communityMetrics } = req.body;
 
+    // Address-anchored block report (new path)
+    if (address && lat != null && lng != null) {
+      if (!blockMetrics || !language) {
+        res.status(400).json({ error: 'Missing required fields: blockMetrics, language' });
+        return;
+      }
+
+      logger.info('Generating address block report on-demand', {
+        address,
+        community: communityName,
+        language,
+      });
+
+      const report = await generateAddressBlockReport(
+        address,
+        lat,
+        lng,
+        communityName || 'San Diego',
+        blockMetrics,
+        communityMetrics || null,
+        language,
+      );
+      res.json(report);
+      return;
+    }
+
+    // Existing anchor-based block report (backward compatible)
     if (!anchor || !blockMetrics || !language) {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;

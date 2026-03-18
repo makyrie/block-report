@@ -82,3 +82,20 @@ export function getBlockReport(
 ): Promise<CommunityReport & { preGenerated?: boolean; anchorName?: string; anchorType?: string }> {
   return fetchJSON(`${BASE}/report?lat=${lat}&lng=${lng}&radius=${radius}&language=${language}`);
 }
+
+export function generateAddressBlockReport(
+  address: string,
+  lat: number,
+  lng: number,
+  radius: number,
+  communityName: string,
+  blockMetrics: BlockMetrics,
+  language: string,
+  communityMetrics?: { resolutionRate: number; totalRequests: number } | null,
+): Promise<CommunityReport> {
+  return fetchJSON(`${BASE}/report/generate-block`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address, lat, lng, radius, communityName, blockMetrics, language, communityMetrics }),
+  });
+}

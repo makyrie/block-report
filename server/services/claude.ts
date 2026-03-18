@@ -3,7 +3,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
+import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor, NearbyOpenIssue, NearbyResource } from '../../src/types/index.js';
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -215,6 +215,154 @@ Keep the total report under 400 words. It should fit on one printed page.`;
       error: error instanceof Error ? error.message : String(error),
       anchor: anchor.name,
       community: anchor.community,
+    });
+    throw error;
+  }
+}
+
+export async function generateAddressBlockReport(
+  address: string,
+  lat: number,
+  lng: number,
+  communityName: string,
+  blockMetrics: BlockMetrics,
+  communityMetrics: { resolutionRate: number; totalRequests: number } | null,
+  language: string,
+): Promise<CommunityReport> {
+  // Sanitize inputs
+  if (typeof address !== 'string' || address.trim().length === 0) {
+    throw new Error('address must be a non-empty string');
+  }
+  if (address.length > 200) {
+    throw new Error('address must be 200 characters or fewer');
+  }
+  if (typeof communityName !== 'string' || communityName.trim().length === 0) {
+    throw new Error('communityName must be a non-empty string');
+  }
+  if (communityName.length > 100) {
+    throw new Error('communityName must be 100 characters or fewer');
+  }
+  // Strip control characters
+  address = address.replace(/[\x00-\x1f\x7f]/g, '');
+  communityName = communityName.replace(/[\x00-\x1f\x7f]/g, '');
+
+  const client = getClient();
+
+  // Format nearby open issues for the prompt
+  const openIssuesList = (blockMetrics.nearbyOpenIssues ?? [])
+    .map((issue) => {
+      const location = issue.streetAddress ? ` at ${issue.streetAddress}` : ' nearby';
+      const detail = issue.serviceNameDetail ? ` (${issue.serviceNameDetail})` : '';
+      return `- ${issue.serviceName}${detail}${location} — reported ${issue.daysOpen} days ago`;
+    })
+    .join('\n');
+
+  // Format nearby resources for the prompt
+  const resourcesList = (blockMetrics.nearbyResources ?? [])
+    .map((r) => {
+      const typeLabel = r.type === 'library' ? 'Library' : 'Rec Center';
+      return `- ${r.name} (${typeLabel}) — ${r.distanceMiles.toFixed(2)} miles away, ${r.address}`;
+    })
+    .join('\n');
+
+  // Community-level comparison context
+  const communityContext = communityMetrics
+    ? `\nNeighborhood-level context for comparison:\nAcross ${communityName} as a whole, the city has received ${communityMetrics.totalRequests.toLocaleString()} total 311 reports with a ${Math.round(communityMetrics.resolutionRate * 100)}% resolution rate.`
+    : '';
+
+  const prompt = `You are generating a block-level community brief for the area within ${blockMetrics.radiusMiles} miles of ${address} in the ${communityName} neighborhood of San Diego.
+
+This brief is hyperlocal — it should feel like a report about the user's immediate surroundings, not a broad neighborhood summary. The headline should reference the specific address.
+
+Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
+
+Here is the 311 service request data for this block:
+- Total requests: ${blockMetrics.totalRequests}
+- Open: ${blockMetrics.openCount}
+- Resolved: ${blockMetrics.resolvedCount}
+- Resolution rate: ${Math.round(blockMetrics.resolutionRate * 100)}%
+- Average days to resolve: ${blockMetrics.avgDaysToResolve ?? 'N/A'}
+
+Top issues:
+${blockMetrics.topIssues.map((i) => `- ${i.category}: ${i.count}`).join('\n')}
+
+${openIssuesList ? `Specific open issues nearby:\n${openIssuesList}` : 'Few open issues reported near this block.'}
+
+${resourcesList ? `Nearest civic resources:\n${resourcesList}` : ''}
+${communityContext}
+
+Generate a report with these sections:
+1. **Welcome** — A 2-sentence greeting that references the area around ${address} in ${communityName}. Make it feel personal — "Your Block Report."
+2. **Good News** — 2-3 positive things happening based on the data (resolved issues, high resolution rates, quick response times, etc.).
+3. **What's Happening Near You** — Reference 3-5 specific open issues nearby with street addresses or descriptions if available. If fewer than 3, note that few issues are reported near the block (which is good news).
+4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report mentioning nearest cross streets, visit nearby resources, attend community events.
+5. **Nearby Resources** — List the closest libraries and rec centers with distances and addresses.
+
+Keep the total report under 400 words. It should fit on one printed page.`;
+
+  const reportTool: Anthropic.Messages.Tool = {
+    name: 'community_report',
+    description: 'Output a structured block-level community report for a specific address',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        neighborhoodName: { type: 'string', description: 'Formatted as "Around {address}, {communityName}"' },
+        language: { type: 'string', description: 'Language the report is written in' },
+        summary: { type: 'string', description: 'A 2-sentence welcome greeting referencing the specific address' },
+        goodNews: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '2-3 positive things happening based on the data',
+        },
+        topIssues: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '3-5 specific open issues nearby with street addresses, or note that few issues are reported',
+        },
+        howToParticipate: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '3-4 concrete actions residents can take to get involved',
+        },
+        contactInfo: {
+          type: 'object',
+          properties: {
+            councilDistrict: { type: 'string' },
+            phone311: { type: 'string' },
+            anchorLocation: { type: 'string', description: 'Nearest library or rec center with address and distance' },
+          },
+          required: ['councilDistrict', 'phone311', 'anchorLocation'],
+        },
+      },
+      required: ['neighborhoodName', 'language', 'summary', 'goodNews', 'topIssues', 'howToParticipate', 'contactInfo'],
+    },
+  };
+
+  try {
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+      tools: [reportTool],
+      tool_choice: { type: 'tool', name: 'community_report' },
+    });
+
+    const toolBlock = message.content.find((block) => block.type === 'tool_use');
+    if (!toolBlock || toolBlock.type !== 'tool_use') {
+      throw new Error('No tool use block in response');
+    }
+
+    const report: CommunityReport = {
+      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
+      generatedAt: new Date().toISOString(),
+    };
+
+    return report;
+  } catch (error) {
+    logger.error('Claude API call failed for address block report', {
+      error: error instanceof Error ? error.message : String(error),
+      address,
+      community: communityName,
     });
     throw error;
   }
