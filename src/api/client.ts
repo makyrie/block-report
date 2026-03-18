@@ -60,7 +60,7 @@ export function getBlockData(lat: number, lng: number, radius = 0.25): Promise<B
 
 export async function getPreGeneratedReport(community: string, language: string): Promise<CommunityReport | null> {
   try {
-    return await fetchJSON(`${BASE}/report?community=${encodeURIComponent(community)}&language=${encodeURIComponent(language)}`);
+    return await fetchJSON(`${BASE}/report/community?community=${encodeURIComponent(community)}&language=${encodeURIComponent(language)}`);
   } catch {
     return null; // 404 or error — no pre-generated report available
   }

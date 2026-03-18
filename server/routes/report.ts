@@ -62,61 +62,9 @@ async function getPreGeneratedReport(
 
 const router = Router();
 
-// GET /api/report?community={name}&language={lang} — pre-generated community report
-// GET /api/report?lat=X&lng=Y&radius=Z&language=L — pre-generated block-level report
-router.get('/', async (req: Request, res: Response) => {
+// GET /api/report/community?community={name}&language={lang} — pre-generated community report
+router.get('/community', async (req: Request, res: Response) => {
   try {
-    // Block-level lookup by coordinates
-    if (req.query.lat && req.query.lng) {
-      const lat = parseFloat(String(req.query.lat));
-      const lng = parseFloat(String(req.query.lng));
-      const radius = parseFloat(String(req.query.radius)) || 0.25;
-      const language = String(req.query.language || 'English');
-
-      if (!validateLanguage(language, res)) return;
-
-      if (isNaN(lat) || isNaN(lng)) {
-        res.status(400).json({ error: 'lat and lng must be valid numbers' });
-        return;
-      }
-
-      // Try deterministic cache key for address block reports first (O(1) lookup)
-      const langCode = getLangCode(language);
-      const cacheKey = buildBlockCacheKey(lat, lng, radius, langCode);
-      const cached = await getCachedReportByKey(cacheKey);
-      if (cached) {
-        logger.info('Serving cached address block report', { lat, lng, radius, language });
-        res.json({ ...cached, preGenerated: true });
-        return;
-      }
-
-      // Fall back to pre-generated anchor-based block reports by filename
-      const filename = path.join(BLOCK_REPORTS_DIR, `block_${lat.toFixed(4)}_${lng.toFixed(4)}_${langCode}.json`);
-      try {
-        const content = await fs.readFile(filename, 'utf-8');
-        const stored = JSON.parse(content) as StoredBlockReport;
-        if (stored.radiusMiles === radius) {
-          logger.info('Serving pre-generated block report', {
-            anchor: stored.anchorName,
-            language,
-          });
-          res.json({
-            ...stored.report,
-            preGenerated: true,
-            anchorName: stored.anchorName,
-            anchorType: stored.anchorType,
-          });
-          return;
-        }
-      } catch {
-        // No pre-generated report at this location
-      }
-
-      res.status(404).json({ error: 'No pre-generated block report found for this location' });
-      return;
-    }
-
-    // Community-level lookup by name
     const community = String(req.query.community || '');
     const language = String(req.query.language || 'English');
 
@@ -135,7 +83,62 @@ router.get('/', async (req: Request, res: Response) => {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Report lookup error', { error: message });
+    logger.error('Community report lookup error', { error: message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/report/block?lat=X&lng=Y&radius=Z&language=L — pre-generated block-level report
+router.get('/block', async (req: Request, res: Response) => {
+  try {
+    const lat = parseFloat(String(req.query.lat));
+    const lng = parseFloat(String(req.query.lng));
+    const radius = parseFloat(String(req.query.radius)) || 0.25;
+    const language = String(req.query.language || 'English');
+
+    if (!validateLanguage(language, res)) return;
+
+    if (isNaN(lat) || isNaN(lng)) {
+      res.status(400).json({ error: 'lat and lng must be valid numbers' });
+      return;
+    }
+
+    // Try deterministic cache key for address block reports first (O(1) lookup)
+    const langCode = getLangCode(language);
+    const cacheKey = buildBlockCacheKey(lat, lng, radius, langCode);
+    const cached = await getCachedReportByKey(cacheKey);
+    if (cached) {
+      logger.info('Serving cached address block report', { lat, lng, radius, language });
+      res.json({ ...cached, preGenerated: true });
+      return;
+    }
+
+    // Fall back to pre-generated anchor-based block reports by filename
+    const filename = path.join(BLOCK_REPORTS_DIR, `block_${lat.toFixed(4)}_${lng.toFixed(4)}_${langCode}.json`);
+    try {
+      const content = await fs.readFile(filename, 'utf-8');
+      const stored = JSON.parse(content) as StoredBlockReport;
+      if (stored.radiusMiles === radius) {
+        logger.info('Serving pre-generated block report', {
+          anchor: stored.anchorName,
+          language,
+        });
+        res.json({
+          ...stored.report,
+          preGenerated: true,
+          anchorName: stored.anchorName,
+          anchorType: stored.anchorType,
+        });
+        return;
+      }
+    } catch {
+      // No pre-generated report at this location
+    }
+
+    res.status(404).json({ error: 'No pre-generated block report found for this location' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Block report lookup error', { error: message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
