@@ -380,6 +380,9 @@ export default function NeighborhoodPage() {
                 {blockReportLoading ? 'Generating...' : 'Generate Block Report'}
               </button>
             )}
+            {blockData?.truncated && (
+              <p className="mt-1 text-xs text-amber-600">Data was capped at 5,000 records. Results may be incomplete for this radius.</p>
+            )}
             {blockReportError && (
               <p className="mt-1 text-xs text-red-600">{blockReportError}</p>
             )}
