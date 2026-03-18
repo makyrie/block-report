@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAccessGapScore, getTopUnderserved } from '../services/gap-analysis.js';
+import { getAccessGapScore, getAccessGapScores, getTopUnderserved } from '../services/gap-analysis.js';
 import { logger } from '../logger.js';
 
 const router = Router();
@@ -38,22 +38,25 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/access-gap/ranking?limit={n}  (limit=0 returns all)
+// GET /api/access-gap/ranking?limit={n}  (limit=0 returns all, capped at 200)
 router.get('/ranking', async (_req, res) => {
+  const MAX_RESULTS = 200;
   const rawLimit = _req.query.limit;
   const parsed = Number(rawLimit);
   const limit = (rawLimit === '0' || rawLimit === 'all')
-    ? 0
+    ? MAX_RESULTS
     : (Number.isFinite(parsed) && parsed > 0)
-      ? Math.min(Math.round(parsed), 200)
+      ? Math.min(Math.round(parsed), MAX_RESULTS)
       : 10;
 
   try {
+    const allScores = await getAccessGapScores();
     const ranking = await getTopUnderserved(limit);
-    const withGaps = ranking.filter((r) => r.accessGapScore >= 50).length;
+    const allEntries = Array.from(allScores.values());
+    const withGaps = allEntries.filter((r) => r.accessGapScore >= 50).length;
     res.json({
       ranking,
-      summary: { total: ranking.length, withGaps },
+      summary: { total: allScores.size, withGaps },
     });
   } catch (err) {
     logger.error('Failed to compute access gap ranking', { error: (err as Error).message });
