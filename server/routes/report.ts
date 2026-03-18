@@ -85,37 +85,36 @@ router.get('/', async (req: Request, res: Response) => {
         return;
       }
 
-      const files = await fs.readdir(BLOCK_REPORTS_DIR).catch(() => [] as string[]);
-      const langSuffix = `_${language}.json`;
-      const COORD_TOLERANCE = 0.0002; // ~0.01 miles in degrees
+      // Try deterministic cache key for address block reports first (O(1) lookup)
+      const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
+      const cacheKey = `addr_${lat.toFixed(4)}_${lng.toFixed(4)}_${radius}_${langCode}`;
+      const cached = await getCachedReport(cacheKey, language);
+      if (cached) {
+        logger.info('Serving cached address block report', { lat, lng, radius, language });
+        res.json({ ...cached, preGenerated: true });
+        return;
+      }
 
-      for (const file of files) {
-        if (!file.endsWith(langSuffix)) continue;
-
-        try {
-          const content = await fs.readFile(path.join(BLOCK_REPORTS_DIR, file), 'utf-8');
-          const stored = JSON.parse(content) as StoredBlockReport;
-
-          if (
-            Math.abs(stored.lat - lat) < COORD_TOLERANCE &&
-            Math.abs(stored.lng - lng) < COORD_TOLERANCE &&
-            stored.radiusMiles === radius
-          ) {
-            logger.info('Serving pre-generated block report', {
-              anchor: stored.anchorName,
-              language,
-            });
-            res.json({
-              ...stored.report,
-              preGenerated: true,
-              anchorName: stored.anchorName,
-              anchorType: stored.anchorType,
-            });
-            return;
-          }
-        } catch {
-          // Skip malformed files
+      // Fall back to pre-generated anchor-based block reports by filename
+      const filename = path.join(BLOCK_REPORTS_DIR, `block_${lat.toFixed(4)}_${lng.toFixed(4)}_${langCode}.json`);
+      try {
+        const content = await fs.readFile(filename, 'utf-8');
+        const stored = JSON.parse(content) as StoredBlockReport;
+        if (stored.radiusMiles === radius) {
+          logger.info('Serving pre-generated block report', {
+            anchor: stored.anchorName,
+            language,
+          });
+          res.json({
+            ...stored.report,
+            preGenerated: true,
+            anchorName: stored.anchorName,
+            anchorType: stored.anchorType,
+          });
+          return;
         }
+      } catch {
+        // No pre-generated report at this location
       }
 
       res.status(404).json({ error: 'No pre-generated block report found for this location' });
