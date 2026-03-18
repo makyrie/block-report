@@ -5,7 +5,6 @@ import { getCitywideGaps, getNeighborhoodBoundaries } from '../api/client';
 import type { CitywideCommunity } from '../types';
 import { toSlug } from '../utils/slug';
 import { useLanguage } from '../i18n/context';
-import { titleCase } from '../utils/community';
 import CitywideChoropleth from '../components/map/citywide-choropleth';
 import CitywideRanking from '../components/ui/citywide-ranking';
 import CitywideSummary from '../components/ui/citywide-summary';
@@ -57,7 +56,7 @@ export default function CitywidePage() {
 
   const handleClickCommunity = useCallback(
     (community: string) => {
-      navigate(`/neighborhood/${toSlug(titleCase(community))}`);
+      navigate(`/neighborhood/${toSlug(community)}`);
     },
     [navigate],
   );
@@ -104,6 +103,7 @@ export default function CitywidePage() {
           role="tabpanel"
           id="tabpanel-map"
           aria-labelledby="tab-map"
+          aria-hidden={mobileView !== 'map'}
           className={`flex-1 min-h-0 ${mobileView === 'map' ? 'block' : 'hidden md:block'}`}
         >
           {boundaries ? (
@@ -126,6 +126,7 @@ export default function CitywidePage() {
           role="tabpanel"
           id="tabpanel-list"
           aria-labelledby="tab-list"
+          aria-hidden={mobileView !== 'list'}
           className={`md:w-96 md:shrink-0 md:border-l md:border-gray-200 overflow-hidden ${
             mobileView === 'list' ? 'flex-1' : 'hidden md:block'
           }`}

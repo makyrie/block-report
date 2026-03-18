@@ -6,7 +6,7 @@ export const ACCESS_GAP_COLORS = ['#fee5d9', '#fcae91', '#fb6a4a', '#de2d26', '#
 export const NO_DATA_COLOR = '#e5e7eb';
 
 export function scoreToColor(score: number): string {
-  if (score < 0) return ACCESS_GAP_COLORS[0];
+  if (Number.isNaN(score)) return NO_DATA_COLOR;
   if (score <= 20) return ACCESS_GAP_COLORS[0];
   if (score <= 40) return ACCESS_GAP_COLORS[1];
   if (score <= 60) return ACCESS_GAP_COLORS[2];

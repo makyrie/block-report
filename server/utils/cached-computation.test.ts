@@ -45,6 +45,20 @@ describe('createCachedComputation', () => {
     expect(compute).toHaveBeenCalledTimes(2);
   });
 
+  it('recomputes after TTL expires', async () => {
+    vi.useFakeTimers();
+    const compute = vi.fn()
+      .mockResolvedValueOnce('fresh')
+      .mockResolvedValueOnce('refreshed');
+    const cached = createCachedComputation(compute, 1000);
+    expect(await cached.get()).toBe('fresh');
+    expect(compute).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1001);
+    expect(await cached.get()).toBe('refreshed');
+    expect(compute).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it('invalidate forces recomputation', async () => {
     const compute = vi.fn()
       .mockResolvedValueOnce('first')
