@@ -3,9 +3,28 @@ import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG, SD_BOUNDS } from '../utils/geo.js';
 
-// In-memory cache for block data (5-minute TTL)
+// In-memory cache for block data (5-minute TTL, bounded size)
 const BLOCK_CACHE_TTL_MS = 5 * 60 * 1000;
+const BLOCK_CACHE_MAX_ENTRIES = 500;
 const blockCache = new Map<string, { data: unknown; expiry: number }>();
+
+function evictStaleEntries(): void {
+  const now = Date.now();
+  for (const [key, entry] of blockCache) {
+    if (entry.expiry <= now) blockCache.delete(key);
+  }
+}
+
+function blockCacheSet(key: string, data: unknown): void {
+  // Evict stale entries first
+  evictStaleEntries();
+  // If still at capacity, delete the oldest entry (first inserted — Map preserves insertion order)
+  if (blockCache.size >= BLOCK_CACHE_MAX_ENTRIES) {
+    const oldest = blockCache.keys().next().value;
+    if (oldest !== undefined) blockCache.delete(oldest);
+  }
+  blockCache.set(key, { data, expiry: Date.now() + BLOCK_CACHE_TTL_MS });
+}
 
 function getBlockCacheKey(lat: number, lng: number, radius: number): string {
   return `${lat.toFixed(4)}_${lng.toFixed(4)}_${radius}`;
@@ -207,8 +226,8 @@ router.get('/', async (req, res) => {
     truncated: data.length === 5000,
   };
 
-  // Cache result
-  blockCache.set(cacheKey, { data: result, expiry: Date.now() + BLOCK_CACHE_TTL_MS });
+  // Cache result (bounded)
+  blockCacheSet(cacheKey, result);
 
   res.json(result);
 });
