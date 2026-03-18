@@ -28,8 +28,18 @@ export function getTransitStops(): Promise<TransitStop[]> {
   return fetchJSON(`${BASE}/locations/transit-stops`);
 }
 
+let boundaryPromise: Promise<FeatureCollection> | null = null;
+
 export function getNeighborhoodBoundaries(signal?: AbortSignal): Promise<FeatureCollection> {
-  return fetchJSON(`${BASE}/locations/neighborhoods`, signal ? { signal } : undefined);
+  if (boundaryPromise) return boundaryPromise;
+  boundaryPromise = fetchJSON<FeatureCollection>(
+    `${BASE}/locations/neighborhoods`,
+    signal ? { signal } : undefined,
+  ).catch((err) => {
+    boundaryPromise = null; // Allow retry on failure
+    throw err;
+  });
+  return boundaryPromise;
 }
 
 export function getTransitScore(community: string): Promise<NeighborhoodProfile['transit']> {
