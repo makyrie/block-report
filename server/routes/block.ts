@@ -139,10 +139,24 @@ router.get('/', async (req, res) => {
     website?: string;
   }[] = [];
 
+  // Use a wider bounding box for resources (5 miles) to find nearest ones
+  const resourceLatDelta = 5 / MILES_PER_LAT_DEG;
+  const resourceLngDelta = 5 / MILES_PER_LNG_DEG;
+
   try {
     const [libs, recs] = await Promise.all([
-      prisma.library.findMany({ where: { lat: { not: null }, lng: { not: null } } }),
-      prisma.recCenter.findMany({ where: { lat: { not: null }, lng: { not: null } } }),
+      prisma.library.findMany({
+        where: {
+          lat: { gte: lat - resourceLatDelta, lte: lat + resourceLatDelta },
+          lng: { gte: lng - resourceLngDelta, lte: lng + resourceLngDelta },
+        },
+      }),
+      prisma.recCenter.findMany({
+        where: {
+          lat: { gte: lat - resourceLatDelta, lte: lat + resourceLatDelta },
+          lng: { gte: lng - resourceLngDelta, lte: lng + resourceLngDelta },
+        },
+      }),
     ]);
 
     nearbyResources = [
