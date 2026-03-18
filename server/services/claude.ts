@@ -96,10 +96,10 @@ function sanitizeProfile(profile: NeighborhoodProfile): NeighborhoodProfile {
   const num = (v: unknown, min = 0, max = Infinity) => Math.min(max, Math.max(min, Number(v) || 0));
 
   return {
-    communityName: s(profile.communityName, 100) || 'Unknown',
+    communityName: sanitizePromptValue(profile.communityName, 100) || 'Unknown',
     anchor: {
       id: s(profile.anchor.id, 50),
-      name: s(profile.anchor.name, 100),
+      name: sanitizePromptValue(profile.anchor.name, 100),
       type: profile.anchor.type === 'library' ? 'library' : 'rec_center',
       lat: num(profile.anchor.lat, -90, 90),
       lng: num(profile.anchor.lng, -180, 180),
@@ -207,10 +207,10 @@ export async function generateBlockReport(
   language: string,
   demographics?: { topLanguages: { language: string; percentage: number }[] },
 ): Promise<CommunityReport> {
-  // Sanitize anchor fields to prevent prompt injection
-  const anchorName = sanitizeString(anchor.name, 100) || 'Unknown Location';
-  const anchorCommunity = sanitizeString(anchor.community, 100) || 'San Diego';
-  const anchorAddress = sanitizeString(anchor.address, 200) || 'address unavailable';
+  // Sanitize anchor fields to prevent prompt injection (strict for prompt-interpolated values)
+  const anchorName = sanitizePromptValue(anchor.name, 100) || 'Unknown Location';
+  const anchorCommunity = sanitizePromptValue(anchor.community, 100) || 'San Diego';
+  const anchorAddress = sanitizePromptValue(anchor.address, 200) || 'address unavailable';
   const anchorLabel = anchor.type === 'library' ? 'library' : 'recreation center';
   // Sanitize blockMetrics and demographics
   blockMetrics = sanitizeBlockMetrics(blockMetrics);
@@ -250,7 +250,21 @@ Keep the total report under 400 words. It should fit on one printed page.`;
 
 function sanitizeString(value: unknown, maxLen: number): string {
   if (typeof value !== 'string') return '';
-  return value.replace(/[\x00-\x1f\x7f]/g, '').slice(0, maxLen);
+  // Strip control characters and common prompt-injection delimiters
+  return value
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .replace(/[<>{}[\]]/g, '')
+    .slice(0, maxLen);
+}
+
+/** Stricter sanitizer for values interpolated directly into Claude prompts (addresses, community names). */
+function sanitizePromptValue(value: unknown, maxLen: number): string {
+  if (typeof value !== 'string') return '';
+  // Allow only alphanumeric, spaces, commas, periods, hyphens, slashes, #, apostrophes, parentheses
+  return value
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .replace(/[^a-zA-Z0-9\s,.\-/#'()áéíóúñüÁÉÍÓÚÑÜ]/g, '')
+    .slice(0, maxLen);
 }
 
 function sanitizeBlockMetrics(raw: BlockMetrics): BlockMetrics {
@@ -309,9 +323,9 @@ export async function generateAddressBlockReport(
   if (communityName.length > 100) {
     throw new Error('communityName must be 100 characters or fewer');
   }
-  // Strip control characters
-  address = address.replace(/[\x00-\x1f\x7f]/g, '');
-  communityName = communityName.replace(/[\x00-\x1f\x7f]/g, '');
+  // Strip injection payloads — allow only address-safe characters
+  address = sanitizePromptValue(address, 200);
+  communityName = sanitizePromptValue(communityName, 100);
   // Sanitize blockMetrics to prevent prompt injection via string fields
   blockMetrics = sanitizeBlockMetrics(blockMetrics);
   // Sanitize communityMetrics
