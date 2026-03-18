@@ -3,6 +3,14 @@ import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG, SD_BOUNDS } from '../utils/geo.js';
 
+// In-memory cache for block data (5-minute TTL)
+const BLOCK_CACHE_TTL_MS = 5 * 60 * 1000;
+const blockCache = new Map<string, { data: unknown; expiry: number }>();
+
+function getBlockCacheKey(lat: number, lng: number, radius: number): string {
+  return `${lat.toFixed(4)}_${lng.toFixed(4)}_${radius}`;
+}
+
 const router = Router();
 
 router.get('/', async (req, res) => {
@@ -23,6 +31,14 @@ router.get('/', async (req, res) => {
 
   if (radius < 0.1 || radius > 2) {
     res.status(400).json({ error: 'Radius must be between 0.1 and 2 miles' });
+    return;
+  }
+
+  // Check in-memory cache
+  const cacheKey = getBlockCacheKey(lat, lng, radius);
+  const cached = blockCache.get(cacheKey);
+  if (cached && cached.expiry > Date.now()) {
+    res.json(cached.data);
     return;
   }
 
@@ -176,7 +192,7 @@ router.get('/', async (req, res) => {
     return Object.entries(counts).sort(([, a], [, b]) => b - a)[0]?.[0] || null;
   })();
 
-  res.json({
+  const result = {
     totalRequests: nearby.length,
     openCount: open.length,
     resolvedCount: resolved.length,
@@ -189,7 +205,12 @@ router.get('/', async (req, res) => {
     nearestAddress,
     communityName,
     truncated: data.length === 5000,
-  });
+  };
+
+  // Cache result
+  blockCache.set(cacheKey, { data: result, expiry: Date.now() + BLOCK_CACHE_TTL_MS });
+
+  res.json(result);
 });
 
 export default router;
