@@ -72,6 +72,7 @@ export interface BlockMetrics {
   totalReports: number;
   openCount: number;
   resolvedCount: number;
+  referredCount: number;
   resolutionRate: number;
   avgDaysToResolve: number | null;
   topIssues: { category: string; count: number }[];

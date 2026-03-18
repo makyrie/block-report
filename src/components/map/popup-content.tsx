@@ -120,6 +120,12 @@ export function BlockPopupContent({
           <p className="text-xl font-bold text-gray-900">{data.resolvedCount}</p>
           <p className="text-xs text-gray-500">resolved</p>
         </div>
+        {data.referredCount > 0 && (
+          <div className="text-center">
+            <p className="text-xl font-bold text-gray-900">{data.referredCount}</p>
+            <p className="text-xs text-gray-500">referred</p>
+          </div>
+        )}
         <div className="text-center">
           <p className="text-xl font-bold text-gray-900">{data.totalReports}</p>
           <p className="text-xs text-gray-500">total</p>
