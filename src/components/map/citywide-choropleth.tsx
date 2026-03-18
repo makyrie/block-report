@@ -47,7 +47,7 @@ export default function CitywideChoropleth({
   onHoverCommunity,
   onClickCommunity,
 }: CitywideChoroplethProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const geoJsonRef = useRef<L.GeoJSON | null>(null);
 
   // Build a lookup map: normalized community name → ranking data
@@ -116,7 +116,7 @@ export default function CitywideChoropleth({
   }, [hoveredCommunity, style]);
 
   // Use a stable key based on ranking data to avoid remounting on hover
-  const geoJsonKey = useMemo(() => ranking.map((r) => r.community).join(','), [ranking]);
+  const geoJsonKey = useMemo(() => lang + '|' + ranking.map((r) => r.community).join(','), [ranking, lang]);
 
   return (
     <div className="relative h-full w-full" role="region" aria-label={t('citywide.title')}>
