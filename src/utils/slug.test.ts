@@ -8,7 +8,7 @@ describe('toSlug', () => {
   });
 
   it('strips non-alphanumeric characters except hyphens', () => {
-    expect(toSlug("Mid-City:City Heights")).toBe('mid-citycity-heights');
+    expect(toSlug("Mid-City:City Heights")).toBe('mid-city-city-heights');
   });
 
   it('handles empty string', () => {
