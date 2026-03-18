@@ -89,10 +89,12 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     // Block-level lookup by coordinates
     if (req.query.lat && req.query.lng) {
-      const lat = parseFloat(req.query.lat as string);
-      const lng = parseFloat(req.query.lng as string);
-      const radius = parseFloat(req.query.radius as string) || 0.25;
-      const language = (req.query.language as string) || 'en';
+      const lat = parseFloat(String(req.query.lat));
+      const lng = parseFloat(String(req.query.lng));
+      const radius = parseFloat(String(req.query.radius)) || 0.25;
+      const language = String(req.query.language || 'English');
+
+      if (!validateLanguage(language, res)) return;
 
       if (isNaN(lat) || isNaN(lng)) {
         res.status(400).json({ error: 'lat and lng must be valid numbers' });
@@ -136,8 +138,8 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     // Community-level lookup by name
-    const community = req.query.community as string;
-    const language = req.query.language as string || 'English';
+    const community = String(req.query.community || '');
+    const language = String(req.query.language || 'English');
 
     if (language !== 'English' && !validateLanguage(language, res)) return;
 

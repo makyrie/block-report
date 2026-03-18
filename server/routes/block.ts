@@ -6,9 +6,9 @@ import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG } from '..
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const lat = parseFloat(req.query.lat as string);
-  const lng = parseFloat(req.query.lng as string);
-  const radius = parseFloat(req.query.radius as string) || 0.25;
+  const lat = parseFloat(String(req.query.lat));
+  const lng = parseFloat(String(req.query.lng));
+  const radius = parseFloat(String(req.query.radius)) || 0.25;
 
   if (isNaN(lat) || isNaN(lng)) {
     res.status(400).json({ error: 'lat and lng query parameters are required' });
