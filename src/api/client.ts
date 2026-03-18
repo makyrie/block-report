@@ -93,7 +93,7 @@ export function generateAddressBlockReport(
   language: string,
   communityMetrics?: { resolutionRate: number; totalRequests: number } | null,
 ): Promise<CommunityReport> {
-  return fetchJSON(`${BASE}/report/generate-block`, {
+  return fetchJSON(`${BASE}/report/generate-address-block`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address, lat, lng, radius, communityName, blockMetrics, language, communityMetrics }),

@@ -197,38 +197,11 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/report/generate-block — Generate a block-level report for an anchor or address
+// POST /api/report/generate-block — Generate an anchor-based block report
 router.post('/generate-block', async (req: Request, res: Response) => {
   try {
-    const { anchor, address, lat, lng, communityName, blockMetrics, language, demographics, communityMetrics } = req.body;
+    const { anchor, blockMetrics, language, demographics } = req.body;
 
-    // Address-anchored block report (new path)
-    if (address && lat != null && lng != null) {
-      if (!blockMetrics || !language) {
-        res.status(400).json({ error: 'Missing required fields: blockMetrics, language' });
-        return;
-      }
-
-      logger.info('Generating address block report on-demand', {
-        address,
-        community: communityName,
-        language,
-      });
-
-      const report = await generateAddressBlockReport(
-        address,
-        lat,
-        lng,
-        communityName || 'San Diego',
-        blockMetrics,
-        communityMetrics || null,
-        language,
-      );
-      res.json(report);
-      return;
-    }
-
-    // Existing anchor-based block report (backward compatible)
     if (!anchor || !blockMetrics || !language) {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;
@@ -267,6 +240,55 @@ router.post('/generate-block', async (req: Request, res: Response) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error generating block report';
     logger.error('Block report generation error', {
+      error: message,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/report/generate-address-block — Generate an address-anchored block report
+router.post('/generate-address-block', async (req: Request, res: Response) => {
+  try {
+    const { address, lat, lng, communityName, blockMetrics, language, communityMetrics } = req.body;
+
+    if (!address || lat == null || lng == null) {
+      res.status(400).json({ error: 'Missing required fields: address, lat, lng' });
+      return;
+    }
+    if (!blockMetrics || !language) {
+      res.status(400).json({ error: 'Missing required fields: blockMetrics, language' });
+      return;
+    }
+
+    logger.info('Generating address block report on-demand', {
+      address,
+      community: communityName,
+      language,
+    });
+
+    const report = await generateAddressBlockReport(
+      address,
+      lat,
+      lng,
+      communityName || 'San Diego',
+      blockMetrics,
+      communityMetrics || null,
+      language,
+    );
+
+    // Cache the generated block report for future instant access
+    const cacheKey = `addr_${lat.toFixed(4)}_${lng.toFixed(4)}_${blockMetrics.radiusMiles}_${LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2)}`;
+    try {
+      await saveCachedReport(cacheKey, language, report);
+    } catch (err) {
+      logger.error('Failed to cache address block report', { error: err instanceof Error ? err.message : String(err) });
+    }
+
+    res.json(report);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error generating address block report';
+    logger.error('Address block report generation error', {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
     });
