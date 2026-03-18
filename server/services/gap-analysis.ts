@@ -1,6 +1,6 @@
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
-import { pointInFeature, computeBBox, pointInBBox } from '../utils/geo.js';
+import { getTransitScoreValues } from './transit-scores.js';
 
 export interface AccessGapResult {
   accessGapScore: number;
@@ -22,32 +22,9 @@ interface CommunityRawData {
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 let scoresCache: Map<string, AccessGapResult> | null = null;
 let scoresCachedAt = 0;
+let inflight: Promise<Map<string, AccessGapResult>> | null = null;
 
-// Cache boundary GeoJSON (static data, changes infrequently)
-let boundaryCache: { data: unknown; cachedAt: number } | null = null;
-
-const BOUNDARY_URL = 'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson';
-
-async function fetchBoundaries(): Promise<{ features: Array<{ properties: Record<string, string>; geometry: { type: string; coordinates: number[][][] | number[][][][] } }> }> {
-  const now = Date.now();
-  if (boundaryCache && now - boundaryCache.cachedAt < CACHE_TTL) {
-    return boundaryCache.data as ReturnType<typeof fetchBoundaries> extends Promise<infer T> ? T : never;
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-  try {
-    const res = await fetch(BOUNDARY_URL, { signal: controller.signal });
-    if (!res.ok) throw new Error(`Failed to fetch boundaries: ${res.status}`);
-    const data = await res.json();
-    boundaryCache = { data, cachedAt: now };
-    return data;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-// Min-max normalize a value to 0-1. Returns null if bounds are equal.
+// Min-max normalize a value to 0-1. Returns 0 if bounds are equal.
 function normalize(value: number, min: number, max: number): number {
   if (max === min) return 0;
   return Math.max(0, Math.min(1, (value - min) / (max - min)));
@@ -68,7 +45,6 @@ async function fetchCensusData(): Promise<CensusRow[]> {
 
 // Fetch 311 engagement rates using database-level aggregation
 async function fetchEngagementRates(censusRows: CensusRow[]): Promise<Map<string, number>> {
-  // Aggregate 311 counts by community in the database
   const grouped = await prisma.request311.groupBy({
     by: ['comm_plan_name'],
     _count: { _all: true },
@@ -81,7 +57,6 @@ async function fetchEngagementRates(censusRows: CensusRow[]): Promise<Map<string
     counts.set(key, (counts.get(key) || 0) + row._count._all);
   }
 
-  // Build population map from shared census data
   const populations = new Map<string, number>();
   for (const row of censusRows) {
     if (!row.community) continue;
@@ -89,7 +64,6 @@ async function fetchEngagementRates(censusRows: CensusRow[]): Promise<Map<string
     populations.set(key, (populations.get(key) || 0) + (Number(row.total_pop_5plus) || 0));
   }
 
-  // Compute per-1000 rate for communities that have both data points
   const rates = new Map<string, number>();
   for (const [community, pop] of populations) {
     if (pop <= 0) continue;
@@ -100,52 +74,8 @@ async function fetchEngagementRates(censusRows: CensusRow[]): Promise<Map<string
   return rates;
 }
 
-// Fetch transit scores for all communities with bbox pre-filtering
-async function fetchTransitScores(): Promise<Map<string, number>> {
-  const stops = await prisma.transitStop.findMany({
-    select: { lat: true, lng: true, stop_agncy: true },
-  });
-
-  const geojson = await fetchBoundaries();
-
-  const scores = new Map<string, number>();
-
-  for (const feature of geojson.features) {
-    const name: string = feature.properties?.cpname || feature.properties?.name || '';
-    if (!name) continue;
-
-    // Pre-compute bounding box for this community
-    const bbox = computeBBox(feature.geometry);
-
-    let stopCount = 0;
-    const agencies = new Set<string>();
-
-    for (const stop of stops) {
-      if (stop.lat == null || stop.lng == null) continue;
-      // Skip stops outside bounding box (fast rejection)
-      if (!pointInBBox(stop.lat, stop.lng, bbox)) continue;
-      if (pointInFeature(stop.lat, stop.lng, feature.geometry)) {
-        stopCount++;
-        if (stop.stop_agncy) agencies.add(stop.stop_agncy);
-      }
-    }
-
-    const rawScore = stopCount * 0.4 + agencies.size * 10 * 0.6;
-    scores.set(name.toUpperCase(), rawScore);
-  }
-
-  // Normalize to 0-100
-  const maxRaw = Math.max(...Array.from(scores.values()), 1);
-  for (const [key, raw] of scores) {
-    scores.set(key, Math.round((raw / maxRaw) * 100));
-  }
-
-  return scores;
-}
-
-// Fetch non-English speaking percentage per community (uses shared census data)
+// Fetch non-English speaking percentage per community
 function computeNonEnglishPct(censusRows: CensusRow[]): Map<string, number> {
-  // Aggregate by community
   const agg = new Map<string, { totalPop: number; englishOnly: number }>();
   for (const row of censusRows) {
     if (!row.community) continue;
@@ -165,15 +95,23 @@ function computeNonEnglishPct(censusRows: CensusRow[]): Map<string, number> {
   return pcts;
 }
 
+// Helper to safely compute min/max without spread operator (stack-safe for large arrays)
+function arrayMin(values: number[]): number {
+  return values.reduce((min, v) => Math.min(min, v), Infinity);
+}
+function arrayMax(values: number[]): number {
+  return values.reduce((max, v) => Math.max(max, v), -Infinity);
+}
+
 async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
   logger.info('Computing access gap scores for all communities...');
 
-  // Fetch census data once, share between engagement rates and non-English pct
   const censusRows = await fetchCensusData();
 
+  // Use shared transit-scores service instead of duplicated computation
   const [engagementRates, transitScores] = await Promise.all([
     fetchEngagementRates(censusRows),
-    fetchTransitScores(),
+    getTransitScoreValues(),
   ]);
   const nonEnglishPcts = computeNonEnglishPct(censusRows);
 
@@ -193,7 +131,7 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
     });
   }
 
-  // Compute min/max for normalization (only across communities with data)
+  // Compute min/max for normalization (stack-safe reduce instead of spread)
   const engagementValues = Array.from(rawData.values())
     .map((d) => d.engagementRate)
     .filter((v): v is number => v !== null);
@@ -204,14 +142,13 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
     .map((d) => d.nonEnglishPct)
     .filter((v): v is number => v !== null);
 
-  const engMin = Math.min(...engagementValues);
-  const engMax = Math.max(...engagementValues);
-  const transMin = Math.min(...transitValues);
-  const transMax = Math.max(...transitValues);
-  const nelMin = Math.min(...nonEnglishValues);
-  const nelMax = Math.max(...nonEnglishValues);
+  const engMin = arrayMin(engagementValues);
+  const engMax = arrayMax(engagementValues);
+  const transMin = arrayMin(transitValues);
+  const transMax = arrayMax(transitValues);
+  const nelMin = arrayMin(nonEnglishValues);
+  const nelMax = arrayMax(nonEnglishValues);
 
-  // Compute composite scores
   // Weights: low engagement 0.35, low transit 0.30, high non-English 0.35
   const WEIGHT_ENGAGEMENT = 0.35;
   const WEIGHT_TRANSIT = 0.30;
@@ -230,7 +167,6 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
       highNonEnglish: null,
     };
 
-    // Low 311 engagement → higher gap score
     if (data.engagementRate !== null) {
       const norm = normalize(data.engagementRate, engMin, engMax);
       signals.lowEngagement = Math.round((1 - norm) * 100) / 100;
@@ -239,7 +175,6 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
       signalCount++;
     }
 
-    // Low transit score → higher gap score
     if (data.transitScore !== null) {
       const norm = normalize(data.transitScore, transMin, transMax);
       signals.lowTransit = Math.round((1 - norm) * 100) / 100;
@@ -248,7 +183,6 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
       signalCount++;
     }
 
-    // High non-English percentage → higher gap score
     if (data.nonEnglishPct !== null) {
       const norm = normalize(data.nonEnglishPct, nelMin, nelMax);
       signals.highNonEnglish = Math.round(norm * 100) / 100;
@@ -257,15 +191,12 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
       signalCount++;
     }
 
-    // Need at least 2 signals for a meaningful score
     if (signalCount < 2) continue;
 
-    // Normalize by total weight used (handles missing signals gracefully)
     const score = Math.round((weightedSum / totalWeight) * 100);
     scored.push({ community, score, signals });
   }
 
-  // Sort by score descending to assign ranks
   scored.sort((a, b) => b.score - a.score);
 
   const results = new Map<string, AccessGapResult>();
@@ -288,9 +219,19 @@ export async function getAccessGapScores(): Promise<Map<string, AccessGapResult>
   if (scoresCache && now - scoresCachedAt < CACHE_TTL) {
     return scoresCache;
   }
-  scoresCache = await computeAllScores();
-  scoresCachedAt = now;
-  return scoresCache;
+  // Promise coalescing: reuse in-flight computation for concurrent callers
+  if (!inflight) {
+    inflight = computeAllScores().then((result) => {
+      scoresCache = result;
+      scoresCachedAt = Date.now();
+      inflight = null;
+      return result;
+    }).catch((err) => {
+      inflight = null;
+      throw err;
+    });
+  }
+  return inflight;
 }
 
 export async function getAccessGapScore(community: string): Promise<AccessGapResult | null> {

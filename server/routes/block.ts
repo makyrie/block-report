@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
+import { haversineDistanceMiles } from '../utils/geo.js';
 
 const router = Router();
 
@@ -8,17 +9,6 @@ const router = Router();
 const MILES_PER_LAT_DEG = 69;
 // At San Diego (~32.7°N): 1 deg longitude ~ 58.8 miles
 const MILES_PER_LNG_DEG = 58.8;
-
-function haversineDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 3958.8;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 router.get('/', async (req, res) => {
   const lat = parseFloat(req.query.lat as string);
