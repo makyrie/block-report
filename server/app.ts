@@ -25,7 +25,13 @@ const reportLimiter = rateLimit({
   max: 10,
   message: { error: 'Too many report generation requests, please try again later' },
 });
+const blockLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many block data requests, please try again later' },
+});
 app.use('/api/report', reportLimiter);
+app.use('/api/block', blockLimiter);
 app.use('/api', apiLimiter);
 
 app.use(express.json());
