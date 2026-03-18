@@ -25,6 +25,7 @@ function validateBoundaryCollection(data: unknown): data is BoundaryCollection {
     if (typeof feat.geometry !== 'object' || feat.geometry === null) return false;
     const geom = feat.geometry as Record<string, unknown>;
     if (typeof geom.type !== 'string') return false;
+    if (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon') return false;
     if (!Array.isArray(geom.coordinates)) return false;
   }
   return true;
