@@ -69,7 +69,7 @@ export interface Block311Report {
 }
 
 export interface BlockMetrics {
-  totalRequests: number;
+  totalReports: number;
   openCount: number;
   resolvedCount: number;
   resolutionRate: number;
