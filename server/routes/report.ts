@@ -321,7 +321,7 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
     if (!validateLanguage(language, res)) return;
 
     const langCode = getLangCode(language);
-    const cacheKey = buildBlockCacheKey(lat, lng, blockMetrics.radiusMiles, langCode);
+    const cacheKey = buildBlockCacheKey(latNum, lngNum, blockMetrics.radiusMiles, langCode);
 
     // Coalesce duplicate in-flight requests for the same location
     let reportPromise = inFlightGenerations.get(cacheKey);
@@ -334,8 +334,8 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
 
       reportPromise = generateAddressBlockReport(
         address,
-        lat,
-        lng,
+        latNum,
+        lngNum,
         communityName || 'San Diego',
         blockMetrics,
         communityMetrics || null,
