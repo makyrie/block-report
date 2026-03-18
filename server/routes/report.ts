@@ -44,6 +44,8 @@ interface StoredReport {
   };
 }
 
+const PRE_GENERATED_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 async function getPreGeneratedReport(
   communityName: string,
   language: string,
@@ -54,7 +56,13 @@ async function getPreGeneratedReport(
 
   try {
     const content = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(content) as StoredReport;
+    const stored = JSON.parse(content) as StoredReport;
+    // Enforce TTL — ignore stale pre-generated reports
+    if (stored.generatedAt) {
+      const age = Date.now() - new Date(stored.generatedAt).getTime();
+      if (age > PRE_GENERATED_TTL_MS) return null;
+    }
+    return stored;
   } catch {
     return null;
   }
