@@ -293,16 +293,33 @@ export async function getAccessGapScore(community: string): Promise<AccessGapRes
   return scores.get(community.toUpperCase().trim()) ?? null;
 }
 
+export function describeTopFactors(signals: AccessGapResult['signals']): string[] {
+  const factors: string[] = [];
+  if (signals.lowEngagement !== null && signals.lowEngagement > 0.5) {
+    factors.push('low civic engagement');
+  }
+  if (signals.lowTransit !== null && signals.lowTransit > 0.5) {
+    factors.push('limited transit access');
+  }
+  if (signals.highNonEnglish !== null && signals.highNonEnglish > 0.5) {
+    factors.push(`${Math.round(signals.highNonEnglish * 100)}% non-English speaking`);
+  }
+  return factors;
+}
+
 export async function getTopUnderserved(limit = 10): Promise<
-  { community: string; accessGapScore: number; signals: AccessGapResult['signals'] }[]
+  { community: string; accessGapScore: number; signals: AccessGapResult['signals']; topFactors: string[]; rank: number; totalCommunities: number }[]
 > {
   const scores = await getAccessGapScores();
-  return Array.from(scores.entries())
-    .sort(([, a], [, b]) => b.accessGapScore - a.accessGapScore)
-    .slice(0, limit)
-    .map(([community, data]) => ({
-      community,
-      accessGapScore: data.accessGapScore,
-      signals: data.signals,
-    }));
+  const sorted = Array.from(scores.entries())
+    .sort(([, a], [, b]) => b.accessGapScore - a.accessGapScore);
+  const sliced = limit === 0 ? sorted : sorted.slice(0, limit);
+  return sliced.map(([community, data]) => ({
+    community,
+    accessGapScore: data.accessGapScore,
+    signals: data.signals,
+    topFactors: describeTopFactors(data.signals),
+    rank: data.rank,
+    totalCommunities: data.totalCommunities,
+  }));
 }

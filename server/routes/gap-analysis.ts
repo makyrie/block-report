@@ -38,13 +38,18 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/access-gap/ranking?limit={n}
+// GET /api/access-gap/ranking?limit={n}  (limit=0 returns all)
 router.get('/ranking', async (_req, res) => {
-  const limit = Math.min(Number(_req.query.limit) || 10, 50);
+  const rawLimit = _req.query.limit;
+  const limit = rawLimit === '0' || rawLimit === 'all' ? 0 : Math.min(Number(rawLimit) || 10, 200);
 
   try {
     const ranking = await getTopUnderserved(limit);
-    res.json({ ranking });
+    const withGaps = ranking.filter((r) => r.accessGapScore >= 50).length;
+    res.json({
+      ranking,
+      summary: { total: ranking.length, withGaps },
+    });
   } catch (err) {
     logger.error('Failed to compute access gap ranking', { error: (err as Error).message });
     res.status(500).json({ error: 'Internal server error' });

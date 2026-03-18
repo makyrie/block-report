@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
+import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
 
 const BASE = '/api';
 
@@ -52,6 +52,13 @@ export function getAccessGapRanking(limit = 10): Promise<{
   ranking: { community: string; accessGapScore: number; signals: NonNullable<NeighborhoodProfile['accessGap']>['signals'] }[];
 }> {
   return fetchJSON(`${BASE}/access-gap/ranking?limit=${limit}`);
+}
+
+export function getCitywideGaps(): Promise<{
+  ranking: CitywideCommunity[];
+  summary: { total: number; withGaps: number };
+}> {
+  return fetchJSON(`${BASE}/access-gap/ranking?limit=0`);
 }
 
 export function getBlockData(lat: number, lng: number, radius = 0.25): Promise<BlockMetrics> {

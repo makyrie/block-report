@@ -82,6 +82,19 @@ export interface CommunityReport {
   };
 }
 
+export interface CitywideCommunity {
+  community: string;
+  accessGapScore: number;
+  signals: {
+    lowEngagement: number | null;
+    lowTransit: number | null;
+    highNonEnglish: number | null;
+  };
+  topFactors: string[];
+  rank: number;
+  totalCommunities: number;
+}
+
 export interface StoredBlockReport {
   anchorName: string;
   anchorType: 'library' | 'rec_center';
