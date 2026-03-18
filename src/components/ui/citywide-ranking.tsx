@@ -1,29 +1,7 @@
 import { useRef, useEffect } from 'react';
 import type { CitywideCommunity } from '../../types';
 import { useLanguage } from '../../i18n/context';
-
-// Same color scale as choropleth
-function scoreToColor(score: number): string {
-  if (score <= 20) return '#fee5d9';
-  if (score <= 40) return '#fcae91';
-  if (score <= 60) return '#fb6a4a';
-  if (score <= 80) return '#de2d26';
-  return '#a50f15';
-}
-
-// Normalize for comparison
-function norm(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-// Convert UPPERCASE community name to title case for display
-function titleCase(name: string): string {
-  return name
-    .toLowerCase()
-    .split(' ')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
+import { scoreToColor, norm, titleCase } from '../../utils/community';
 
 interface CitywideRankingProps {
   ranking: CitywideCommunity[];

@@ -5,18 +5,10 @@ import { getCitywideGaps, getNeighborhoodBoundaries } from '../api/client';
 import type { CitywideCommunity } from '../types';
 import { toSlug } from '../utils/slug';
 import { useLanguage } from '../i18n/context';
+import { titleCase } from '../utils/community';
 import CitywideChoropleth from '../components/map/citywide-choropleth';
 import CitywideRanking from '../components/ui/citywide-ranking';
 import CitywideSummary from '../components/ui/citywide-summary';
-
-// Convert UPPERCASE community name to title case for slug generation
-function titleCase(name: string): string {
-  return name
-    .toLowerCase()
-    .split(' ')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
 
 export default function CitywidePage() {
   const navigate = useNavigate();

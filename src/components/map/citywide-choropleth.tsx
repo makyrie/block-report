@@ -4,22 +4,7 @@ import L from 'leaflet';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { CitywideCommunity } from '../../types';
 import { useLanguage } from '../../i18n/context';
-
-// Sequential red-orange color ramp for access gap scores
-function scoreToColor(score: number): string {
-  if (score <= 20) return '#fee5d9';
-  if (score <= 40) return '#fcae91';
-  if (score <= 60) return '#fb6a4a';
-  if (score <= 80) return '#de2d26';
-  return '#a50f15';
-}
-
-const NO_DATA_COLOR = '#e5e7eb';
-
-// Normalize strings for fuzzy matching (same logic as san-diego-map.tsx)
-function norm(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-}
+import { scoreToColor, norm, escapeHtml, ACCESS_GAP_COLORS, NO_DATA_COLOR } from '../../utils/community';
 
 interface CitywideChoroplethProps {
   boundaries: FeatureCollection;
@@ -158,7 +143,7 @@ export default function CitywideChoropleth({
         <p className="text-xs font-semibold text-gray-700 mb-1.5">{t('citywide.legend')}</p>
         <div className="flex items-center gap-0.5">
           <span className="text-[10px] text-gray-500 mr-1">{t('citywide.legendLow')}</span>
-          {['#fee5d9', '#fcae91', '#fb6a4a', '#de2d26', '#a50f15'].map((color) => (
+          {ACCESS_GAP_COLORS.map((color) => (
             <span
               key={color}
               className="w-6 h-3 rounded-sm"
