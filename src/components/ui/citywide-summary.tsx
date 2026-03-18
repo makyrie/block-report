@@ -1,3 +1,5 @@
+import { Fragment } from 'react';
+import type { ReactNode } from 'react';
 import { useLanguage } from '../../i18n/context';
 
 interface CitywideSummaryProps {
@@ -5,36 +7,35 @@ interface CitywideSummaryProps {
   withGaps: number;
 }
 
+// Token-based interpolation: splits a template with {key} placeholders and
+// replaces them with ReactNode values. Safe regardless of numeric collisions.
+function interpolateJSX(
+  template: string,
+  vars: Record<string, ReactNode>,
+): ReactNode[] {
+  const parts = template.split(/(\{[^}]+\})/g);
+  return parts.map((part, i) => {
+    const match = part.match(/^\{(.+)\}$/);
+    if (match && match[1] in vars) {
+      return <Fragment key={i}>{vars[match[1]]}</Fragment>;
+    }
+    return <Fragment key={i}>{part}</Fragment>;
+  });
+}
+
 export default function CitywideSummary({ total, withGaps }: CitywideSummaryProps) {
   const { t } = useLanguage();
+
+  // Get the raw template with {total} and {withGaps} placeholders intact
+  const template = t('citywide.summary');
 
   return (
     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200 px-4 py-3">
       <p className="text-sm text-gray-700 text-center">
-        {t('citywide.summary', {
-          total: String(total),
-          withGaps: String(withGaps),
-        }).split(String(total)).map((part, i, arr) =>
-          i < arr.length - 1 ? (
-            <span key={`total-${i}`}>
-              {part}
-              <strong className="text-gray-900">{total}</strong>
-            </span>
-          ) : (
-            <span key={`rest-${i}`}>
-              {part.split(String(withGaps)).map((subPart, j, subArr) =>
-                j < subArr.length - 1 ? (
-                  <span key={`gaps-${j}`}>
-                    {subPart}
-                    <strong className="text-red-700">{withGaps}</strong>
-                  </span>
-                ) : (
-                  <span key={`end-${j}`}>{subPart}</span>
-                ),
-              )}
-            </span>
-          ),
-        )}
+        {interpolateJSX(template, {
+          total: <strong className="text-gray-900">{total}</strong>,
+          withGaps: <strong className="text-red-700">{withGaps}</strong>,
+        })}
       </p>
     </div>
   );
