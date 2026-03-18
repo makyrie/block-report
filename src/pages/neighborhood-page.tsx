@@ -82,6 +82,7 @@ export default function NeighborhoodPage() {
       return;
     }
 
+    let cancelled = false;
     setMetricsLoading(true);
     setMetrics(null);
     setTopLanguages([]);
@@ -89,27 +90,50 @@ export default function NeighborhoodPage() {
     setAccessGap(null);
 
     get311(selectedCommunity)
-      .then(setMetrics)
+      .then((data) => { if (!cancelled) setMetrics(data); })
       .catch(console.error)
-      .finally(() => setMetricsLoading(false));
+      .finally(() => { if (!cancelled) setMetricsLoading(false); });
 
     getTransitScore(selectedCommunity)
-      .then(setTransitScore)
+      .then((data) => { if (!cancelled) setTransitScore(data); })
       .catch(() => { /* transit score may not be available */ });
 
     getAccessGap(selectedCommunity)
-      .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
+      .then((data) => { if (!cancelled && data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
-    // Try to fetch demographics for language suggestion
     getDemographics(selectedCommunity)
       .then((data) => {
-        if (data?.topLanguages) setTopLanguages(data.topLanguages);
+        if (!cancelled && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
       .catch(() => {
         // Demographics may not be available for all communities
       });
+
+    return () => { cancelled = true; };
   }, [selectedCommunity]);
+
+  const DEFAULT_TRANSIT = { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [] as string[], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null };
+
+  function buildProfile(community: string, metricsData: NeighborhoodProfile['metrics']): NeighborhoodProfile {
+    const anchor = selectedAnchor ?? {
+      id: '',
+      name: community,
+      type: 'library' as const,
+      lat: 0,
+      lng: 0,
+      address: '',
+      community,
+    };
+    return {
+      communityName: community,
+      anchor,
+      metrics: metricsData,
+      transit: transitScore ?? DEFAULT_TRANSIT,
+      demographics: { topLanguages },
+      accessGap: accessGap ?? null,
+    };
+  }
 
   // Clear report when community or language changes
   const generatingRef = useRef(false);
@@ -144,32 +168,9 @@ export default function NeighborhoodPage() {
         return;
       }
 
-      // Already have a report — don't regenerate on metrics updates
-      if (report) {
-        setReportLoading(false);
-        return;
-      }
-
       generatingRef.current = true;
 
-      const anchor = selectedAnchor ?? {
-        id: '',
-        name: selectedCommunity,
-        type: 'library' as const,
-        lat: 0,
-        lng: 0,
-        address: '',
-        community: selectedCommunity,
-      };
-
-      const profile: NeighborhoodProfile = {
-        communityName: selectedCommunity,
-        anchor,
-        metrics,
-        transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-        demographics: { topLanguages },
-        accessGap: accessGap ?? null,
-      };
+      const profile = buildProfile(selectedCommunity, metrics);
 
       try {
         const result = await generateReport(profile, reportLang);
@@ -182,7 +183,7 @@ export default function NeighborhoodPage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; generatingRef.current = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunity, reportLang, metrics]);
 
@@ -219,6 +220,7 @@ export default function NeighborhoodPage() {
   useEffect(() => {
     if (!pinnedLocation) return;
     let cancelled = false;
+    setBlockData(null);
     const timer = setTimeout(() => {
       setBlockLoading(true);
       getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
@@ -229,27 +231,14 @@ export default function NeighborhoodPage() {
     return () => { clearTimeout(timer); cancelled = true; };
   }, [blockRadius, pinnedLocation]);
 
+  const reportGeneratingRef = useRef(false);
+  const blockReportGeneratingRef = useRef(false);
+
   const handleGenerateReport = useCallback(async (language: string) => {
-    if (!selectedCommunity || !metrics) return;
+    if (!selectedCommunity || !metrics || reportGeneratingRef.current) return;
+    reportGeneratingRef.current = true;
 
-    const anchor = selectedAnchor ?? {
-      id: '',
-      name: selectedCommunity,
-      type: 'library' as const,
-      lat: 0,
-      lng: 0,
-      address: '',
-      community: selectedCommunity,
-    };
-
-    const profile: NeighborhoodProfile = {
-      communityName: selectedCommunity,
-      anchor,
-      metrics,
-      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-      demographics: { topLanguages },
-      accessGap: accessGap ?? null,
-    };
+    const profile = buildProfile(selectedCommunity, metrics);
 
     setReportLoading(true);
     setReportError(null);
@@ -260,12 +249,14 @@ export default function NeighborhoodPage() {
       const message = err instanceof Error ? err.message : 'Failed to generate report';
       setReportError(message);
     } finally {
+      reportGeneratingRef.current = false;
       setReportLoading(false);
     }
   }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
 
   const handleGenerateBlockReport = useCallback(async () => {
-    if (!pinnedLocation || !blockData) return;
+    if (!pinnedLocation || !blockData || blockReportGeneratingRef.current) return;
+    blockReportGeneratingRef.current = true;
 
     const address = blockData.nearestAddress || `${pinnedLocation.lat.toFixed(4)}, ${pinnedLocation.lng.toFixed(4)}`;
     const community = blockData.communityName || selectedCommunity || 'San Diego';
@@ -286,6 +277,7 @@ export default function NeighborhoodPage() {
     } catch (err) {
       setBlockReportError(err instanceof Error ? err.message : 'Failed to generate block report');
     } finally {
+      blockReportGeneratingRef.current = false;
       setBlockReportLoading(false);
     }
   }, [pinnedLocation, blockData, selectedCommunity, reportLang, metrics]);
