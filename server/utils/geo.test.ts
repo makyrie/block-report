@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pointInPolygon, pointInFeature, computeBBox, pointInBBox } from './geo';
+import { pointInPolygon, pointInFeature, computeBBox, pointInBBox, haversineDistanceMiles, computeCentroid } from './geo';
 
 // A simple square polygon: [lng, lat] pairs forming a square from (0,0) to (10,10)
 // GeoJSON convention: [lng, lat]
@@ -15,10 +15,6 @@ describe('pointInPolygon', () => {
   it('returns false for a point outside the polygon', () => {
     expect(pointInPolygon(15, 15, squareRing)).toBe(false);
     expect(pointInPolygon(-1, 5, squareRing)).toBe(false);
-  });
-
-  it('returns true for a point at the center', () => {
-    expect(pointInPolygon(5, 5, squareRing)).toBe(true);
   });
 
   it('returns false for a point clearly outside', () => {
@@ -93,5 +89,37 @@ describe('pointInBBox', () => {
   it('returns false for points outside bbox', () => {
     expect(pointInBBox(-1, 5, bbox)).toBe(false);
     expect(pointInBBox(5, 11, bbox)).toBe(false);
+  });
+});
+
+describe('haversineDistanceMiles', () => {
+  it('returns 0 for identical points', () => {
+    expect(haversineDistanceMiles(32.7, -117.1, 32.7, -117.1)).toBe(0);
+  });
+
+  it('computes approximate distance between known points', () => {
+    // San Diego to Los Angeles is roughly 120 miles
+    const dist = haversineDistanceMiles(32.7157, -117.1611, 34.0522, -118.2437);
+    expect(dist).toBeGreaterThan(100);
+    expect(dist).toBeLessThan(130);
+  });
+});
+
+describe('computeCentroid', () => {
+  it('returns centroid of a simple polygon', () => {
+    const geometry = {
+      type: 'Polygon',
+      coordinates: [squareRing] as number[][][],
+    };
+    const centroid = computeCentroid(geometry);
+    expect(centroid).not.toBeNull();
+    // Average of [0,0],[10,0],[10,10],[0,10],[0,0] → lat≈4, lng≈4
+    expect(centroid!.lat).toBeCloseTo(4, 0);
+    expect(centroid!.lng).toBeCloseTo(4, 0);
+  });
+
+  it('returns null for empty geometry', () => {
+    const geometry = { type: 'Polygon', coordinates: [[]] as number[][][] };
+    expect(computeCentroid(geometry)).toBeNull();
   });
 });

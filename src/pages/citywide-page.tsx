@@ -98,7 +98,6 @@ export default function CitywidePage() {
           role="tabpanel"
           id="tabpanel-map"
           aria-labelledby="tab-map"
-          aria-hidden={mobileView !== 'map' ? true : undefined}
           className={`flex-1 min-h-0 ${mobileView === 'map' ? 'block' : 'hidden md:block'}`}
         >
           {boundaries ? (
@@ -111,7 +110,7 @@ export default function CitywidePage() {
             />
           ) : (
             <div className="h-full flex items-center justify-center bg-gray-100">
-              <p className="text-sm text-gray-500">Map data unavailable</p>
+              <p className="text-sm text-gray-500">{t('citywide.noScore')}</p>
             </div>
           )}
         </div>
@@ -121,7 +120,6 @@ export default function CitywidePage() {
           role="tabpanel"
           id="tabpanel-list"
           aria-labelledby="tab-list"
-          aria-hidden={mobileView !== 'list' ? true : undefined}
           className={`md:w-96 md:shrink-0 md:border-l md:border-gray-200 overflow-hidden ${
             mobileView === 'list' ? 'flex-1' : 'hidden md:block'
           }`}
