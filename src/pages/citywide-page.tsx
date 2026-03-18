@@ -19,12 +19,12 @@ export default function CitywidePage() {
   const [summary, setSummary] = useState<{ total: number; withGaps: number } | null>(null);
   const [boundaries, setBoundaries] = useState<FeatureCollection | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const [hoveredCommunity, setHoveredCommunity] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
     setLoading(true);
-    setError(null);
+    setError(false);
 
     Promise.all([getCitywideGaps(), getNeighborhoodBoundaries()])
       .then(([gapData, boundaryData]) => {
@@ -34,10 +34,10 @@ export default function CitywidePage() {
       })
       .catch((err) => {
         console.error('Failed to load citywide data', err);
-        setError(t('citywide.error'));
+        setError(true);
       })
       .finally(() => setLoading(false));
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -67,7 +67,7 @@ export default function CitywidePage() {
     return (
       <div className="h-full flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <p className="text-sm text-red-600 mb-3">{error}</p>
+          <p className="text-sm text-red-600 mb-3">{t('citywide.error')}</p>
           <button
             type="button"
             onClick={fetchData}
