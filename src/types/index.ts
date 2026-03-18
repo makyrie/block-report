@@ -61,7 +61,6 @@ export interface NearbyOpenIssue {
   serviceName: string;
   serviceNameDetail?: string;
   streetAddress?: string;
-  publicDescription?: string;
   dateRequested: string;
   daysOpen: number;
   distanceMiles: number;

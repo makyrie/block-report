@@ -211,16 +211,18 @@ export default function NeighborhoodPage() {
     setBlockReportError(null);
   }, []);
 
-  // Fetch block data when pinned location or radius changes (single source of truth)
+  // Fetch block data when pinned location or radius changes (debounced + abortable)
   useEffect(() => {
     if (!pinnedLocation) return;
-    let cancelled = false;
-    setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
-      .then((data) => { if (!cancelled) setBlockData(data); })
-      .catch((err) => { if (!cancelled) console.error('Failed to fetch block data', err); })
-      .finally(() => { if (!cancelled) setBlockLoading(false); });
-    return () => { cancelled = true; };
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setBlockLoading(true);
+      getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
+        .then((data) => { if (!controller.signal.aborted) setBlockData(data); })
+        .catch((err) => { if (!controller.signal.aborted) console.error('Failed to fetch block data', err); })
+        .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
   }, [blockRadius, pinnedLocation]);
 
   const handleGenerateReport = useCallback(async (language: string) => {
@@ -271,7 +273,6 @@ export default function NeighborhoodPage() {
         address,
         pinnedLocation.lat,
         pinnedLocation.lng,
-        blockRadius,
         community,
         blockData,
         reportLang,

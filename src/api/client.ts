@@ -74,20 +74,10 @@ export function generateReport(profile: NeighborhoodProfile, language: string): 
   });
 }
 
-export function getBlockReport(
-  lat: number,
-  lng: number,
-  radius = 0.25,
-  language = 'en',
-): Promise<CommunityReport & { preGenerated?: boolean; anchorName?: string; anchorType?: string }> {
-  return fetchJSON(`${BASE}/report?lat=${lat}&lng=${lng}&radius=${radius}&language=${language}`);
-}
-
 export function generateAddressBlockReport(
   address: string,
   lat: number,
   lng: number,
-  radius: number,
   communityName: string,
   blockMetrics: BlockMetrics,
   language: string,
@@ -96,6 +86,6 @@ export function generateAddressBlockReport(
   return fetchJSON(`${BASE}/report/generate-address-block`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address, lat, lng, radius, communityName, blockMetrics, language, communityMetrics }),
+    body: JSON.stringify({ address, lat, lng, communityName, blockMetrics, language, communityMetrics }),
   });
 }

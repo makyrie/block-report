@@ -205,7 +205,6 @@ function sanitizeBlockMetrics(raw: BlockMetrics): BlockMetrics {
       serviceName: sanitizeString(issue.serviceName, 100),
       serviceNameDetail: issue.serviceNameDetail ? sanitizeString(issue.serviceNameDetail, 200) : undefined,
       streetAddress: issue.streetAddress ? sanitizeString(issue.streetAddress, 200) : undefined,
-      publicDescription: undefined, // Strip — not used in prompt, avoids injection vector
       dateRequested: sanitizeString(issue.dateRequested, 30),
       daysOpen: Math.max(0, Math.floor(Number(issue.daysOpen) || 0)),
       distanceMiles: Math.max(0, Number(issue.distanceMiles) || 0),
