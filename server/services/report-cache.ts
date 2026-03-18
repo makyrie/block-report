@@ -6,7 +6,7 @@ import { sanitizeFilename } from '../utils/language.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // Ensure cache directory exists once at module init
 const _ensureDir = mkdir(CACHE_DIR, { recursive: true }).catch(() => {});

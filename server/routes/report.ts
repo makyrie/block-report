@@ -5,8 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport, generateAddressBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport, buildBlockCacheKey, getCachedReportByKey, saveCachedReportByKey } from '../services/report-cache.js';
+import type { CommunityReport, NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
+import { getCachedReport, saveCachedReport, CACHE_TTL_MS, buildBlockCacheKey, getCachedReportByKey, saveCachedReportByKey } from '../services/report-cache.js';
 import { VALID_LANGUAGES, getLangCode, sanitizeFilename } from '../utils/language.js';
 import { SD_BOUNDS } from '../utils/geo.js';
 
@@ -28,23 +28,8 @@ interface StoredReport {
   languageCode: string;
   generatedAt: string;
   dataAsOf: string;
-  report: {
-    neighborhoodName: string;
-    language: string;
-    generatedAt: string;
-    summary: string;
-    goodNews: string[];
-    topIssues: string[];
-    howToParticipate: string[];
-    contactInfo: {
-      councilDistrict: string;
-      phone311: string;
-      anchorLocation: string;
-    };
-  };
+  report: CommunityReport;
 }
-
-const PRE_GENERATED_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 async function getPreGeneratedReport(
   communityName: string,
@@ -60,7 +45,7 @@ async function getPreGeneratedReport(
     // Enforce TTL — ignore stale pre-generated reports
     if (stored.generatedAt) {
       const age = Date.now() - new Date(stored.generatedAt).getTime();
-      if (age > PRE_GENERATED_TTL_MS) return null;
+      if (age > CACHE_TTL_MS) return null;
     }
     return stored;
   } catch {
@@ -68,8 +53,38 @@ async function getPreGeneratedReport(
   }
 }
 
-// In-flight request coalescing for Claude API calls
-const inFlightGenerations = new Map<string, Promise<import('../../src/types/index.js').CommunityReport>>();
+// In-flight request coalescing for Claude API calls (bounded to prevent memory leaks)
+const MAX_IN_FLIGHT = 50;
+const inFlightGenerations = new Map<string, Promise<CommunityReport>>();
+
+/** Coalesce duplicate in-flight generation requests, generate, and cache the result. */
+async function coalesceAndGenerate(
+  coalescingKey: string,
+  generateFn: () => Promise<CommunityReport>,
+  cacheFn: (report: CommunityReport) => Promise<void>,
+): Promise<CommunityReport> {
+  let reportPromise = inFlightGenerations.get(coalescingKey);
+  if (!reportPromise) {
+    if (inFlightGenerations.size >= MAX_IN_FLIGHT) {
+      throw new Error('Too many concurrent report generations. Please try again later.');
+    }
+    reportPromise = generateFn();
+    inFlightGenerations.set(coalescingKey, reportPromise);
+    reportPromise.finally(() => inFlightGenerations.delete(coalescingKey));
+  } else {
+    logger.info('Coalescing duplicate report request', { coalescingKey });
+  }
+
+  const report = await reportPromise;
+
+  try {
+    await cacheFn(report);
+  } catch (err) {
+    logger.error('Failed to cache report', { error: err instanceof Error ? err.message : String(err) });
+  }
+
+  return report;
+}
 
 const router = Router();
 
@@ -185,27 +200,11 @@ router.post('/generate', async (req: Request, res: Response) => {
 
     // Fall back to on-demand generation with request coalescing
     const coalescingKey = `community_${sanitizeFilename(profile.communityName)}_${getLangCode(language)}`;
-    let reportPromise = inFlightGenerations.get(coalescingKey);
-    if (!reportPromise) {
-      logger.info('No pre-generated report found, generating on-demand', {
-        community: profile.communityName,
-        language,
-      });
-      reportPromise = generateReport(profile, language);
-      inFlightGenerations.set(coalescingKey, reportPromise);
-      reportPromise.finally(() => inFlightGenerations.delete(coalescingKey));
-    } else {
-      logger.info('Coalescing duplicate community report request', { coalescingKey });
-    }
-
-    const report = await reportPromise;
-
-    // Cache the generated report for future instant access
-    try {
-      await saveCachedReport(profile.communityName, language, report);
-    } catch (err) {
-      logger.error('Failed to cache report', { error: err instanceof Error ? err.message : String(err) });
-    }
+    const report = await coalesceAndGenerate(
+      coalescingKey,
+      () => generateReport(profile, language),
+      (r) => saveCachedReport(profile.communityName, language, r),
+    );
 
     res.json(report);
   } catch (error) {
@@ -266,33 +265,12 @@ router.post('/generate-block', async (req: Request, res: Response) => {
 
     // Coalesce duplicate in-flight requests for same anchor
     const coalescingKey = `block_${sanitizeFilename(anchor.id || anchor.name)}_${langCode}`;
-    let reportPromise = inFlightGenerations.get(coalescingKey);
-    if (!reportPromise) {
-      logger.info('Generating block report on-demand', {
-        anchor: anchor.name,
-        language,
-      });
-      reportPromise = generateBlockReport(anchor, blockMetrics, language, demographics);
-      inFlightGenerations.set(coalescingKey, reportPromise);
-      reportPromise.finally(() => inFlightGenerations.delete(coalescingKey));
-    } else {
-      logger.info('Coalescing duplicate block report request', { coalescingKey });
-    }
-
-    const report = await reportPromise;
-
-    // Cache the generated block report for future instant access
-    try {
-      const cacheKey = buildBlockCacheKey(
-        anchorLat,
-        anchorLng,
-        blockMetrics.radiusMiles || 0.25,
-        langCode,
-      );
-      await saveCachedReportByKey(cacheKey, report);
-    } catch (err) {
-      logger.error('Failed to cache block report', { error: err instanceof Error ? err.message : String(err) });
-    }
+    const blockCacheKey = buildBlockCacheKey(anchorLat, anchorLng, blockMetrics.radiusMiles || 0.25, langCode);
+    const report = await coalesceAndGenerate(
+      coalescingKey,
+      () => generateBlockReport(anchor, blockMetrics, language, demographics),
+      (r) => saveCachedReportByKey(blockCacheKey, r),
+    );
 
     res.json(report);
   } catch (error) {
@@ -335,38 +313,15 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
     const langCode = getLangCode(language);
     const cacheKey = buildBlockCacheKey(latNum, lngNum, blockMetrics.radiusMiles, langCode);
 
-    // Coalesce duplicate in-flight requests for the same location
-    let reportPromise = inFlightGenerations.get(cacheKey);
-    if (!reportPromise) {
-      logger.info('Generating address block report on-demand', {
-        address,
-        community: communityName,
-        language,
-      });
-
-      reportPromise = generateAddressBlockReport(
-        address,
-        latNum,
-        lngNum,
+    const report = await coalesceAndGenerate(
+      cacheKey,
+      () => generateAddressBlockReport(
+        address, latNum, lngNum,
         communityName || 'San Diego',
-        blockMetrics,
-        communityMetrics || null,
-        language,
-      );
-      inFlightGenerations.set(cacheKey, reportPromise);
-      reportPromise.finally(() => inFlightGenerations.delete(cacheKey));
-    } else {
-      logger.info('Coalescing duplicate address block report request', { cacheKey });
-    }
-
-    const report = await reportPromise;
-
-    // Cache the generated block report for future instant access
-    try {
-      await saveCachedReportByKey(cacheKey, report);
-    } catch (err) {
-      logger.error('Failed to cache address block report', { error: err instanceof Error ? err.message : String(err) });
-    }
+        blockMetrics, communityMetrics || null, language,
+      ),
+      (r) => saveCachedReportByKey(cacheKey, r),
+    );
 
     res.json(report);
   } catch (error) {
