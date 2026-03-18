@@ -248,6 +248,20 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     });
 
     const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
+
+    // Cache the generated block report for future instant access
+    try {
+      const cacheKey = buildBlockCacheKey(
+        anchor.lat,
+        anchor.lng,
+        blockMetrics.radiusMiles || 0.25,
+        langCode,
+      );
+      await saveCachedReportByKey(cacheKey, report);
+    } catch (err) {
+      logger.error('Failed to cache block report', { error: err instanceof Error ? err.message : String(err) });
+    }
+
     res.json(report);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error generating block report';
