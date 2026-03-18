@@ -97,21 +97,9 @@ export default function CitywideChoropleth({
   // Update styles when hoveredCommunity changes without remounting GeoJSON
   useEffect(() => {
     if (geoJsonRef.current) {
-      geoJsonRef.current.setStyle((feature?: Feature) => {
-        if (!feature) return {};
-        const entry = getScore(feature);
-        const cpname = norm(feature.properties?.cpname ?? '');
-        const isHovered = hoveredCommunity && norm(hoveredCommunity) === cpname;
-        return {
-          fillColor: entry ? scoreToColor(entry.accessGapScore) : NO_DATA_COLOR,
-          fillOpacity: isHovered ? 0.9 : 0.7,
-          weight: isHovered ? 3 : 1,
-          color: isHovered ? '#1d4ed8' : '#ffffff',
-          dashArray: entry ? undefined : '4',
-        };
-      });
+      geoJsonRef.current.setStyle(style);
     }
-  }, [hoveredCommunity, getScore]);
+  }, [hoveredCommunity, style]);
 
   // Use a stable key based on ranking data to avoid remounting on hover
   const geoJsonKey = useMemo(() => ranking.map((r) => r.community).join(','), [ranking]);
