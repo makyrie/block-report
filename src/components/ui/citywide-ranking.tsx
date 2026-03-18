@@ -39,17 +39,16 @@ export default function CitywideRanking({
       </div>
 
       {/* Rows */}
-      <div role="list" aria-label={t('citywide.title')}>
+      <ul aria-label={t('citywide.title')} className="list-none m-0 p-0">
         {ranking.map((entry) => {
           const isHovered = hoveredCommunity && norm(hoveredCommunity) === norm(entry.community);
           const displayName = titleCase(entry.community);
           return (
+            <li key={entry.community} className="m-0 p-0">
             <button
-              key={entry.community}
               ref={(el) => {
                 if (el) rowRefs.current.set(norm(entry.community), el);
               }}
-              role="listitem"
               type="button"
               onClick={() => onClickCommunity(entry.community)}
               onMouseEnter={() => onHoverCommunity(entry.community)}
@@ -101,9 +100,10 @@ export default function CitywideRanking({
                 {entry.accessGapScore}
               </span>
             </button>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }

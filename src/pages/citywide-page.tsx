@@ -89,8 +89,10 @@ export default function CitywidePage() {
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Map */}
         <div
+          role="tabpanel"
+          id="tabpanel-map"
+          aria-labelledby="tab-map"
           className={`flex-1 min-h-0 ${mobileView === 'map' ? 'block' : 'hidden md:block'}`}
-          id="main-content"
         >
           {boundaries ? (
             <CitywideChoropleth
@@ -109,6 +111,9 @@ export default function CitywidePage() {
 
         {/* Ranked list */}
         <div
+          role="tabpanel"
+          id="tabpanel-list"
+          aria-labelledby="tab-list"
           className={`md:w-96 md:shrink-0 md:border-l md:border-gray-200 overflow-hidden ${
             mobileView === 'list' ? 'flex-1' : 'hidden md:block'
           }`}
@@ -131,7 +136,9 @@ export default function CitywidePage() {
         <button
           type="button"
           role="tab"
+          id="tab-map"
           aria-selected={mobileView === 'map'}
+          aria-controls="tabpanel-map"
           onClick={() => setMobileView('map')}
           className={`flex-1 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
             mobileView === 'map'
@@ -144,7 +151,9 @@ export default function CitywidePage() {
         <button
           type="button"
           role="tab"
+          id="tab-list"
           aria-selected={mobileView === 'list'}
+          aria-controls="tabpanel-list"
           onClick={() => setMobileView('list')}
           className={`flex-1 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
             mobileView === 'list'

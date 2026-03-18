@@ -105,7 +105,7 @@ export default function CitywideChoropleth({
   const geoJsonKey = useMemo(() => ranking.map((r) => r.community).join(','), [ranking]);
 
   return (
-    <div className="relative h-full w-full" role="img" aria-label={t('citywide.title')}>
+    <div className="relative h-full w-full" role="region" aria-label={t('citywide.title')}>
       <MapContainer
         center={[32.82, -117.15]}
         zoom={11}
