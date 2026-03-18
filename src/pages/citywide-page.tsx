@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { FeatureCollection } from 'geojson';
 import { getCitywideGaps, getNeighborhoodBoundaries } from '../api/client';
@@ -21,32 +21,38 @@ export default function CitywidePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [hoveredCommunity, setHoveredCommunity] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const fetchData = useCallback((signal?: AbortSignal) => {
+  const fetchData = useCallback(() => {
+    // Abort any in-flight request (prevents stale state updates)
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const signal = controller.signal;
+
     setLoading(true);
     setError(false);
 
     Promise.all([getCitywideGaps(signal), getNeighborhoodBoundaries(signal)])
       .then(([gapData, boundaryData]) => {
-        if (signal?.aborted) return;
+        if (signal.aborted) return;
         setRanking(gapData.ranking);
         setSummary(gapData.summary);
         setBoundaries(boundaryData);
       })
       .catch((err) => {
-        if (signal?.aborted) return;
+        if (signal.aborted) return;
         console.error('Failed to load citywide data', err);
         setError(true);
       })
       .finally(() => {
-        if (!signal?.aborted) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       });
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchData(controller.signal);
-    return () => controller.abort();
+    fetchData();
+    return () => abortRef.current?.abort();
   }, [fetchData]);
 
   const handleClickCommunity = useCallback(
