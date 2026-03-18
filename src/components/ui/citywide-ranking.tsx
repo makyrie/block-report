@@ -50,7 +50,9 @@ export default function CitywideRanking({
             <li key={entry.community} className="m-0 p-0">
             <button
               ref={(el) => {
-                if (el) rowRefs.current.set(norm(entry.community), el);
+                const key = norm(entry.community);
+                if (el) rowRefs.current.set(key, el);
+                else rowRefs.current.delete(key);
               }}
               type="button"
               onClick={() => onClickCommunity(entry.community)}
