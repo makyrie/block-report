@@ -220,6 +220,50 @@ Keep the total report under 400 words. It should fit on one printed page.`;
   }
 }
 
+function sanitizeString(value: unknown, maxLen: number): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[\x00-\x1f\x7f]/g, '').slice(0, maxLen);
+}
+
+function sanitizeBlockMetrics(raw: BlockMetrics): BlockMetrics {
+  return {
+    totalRequests: Math.max(0, Math.floor(Number(raw.totalRequests) || 0)),
+    openCount: Math.max(0, Math.floor(Number(raw.openCount) || 0)),
+    resolvedCount: Math.max(0, Math.floor(Number(raw.resolvedCount) || 0)),
+    resolutionRate: Math.min(1, Math.max(0, Number(raw.resolutionRate) || 0)),
+    avgDaysToResolve: raw.avgDaysToResolve != null ? Math.max(0, Number(raw.avgDaysToResolve) || 0) : null,
+    topIssues: (Array.isArray(raw.topIssues) ? raw.topIssues : []).slice(0, 10).map((i) => ({
+      category: sanitizeString(i.category, 100),
+      count: Math.max(0, Math.floor(Number(i.count) || 0)),
+    })),
+    recentlyResolved: (Array.isArray(raw.recentlyResolved) ? raw.recentlyResolved : []).slice(0, 10).map((r) => ({
+      category: sanitizeString(r.category, 100),
+      date: sanitizeString(r.date, 30),
+    })),
+    radiusMiles: Math.min(2, Math.max(0.1, Number(raw.radiusMiles) || 0.25)),
+    nearbyOpenIssues: (Array.isArray(raw.nearbyOpenIssues) ? raw.nearbyOpenIssues : []).slice(0, 10).map((issue) => ({
+      serviceRequestId: sanitizeString(issue.serviceRequestId, 50),
+      serviceName: sanitizeString(issue.serviceName, 100),
+      serviceNameDetail: issue.serviceNameDetail ? sanitizeString(issue.serviceNameDetail, 200) : undefined,
+      streetAddress: issue.streetAddress ? sanitizeString(issue.streetAddress, 200) : undefined,
+      publicDescription: undefined, // Strip — not used in prompt, avoids injection vector
+      dateRequested: sanitizeString(issue.dateRequested, 30),
+      daysOpen: Math.max(0, Math.floor(Number(issue.daysOpen) || 0)),
+      distanceMiles: Math.max(0, Number(issue.distanceMiles) || 0),
+    })),
+    nearbyResources: (Array.isArray(raw.nearbyResources) ? raw.nearbyResources : []).slice(0, 10).map((r) => ({
+      name: sanitizeString(r.name, 100),
+      type: r.type === 'library' ? 'library' as const : 'rec_center' as const,
+      address: sanitizeString(r.address, 200),
+      distanceMiles: Math.max(0, Number(r.distanceMiles) || 0),
+      phone: r.phone ? sanitizeString(r.phone, 20) : undefined,
+      website: r.website ? sanitizeString(r.website, 200) : undefined,
+    })),
+    nearestAddress: raw.nearestAddress ? sanitizeString(raw.nearestAddress, 200) : null,
+    communityName: raw.communityName ? sanitizeString(raw.communityName, 100) : null,
+  };
+}
+
 export async function generateAddressBlockReport(
   address: string,
   lat: number,
@@ -245,6 +289,15 @@ export async function generateAddressBlockReport(
   // Strip control characters
   address = address.replace(/[\x00-\x1f\x7f]/g, '');
   communityName = communityName.replace(/[\x00-\x1f\x7f]/g, '');
+  // Sanitize blockMetrics to prevent prompt injection via string fields
+  blockMetrics = sanitizeBlockMetrics(blockMetrics);
+  // Sanitize communityMetrics
+  if (communityMetrics) {
+    communityMetrics = {
+      resolutionRate: Math.min(1, Math.max(0, Number(communityMetrics.resolutionRate) || 0)),
+      totalRequests: Math.max(0, Math.floor(Number(communityMetrics.totalRequests) || 0)),
+    };
+  }
 
   const client = getClient();
 
