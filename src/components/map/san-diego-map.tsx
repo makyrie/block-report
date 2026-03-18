@@ -5,7 +5,7 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
+import type { Block311Report, BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
 import {
   AnchorPopupContent,
   TransitPopupContent,
@@ -126,6 +126,36 @@ function MapController({ feature }: { feature: Feature | null }) {
   return null;
 }
 
+const EMPTY_REPORTS: Block311Report[] = [];
+
+const ReportMarkers = memo(function ReportMarkers({ reports }: { reports: Block311Report[] }) {
+  return (
+    <>
+      {reports.map((report) => {
+        const { color } = reportStatus(report.statusCategory);
+        return (
+          <CircleMarker
+            key={report.id}
+            center={[report.lat, report.lng]}
+            radius={6}
+            pathOptions={{
+              color: '#fff',
+              weight: 1.5,
+              fillColor: color,
+              fillOpacity: 0.85,
+            }}
+            bubblingMouseEvents={false}
+          >
+            <Popup>
+              <ReportPopupContent report={report} />
+            </Popup>
+          </CircleMarker>
+        );
+      })}
+    </>
+  );
+});
+
 function SanDiegoMap({
   libraries,
   recCenters,
@@ -139,7 +169,7 @@ function SanDiegoMap({
   blockLoading = false,
   blockRadius = 0.25,
 }: SanDiegoMapProps) {
-  const reports = blockData?.reports ?? [];
+  const reports = blockData?.reports ?? EMPTY_REPORTS;
   const totalReports = blockData?.totalReports ?? 0;
   const handleMarkerClick = useCallback(
     (anchor: CommunityAnchor) => () => {
@@ -242,24 +272,7 @@ function SanDiegoMap({
       )}
 
       {/* 311 report markers — color-coded by status */}
-      {pinnedLocation && reports.map((report) => (
-        <CircleMarker
-          key={report.id}
-          center={[report.lat, report.lng]}
-          radius={6}
-          pathOptions={{
-            color: '#fff',
-            weight: 1.5,
-            fillColor: reportStatus(report.statusCategory).color,
-            fillOpacity: 0.85,
-          }}
-          bubblingMouseEvents={false}
-        >
-          <Popup>
-            <ReportPopupContent report={report} />
-          </Popup>
-        </CircleMarker>
-      ))}
+      {pinnedLocation && <ReportMarkers reports={reports} />}
 
       {/* Zoom to selected community + highlight its boundary */}
       <MapController feature={selectedFeature} />
