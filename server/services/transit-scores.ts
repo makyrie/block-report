@@ -11,6 +11,49 @@ const WALKING_SPEED_MPH = 3;
 const BUS_SPEED_MPH = 12;
 const ROUTE_INDIRECTNESS = 1.4;
 
+// Spatial grid for O(communities * local_stops) instead of O(communities * all_stops)
+const GRID_CELL_SIZE = 0.02; // ~2 km cells
+
+interface GridStop {
+  lat: number;
+  lng: number;
+  stop_agncy: string | null;
+}
+
+function gridKey(lat: number, lng: number): string {
+  return `${Math.floor(lat / GRID_CELL_SIZE)},${Math.floor(lng / GRID_CELL_SIZE)}`;
+}
+
+function buildSpatialGrid(stops: GridStop[]): Map<string, GridStop[]> {
+  const grid = new Map<string, GridStop[]>();
+  for (const stop of stops) {
+    if (stop.lat == null || stop.lng == null) continue;
+    const key = gridKey(stop.lat, stop.lng);
+    const cell = grid.get(key);
+    if (cell) cell.push(stop);
+    else grid.set(key, [stop]);
+  }
+  return grid;
+}
+
+function getStopsInBBox(
+  grid: Map<string, GridStop[]>,
+  bbox: { minLat: number; maxLat: number; minLng: number; maxLng: number },
+): GridStop[] {
+  const result: GridStop[] = [];
+  const minRow = Math.floor(bbox.minLat / GRID_CELL_SIZE);
+  const maxRow = Math.floor(bbox.maxLat / GRID_CELL_SIZE);
+  const minCol = Math.floor(bbox.minLng / GRID_CELL_SIZE);
+  const maxCol = Math.floor(bbox.maxLng / GRID_CELL_SIZE);
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
+      const cell = grid.get(`${row},${col}`);
+      if (cell) result.push(...cell);
+    }
+  }
+  return result;
+}
+
 export interface TransitScore {
   stopCount: number;
   agencyCount: number;
@@ -41,21 +84,26 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
     }
   }
 
+  // Build spatial grid for efficient stop lookups
+  const spatialGrid = buildSpatialGrid(
+    stops.filter((s) => s.lat != null && s.lng != null) as GridStop[]
+  );
+
   const scores = new Map<string, TransitScore>();
 
   for (const feature of geojson.features) {
     const communityName: string = feature.properties?.cpname || feature.properties?.name || '';
     if (!communityName) continue;
 
-    // Use bbox pre-filtering for performance
+    // Use spatial grid + bbox to narrow candidate stops
     const bbox = computeBBox(feature.geometry);
+    const candidates = getStopsInBBox(spatialGrid, bbox);
 
-    const stopsInCommunity: { lat: number; lng: number; stop_agncy: string | null }[] = [];
-    for (const stop of stops) {
-      if (stop.lat == null || stop.lng == null) continue;
+    const stopsInCommunity: GridStop[] = [];
+    for (const stop of candidates) {
       if (!pointInBBox(stop.lat, stop.lng, bbox)) continue;
       if (pointInFeature(stop.lat, stop.lng, feature.geometry)) {
-        stopsInCommunity.push({ lat: stop.lat, lng: stop.lng, stop_agncy: stop.stop_agncy });
+        stopsInCommunity.push(stop);
       }
     }
 
