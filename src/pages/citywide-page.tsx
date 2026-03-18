@@ -22,25 +22,31 @@ export default function CitywidePage() {
   const [error, setError] = useState(false);
   const [hoveredCommunity, setHoveredCommunity] = useState<string | null>(null);
 
-  const fetchData = useCallback(() => {
+  const fetchData = useCallback((signal?: AbortSignal) => {
     setLoading(true);
     setError(false);
 
-    Promise.all([getCitywideGaps(), getNeighborhoodBoundaries()])
+    Promise.all([getCitywideGaps(signal), getNeighborhoodBoundaries(signal)])
       .then(([gapData, boundaryData]) => {
+        if (signal?.aborted) return;
         setRanking(gapData.ranking);
         setSummary(gapData.summary);
         setBoundaries(boundaryData);
       })
       .catch((err) => {
+        if (signal?.aborted) return;
         console.error('Failed to load citywide data', err);
         setError(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
-    fetchData();
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
   }, [fetchData]);
 
   const handleClickCommunity = useCallback(
@@ -70,7 +76,7 @@ export default function CitywidePage() {
           <p className="text-sm text-red-600 mb-3">{t('citywide.error')}</p>
           <button
             type="button"
-            onClick={fetchData}
+            onClick={() => fetchData()}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {t('citywide.retry')}

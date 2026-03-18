@@ -28,8 +28,8 @@ export function getTransitStops(): Promise<TransitStop[]> {
   return fetchJSON(`${BASE}/locations/transit-stops`);
 }
 
-export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
-  return fetchJSON(`${BASE}/locations/neighborhoods`);
+export function getNeighborhoodBoundaries(signal?: AbortSignal): Promise<FeatureCollection> {
+  return fetchJSON(`${BASE}/locations/neighborhoods`, signal ? { signal } : undefined);
 }
 
 export function getTransitScore(community: string): Promise<NeighborhoodProfile['transit']> {
@@ -48,11 +48,11 @@ export function getAccessGap(community: string): Promise<NonNullable<Neighborhoo
   return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`);
 }
 
-export function getCitywideGaps(): Promise<{
+export function getCitywideGaps(signal?: AbortSignal): Promise<{
   ranking: CitywideCommunity[];
   summary: { total: number; withGaps: number };
 }> {
-  return fetchJSON(`${BASE}/access-gap/ranking?limit=0`);
+  return fetchJSON(`${BASE}/access-gap/ranking?limit=0`, signal ? { signal } : undefined);
 }
 
 export function getBlockData(lat: number, lng: number, radius = 0.25): Promise<BlockMetrics> {
