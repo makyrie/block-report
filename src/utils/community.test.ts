@@ -26,6 +26,17 @@ describe('scoreToColor', () => {
     expect(scoreToColor(81)).toBe(ACCESS_GAP_COLORS[4]);
     expect(scoreToColor(100)).toBe(ACCESS_GAP_COLORS[4]);
   });
+
+  it('handles negative scores', () => {
+    expect(scoreToColor(-1)).toBe(ACCESS_GAP_COLORS[0]);
+    expect(scoreToColor(-100)).toBe(ACCESS_GAP_COLORS[0]);
+  });
+
+  it('handles NaN gracefully', () => {
+    // NaN comparisons are all false, so it falls through to the last return
+    const result = scoreToColor(NaN);
+    expect(ACCESS_GAP_COLORS).toContain(result);
+  });
 });
 
 describe('norm', () => {
