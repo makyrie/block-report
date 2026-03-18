@@ -1,5 +1,5 @@
 import { QRCodeSVG } from 'qrcode.react';
-import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
+import type { CommunityReport, NeighborhoodProfile, BlockMetrics } from '../../types/index';
 import {
   CheckCircleIcon,
   SmartphoneIcon,
@@ -15,6 +15,12 @@ interface FlyerLayoutProps {
   topLanguages?: { language: string; percentage: number }[];
   /** When true, the flyer is visible on screen (used in preview). Default: hidden (print-only). */
   inline?: boolean;
+  /** When true, renders block-level variant with address headline */
+  isBlockLevel?: boolean;
+  /** The street address for block-level reports */
+  blockAddress?: string;
+  /** Block metrics for block-level reports */
+  blockMetrics?: BlockMetrics;
 }
 
 /** Truncate text to roughly N sentences. */
@@ -24,7 +30,7 @@ function truncateSentences(text: string, max: number): string {
   return sentences.slice(0, max).join('').trim();
 }
 
-export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, inline = false }: FlyerLayoutProps) {
+export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, inline = false, isBlockLevel = false, blockAddress, blockMetrics }: FlyerLayoutProps) {
   const formattedDate = new Date(report.generatedAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -47,10 +53,19 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
 
       {/* ── TOP BANNER ── */}
       <div className="border-b-4 border-black pb-3 mb-4">
-        <p className="text-[11px] font-bold uppercase tracking-[0.35em] mb-1">Block Report</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.35em] mb-1">
+          {isBlockLevel ? 'Your Block Report' : 'Block Report'}
+        </p>
         <h1 className="text-[32px] font-black leading-none">
-          {report.neighborhoodName}
+          {isBlockLevel && blockAddress
+            ? `Around ${blockAddress}`
+            : report.neighborhoodName}
         </h1>
+        {isBlockLevel && blockAddress && (
+          <p className="text-[15px] mt-0.5 font-medium text-gray-700">
+            {report.neighborhoodName}
+          </p>
+        )}
         <p className="text-[15px] mt-1.5 font-medium">
           {formattedDate}
         </p>
@@ -62,19 +77,23 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
       </p>
 
       {/* ── BIG NUMBER CARDS ── */}
-      {metrics && (
+      {(metrics || (isBlockLevel && blockMetrics)) && (
         <div className="grid grid-cols-3 gap-4 mb-5">
           <div className="border-2 border-black rounded-lg p-4 text-center">
             <div className="text-[36px] font-black leading-none">
-              {metrics.totalRequests311.toLocaleString()}
+              {isBlockLevel && blockMetrics
+                ? blockMetrics.totalRequests.toLocaleString()
+                : metrics!.totalRequests311.toLocaleString()}
             </div>
             <div className="text-[12px] mt-1.5 font-semibold uppercase tracking-wide">
-              Issues Reported
+              {isBlockLevel ? 'Nearby Reports' : 'Issues Reported'}
             </div>
           </div>
           <div className="border-2 border-black rounded-lg p-4 text-center">
             <div className="text-[36px] font-black leading-none">
-              {resolutionPct}%
+              {isBlockLevel && blockMetrics
+                ? Math.round(blockMetrics.resolutionRate * 100)
+                : resolutionPct}%
             </div>
             <div className="text-[12px] mt-1.5 font-semibold uppercase tracking-wide">
               Resolved
@@ -82,7 +101,9 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
           </div>
           <div className="border-2 border-black rounded-lg p-4 text-center">
             <div className="text-[36px] font-black leading-none">
-              {avgDays}
+              {isBlockLevel && blockMetrics
+                ? (blockMetrics.avgDaysToResolve != null ? Math.round(blockMetrics.avgDaysToResolve) : '—')
+                : avgDays}
             </div>
             <div className="text-[12px] mt-1.5 font-semibold uppercase tracking-wide">
               Avg Days to Fix
@@ -143,6 +164,50 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
           </ul>
         </div>
       </div>
+
+      {/* ── NEARBY OPEN ISSUES (block-level only) ── */}
+      {isBlockLevel && blockMetrics?.nearbyOpenIssues && blockMetrics.nearbyOpenIssues.length > 0 && (
+        <div className="flyer-section mb-5">
+          <h2 className="text-[15px] font-black uppercase tracking-widest border-b-2 border-black pb-1 mb-3">
+            Open Issues Near You
+          </h2>
+          <ul className="text-[12px] space-y-2 list-none">
+            {blockMetrics.nearbyOpenIssues.slice(0, 5).map((issue) => (
+              <li key={issue.serviceRequestId} className="flex gap-2">
+                <span className="font-bold flex-shrink-0">&bull;</span>
+                <span>
+                  <span className="font-semibold">{issue.serviceName}</span>
+                  {issue.streetAddress && <> at {issue.streetAddress}</>}
+                  {' '}&mdash; {issue.daysOpen} days open
+                  {issue.distanceMiles != null && <> ({issue.distanceMiles.toFixed(2)} mi away)</>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* ── NEARBY RESOURCES (block-level only) ── */}
+      {isBlockLevel && blockMetrics?.nearbyResources && blockMetrics.nearbyResources.length > 0 && (
+        <div className="flyer-section mb-5">
+          <div className="flex items-center gap-2 mb-2">
+            <MapPinIcon className="w-5 h-5" />
+            <h2 className="text-[15px] font-black uppercase tracking-widest">Nearest Resources</h2>
+          </div>
+          <ul className="text-[12px] space-y-2 list-none">
+            {blockMetrics.nearbyResources.slice(0, 4).map((resource) => (
+              <li key={`${resource.name}-${resource.type}`} className="flex gap-2">
+                <span className="font-bold flex-shrink-0">{resource.type === 'library' ? '\u{1F4DA}' : '\u{1F3C3}'}</span>
+                <span>
+                  <span className="font-semibold">{resource.name}</span>
+                  {' '}&mdash; {resource.distanceMiles.toFixed(2)} mi
+                  {resource.address && <>, {resource.address}</>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ── LANGUAGES SPOKEN ── */}
       {languagesForDisplay.length > 0 && (
