@@ -217,8 +217,6 @@ interface SanDiegoMapProps {
   blockData?: BlockMetrics | null;
   blockLoading?: boolean;
   blockRadius?: number;
-  reports?: Block311Report[];
-  totalReportsAvailable?: number;
 }
 
 // Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
@@ -297,21 +295,20 @@ function MapController({ feature }: { feature: Feature | null }) {
 
 // ── 311 report status colors ────────────────────────────────────────────────
 
-function reportStatusColor(status: string, dateClosed: string | null): string {
-  if (status === 'Closed' || dateClosed) return '#22c55e'; // green — resolved
-  if (/referred/i.test(status)) return '#9ca3af';          // gray — referred
-  return '#ef4444';                                         // red — open
-}
+const STATUS_COLORS = {
+  open: '#ef4444',
+  resolved: '#22c55e',
+  referred: '#9ca3af',
+} as const;
 
-function reportStatusLabel(status: string, dateClosed: string | null): string {
-  if (status === 'Closed' || dateClosed) return 'Resolved';
-  if (/referred/i.test(status)) return 'Referred';
-  return 'Open';
+function reportStatus(status: string, dateClosed: string | null): { color: string; label: string } {
+  if (status === 'Closed' || dateClosed) return { color: STATUS_COLORS.resolved, label: 'Resolved' };
+  if (/referred/i.test(status)) return { color: STATUS_COLORS.referred, label: 'Referred' };
+  return { color: STATUS_COLORS.open, label: 'Open' };
 }
 
 function ReportPopupContent({ report }: { report: Block311Report }) {
-  const color = reportStatusColor(report.status, report.dateClosed);
-  const label = reportStatusLabel(report.status, report.dateClosed);
+  const { color, label } = reportStatus(report.status, report.dateClosed);
   const dateStr = report.dateRequested
     ? new Date(report.dateRequested).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'Unknown';
@@ -361,9 +358,9 @@ function SanDiegoMap({
   blockData,
   blockLoading = false,
   blockRadius = 0.25,
-  reports = [],
-  totalReportsAvailable = 0,
 }: SanDiegoMapProps) {
+  const reports = blockData?.reports ?? [];
+  const totalReportsAvailable = blockData?.totalRequests ?? 0;
   const handleMarkerClick = useCallback(
     (anchor: CommunityAnchor) => () => {
       onAnchorClick(anchor);
@@ -406,15 +403,15 @@ function SanDiegoMap({
         {pinnedLocation && reports.length > 0 && (
           <>
             <li className="border-t border-gray-200 pt-1.5 mt-1 flex items-center gap-2">
-              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#ef4444' }} />
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.open }} />
               <span className="text-gray-700">311 Open</span>
             </li>
             <li className="flex items-center gap-2">
-              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#22c55e' }} />
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.resolved }} />
               <span className="text-gray-700">311 Resolved</span>
             </li>
             <li className="flex items-center gap-2">
-              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#9ca3af' }} />
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.referred }} />
               <span className="text-gray-700">311 Referred</span>
             </li>
           </>
@@ -470,7 +467,7 @@ function SanDiegoMap({
           pathOptions={{
             color: '#fff',
             weight: 1.5,
-            fillColor: reportStatusColor(report.status, report.dateClosed),
+            fillColor: reportStatus(report.status, report.dateClosed).color,
             fillOpacity: 0.85,
           }}
           bubblingMouseEvents={false}

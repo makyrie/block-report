@@ -78,7 +78,6 @@ export interface BlockMetrics {
   recentlyResolved: { category: string; date: string }[];
   radiusMiles: number;
   reports: Block311Report[];
-  totalReportsAvailable: number;
 }
 
 export interface CommunityReport {
