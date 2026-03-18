@@ -199,17 +199,24 @@ export default function NeighborhoodPage() {
     [navigate],
   );
 
+  const blockAbortRef = useRef<AbortController | null>(null);
+
   const handleMapClick = useCallback(async (lat: number, lng: number) => {
+    blockAbortRef.current?.abort();
+    const controller = new AbortController();
+    blockAbortRef.current = controller;
+
     setPinnedLocation({ lat, lng });
     setBlockData(null);
     setBlockLoading(true);
     try {
-      const data = await getBlockData(lat, lng, blockRadius);
+      const data = await getBlockData(lat, lng, blockRadius, controller.signal);
       setBlockData(data);
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
       console.error('Failed to fetch block data', err);
     } finally {
-      setBlockLoading(false);
+      if (!controller.signal.aborted) setBlockLoading(false);
     }
   }, [blockRadius]);
 
@@ -219,11 +226,16 @@ export default function NeighborhoodPage() {
     if (!pinnedLocation) return;
     if (prevRadiusRef.current === blockRadius) return;
     prevRadiusRef.current = blockRadius;
+
+    blockAbortRef.current?.abort();
+    const controller = new AbortController();
+    blockAbortRef.current = controller;
+
     setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
+    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
       .then(setBlockData)
-      .catch((err) => console.error('Failed to fetch block data', err))
-      .finally(() => setBlockLoading(false));
+      .catch((err) => { if ((err as Error).name !== 'AbortError') console.error('Failed to fetch block data', err); })
+      .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
   }, [blockRadius, pinnedLocation]);
 
   const handleGenerateReport = useCallback(async (language: string) => {
