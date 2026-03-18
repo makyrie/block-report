@@ -54,7 +54,7 @@ export function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
           </a>
         </p>
       )}
-      {anchor.website && (
+      {anchor.website && /^https?:\/\//i.test(anchor.website) && (
         <p className="text-xs mt-0.5">
           <a
             href={anchor.website}
