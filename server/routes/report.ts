@@ -29,6 +29,8 @@ function sanitizeFilename(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
+const VALID_LANGUAGES = new Set(Object.keys(LANGUAGE_CODES));
+
 interface StoredReport {
   communityName: string;
   language: string;
@@ -154,6 +156,10 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: profile, language' });
       return;
     }
+    if (!VALID_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `Invalid language. Supported: ${[...VALID_LANGUAGES].join(', ')}` });
+      return;
+    }
 
     // Check for a pre-generated report first
     const preGenerated = await getPreGeneratedReport(profile.communityName, language);
@@ -203,6 +209,10 @@ router.post('/generate-block', async (req: Request, res: Response) => {
 
     if (!anchor || !blockMetrics || !language) {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
+      return;
+    }
+    if (!VALID_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `Invalid language. Supported: ${[...VALID_LANGUAGES].join(', ')}` });
       return;
     }
 
@@ -257,6 +267,10 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
     }
     if (!blockMetrics || !language) {
       res.status(400).json({ error: 'Missing required fields: blockMetrics, language' });
+      return;
+    }
+    if (!VALID_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `Invalid language. Supported: ${[...VALID_LANGUAGES].join(', ')}` });
       return;
     }
 
