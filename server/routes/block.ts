@@ -64,6 +64,7 @@ router.get('/', async (req, res) => {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
         lng: { gte: lng - lngDelta, lte: lng + lngDelta },
       },
+      take: 5000,
     });
   } catch (err) {
     logger.error('Failed to fetch block data', { error: (err as Error).message });
@@ -71,11 +72,11 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  // Refine with exact Haversine distance
-  const nearby = data.filter(
-    (r) => r.lat != null && r.lng != null &&
-      haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= radius,
-  );
+  // Compute Haversine distance once per record, then filter
+  const withDist = data
+    .filter((r) => r.lat != null && r.lng != null)
+    .map((r) => ({ ...r, _dist: haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) }));
+  const nearby = withDist.filter((r) => r._dist <= radius);
 
   const open = nearby.filter((r) => r.status !== 'Closed' && !r.date_closed);
   const resolved = nearby.filter((r) => r.status === 'Closed' || r.date_closed);
@@ -118,7 +119,7 @@ router.get('/', async (req, res) => {
       daysOpen: r.date_requested
         ? Math.floor((Date.now() - r.date_requested.getTime()) / (1000 * 60 * 60 * 24))
         : 0,
-      distanceMiles: haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)),
+      distanceMiles: r._dist,
     }))
     .sort((a, b) => a.distanceMiles - b.distanceMiles)
     .slice(0, 5);
@@ -154,19 +155,19 @@ router.get('/', async (req, res) => {
     ]);
 
     nearbyResources = [
-      ...libs.map((l) => ({
+      ...libs.filter((l) => l.lat != null && l.lng != null).map((l) => ({
         name: l.name,
         type: 'library' as const,
         address: l.address || '',
-        distanceMiles: haversineDistanceMiles(lat, lng, l.lat!, l.lng!),
+        distanceMiles: haversineDistanceMiles(lat, lng, Number(l.lat), Number(l.lng)),
         phone: l.phone || undefined,
         website: l.website || undefined,
       })),
-      ...recs.map((r) => ({
+      ...recs.filter((r) => r.lat != null && r.lng != null).map((r) => ({
         name: r.rec_bldg || r.park_name || 'Recreation Center',
         type: 'rec_center' as const,
         address: r.address || '',
-        distanceMiles: haversineDistanceMiles(lat, lng, r.lat!, r.lng!),
+        distanceMiles: haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)),
       })),
     ]
       .sort((a, b) => a.distanceMiles - b.distanceMiles)
@@ -178,10 +179,7 @@ router.get('/', async (req, res) => {
   // Nearest address from closest 311 record with a street_address
   const nearestAddress = nearby
     .filter((r) => r.street_address)
-    .sort((a, b) =>
-      haversineDistanceMiles(lat, lng, Number(a.lat), Number(a.lng)) -
-      haversineDistanceMiles(lat, lng, Number(b.lat), Number(b.lng))
-    )[0]?.street_address || null;
+    .sort((a, b) => a._dist - b._dist)[0]?.street_address || null;
 
   // Community name from most common comm_plan_name
   const communityName = (() => {
