@@ -4,13 +4,12 @@ import { prisma } from './db.js';
 import { logger } from '../logger.js';
 import { fetchBoundaries } from './boundaries.js';
 import { pointInFeature, computeBBox, pointInBBox, haversineDistanceMiles, computeCentroid } from '../utils/geo.js';
+import { createCachedComputation } from '../utils/cached-computation.js';
 
 const CITY_HALL = { lat: 32.7157, lng: -117.1611 };
 const WALKING_SPEED_MPH = 3;
 const BUS_SPEED_MPH = 12;
 const ROUTE_INDIRECTNESS = 1.4;
-
-const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 export interface TransitScore {
   stopCount: number;
@@ -20,10 +19,6 @@ export interface TransitScore {
   transitScore: number; // normalized 0-100
   travelTimeToCityHall: number | null;
 }
-
-let scoresCache: Map<string, TransitScore> | null = null;
-let scoresCachedAt = 0;
-let inflight: Promise<Map<string, TransitScore>> | null = null;
 
 async function computeAllScores(): Promise<Map<string, TransitScore>> {
   logger.info('Computing transit scores for all communities...');
@@ -120,24 +115,11 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
   return scores;
 }
 
-export async function getTransitScores(): Promise<Map<string, TransitScore>> {
-  const now = Date.now();
-  if (scoresCache && now - scoresCachedAt < CACHE_TTL) {
-    return scoresCache;
-  }
-  // Promise coalescing: reuse in-flight computation for concurrent callers
-  if (!inflight) {
-    inflight = computeAllScores().then((result) => {
-      scoresCache = result;
-      scoresCachedAt = Date.now();
-      inflight = null;
-      return result;
-    }).catch((err) => {
-      inflight = null;
-      throw err;
-    });
-  }
-  return inflight;
+const CACHE_TTL = 24 * 60 * 60 * 1000;
+const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL);
+
+export function getTransitScores(): Promise<Map<string, TransitScore>> {
+  return cachedScores.get();
 }
 
 export function getCityAverage(scores: Map<string, TransitScore>): number {
