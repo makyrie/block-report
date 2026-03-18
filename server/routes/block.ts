@@ -4,6 +4,7 @@ import { logger } from '../logger.js';
 
 // ── In-memory cache for block queries (keyed by rounded lat/lng/radius) ──────
 const BLOCK_CACHE_TTL = 5 * 60 * 1000; // 5 minutes — block data changes infrequently
+const MAX_BLOCK_CACHE_SIZE = 200;
 const blockCache = new Map<string, { data: unknown; cachedAt: number }>();
 
 function blockCacheKey(lat: number, lng: number, radius: number): string {
@@ -22,6 +23,10 @@ function getCachedBlock(key: string): unknown | null {
 }
 
 function setCachedBlock(key: string, data: unknown): void {
+  if (blockCache.size >= MAX_BLOCK_CACHE_SIZE) {
+    const oldestKey = blockCache.keys().next().value;
+    if (oldestKey) blockCache.delete(oldestKey);
+  }
   blockCache.set(key, { data, cachedAt: Date.now() });
 }
 
@@ -92,6 +97,7 @@ router.get('/', async (req, res) => {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
         lng: { gte: lng - lngDelta, lte: lng + lngDelta },
       },
+      orderBy: { date_requested: 'desc' },
       take: 5000,
     });
   } catch (err) {
@@ -110,13 +116,15 @@ router.get('/', async (req, res) => {
   const issueCounts: Record<string, number> = {};
   let openCount = 0;
   let resolvedCount = 0;
+  let referredCount = 0;
   let resolveDaysSum = 0;
   let resolvedWithDatesCount = 0;
   const resolvedWithClosed: typeof nearby = [];
 
   for (const r of nearby) {
-    // Open vs resolved
+    // Three-way classification matching frontend display
     const isClosed = r.status === 'Closed' || !!r.date_closed;
+    const isReferred = !isClosed && /referred/i.test(r.status || '');
     if (isClosed) {
       resolvedCount++;
       if (r.date_closed) {
@@ -126,6 +134,8 @@ router.get('/', async (req, res) => {
           resolvedWithDatesCount++;
         }
       }
+    } else if (isReferred) {
+      referredCount++;
     } else {
       openCount++;
     }
@@ -175,6 +185,7 @@ router.get('/', async (req, res) => {
     totalReports: nearby.length,
     openCount,
     resolvedCount,
+    referredCount,
     resolutionRate,
     avgDaysToResolve,
     topIssues,
