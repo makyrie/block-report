@@ -41,7 +41,12 @@ router.get('/', async (req, res) => {
 // GET /api/access-gap/ranking?limit={n}  (limit=0 returns all)
 router.get('/ranking', async (_req, res) => {
   const rawLimit = _req.query.limit;
-  const limit = rawLimit === '0' || rawLimit === 'all' ? 0 : Math.min(Number(rawLimit) || 10, 200);
+  const parsed = Number(rawLimit);
+  const limit = (rawLimit === '0' || rawLimit === 'all')
+    ? 0
+    : (Number.isFinite(parsed) && parsed > 0)
+      ? Math.min(Math.round(parsed), 200)
+      : 10;
 
   try {
     const ranking = await getTopUnderserved(limit);
