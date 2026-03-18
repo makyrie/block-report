@@ -3,27 +3,54 @@ import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG } from '../utils/geo.js';
 
-// ── In-memory cache for block queries (keyed by rounded lat/lng/radius) ──────
+// ── In-memory LRU cache for block queries (keyed by rounded lat/lng/radius) ─
+interface BlockResponse {
+  totalReports: number;
+  openCount: number;
+  resolvedCount: number;
+  referredCount: number;
+  resolutionRate: number;
+  avgDaysToResolve: number | null;
+  topIssues: { category: string; count: number }[];
+  recentlyResolved: { category: string; date: string }[];
+  radiusMiles: number;
+  reports: {
+    id: string;
+    lat: number;
+    lng: number;
+    category: string;
+    categoryDetail: string | null;
+    status: string;
+    statusCategory: 'open' | 'resolved' | 'referred';
+    dateRequested: string;
+    dateClosed: string | null;
+    address: string | null;
+  }[];
+}
+
 const BLOCK_CACHE_TTL = 5 * 60 * 1000; // 5 minutes — block data changes infrequently
 const MAX_BLOCK_CACHE_SIZE = 200;
-const blockCache = new Map<string, { data: unknown; cachedAt: number }>();
+const blockCache = new Map<string, { data: BlockResponse; cachedAt: number }>();
 
 function blockCacheKey(lat: number, lng: number, radius: number): string {
   // Round to ~55 m precision so nearby clicks share a cache entry
   return `${lat.toFixed(4)},${lng.toFixed(4)},${radius}`;
 }
 
-function getCachedBlock(key: string): unknown | null {
+function getCachedBlock(key: string): BlockResponse | null {
   const entry = blockCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.cachedAt > BLOCK_CACHE_TTL) {
     blockCache.delete(key);
     return null;
   }
+  // LRU: move to end so least-recently-used entries are evicted first
+  blockCache.delete(key);
+  blockCache.set(key, entry);
   return entry.data;
 }
 
-function setCachedBlock(key: string, data: unknown): void {
+function setCachedBlock(key: string, data: BlockResponse): void {
   if (blockCache.size >= MAX_BLOCK_CACHE_SIZE) {
     const oldestKey = blockCache.keys().next().value;
     if (oldestKey) blockCache.delete(oldestKey);
