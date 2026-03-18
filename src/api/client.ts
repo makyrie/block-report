@@ -54,8 +54,8 @@ export function getAccessGapRanking(limit = 10): Promise<{
   return fetchJSON(`${BASE}/access-gap/ranking?limit=${limit}`);
 }
 
-export function getBlockData(lat: number, lng: number, radius = 0.25): Promise<BlockMetrics> {
-  return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`);
+export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: AbortSignal): Promise<BlockMetrics> {
+  return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`, { signal });
 }
 
 export async function getPreGeneratedReport(community: string, language: string): Promise<CommunityReport | null> {
