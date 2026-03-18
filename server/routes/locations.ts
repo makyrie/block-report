@@ -40,6 +40,7 @@ router.get('/transit-stops', async (_req, res) => {
 router.get('/neighborhoods', async (_req, res) => {
   try {
     const data = await fetchBoundaries();
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json(data);
   } catch (err) {
     logger.error('Failed to fetch neighborhoods', { error: (err as Error).message });

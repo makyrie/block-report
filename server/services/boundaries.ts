@@ -1,6 +1,6 @@
 // Single source of truth for fetching and caching community boundary GeoJSON
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FeatureCollection, Feature, Polygon, MultiPolygon } from 'geojson';
 import { logger } from '../logger.js';
@@ -8,6 +8,7 @@ import { createCachedComputation } from '../utils/cached-computation.js';
 
 const BOUNDARY_URL = 'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson';
 const CACHE_TTL = 24 * 60 * 60 * 1000;
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB safety limit
 const DISK_CACHE_DIR = join(process.cwd(), 'server', 'cache');
 const DISK_CACHE_FILE = join(DISK_CACHE_DIR, 'boundaries.json');
 
@@ -50,7 +51,9 @@ async function readDiskCache(): Promise<BoundaryCollection | null> {
 async function writeDiskCache(data: BoundaryCollection): Promise<void> {
   try {
     await mkdir(DISK_CACHE_DIR, { recursive: true });
-    await writeFile(DISK_CACHE_FILE, JSON.stringify({ cachedAt: Date.now(), data }));
+    const tmpFile = DISK_CACHE_FILE + '.tmp';
+    await writeFile(tmpFile, JSON.stringify({ cachedAt: Date.now(), data }));
+    await rename(tmpFile, DISK_CACHE_FILE);
   } catch (err) {
     logger.warn('Failed to write boundary disk cache', { error: (err as Error).message });
   }
@@ -69,7 +72,19 @@ async function computeBoundaries(): Promise<BoundaryCollection> {
   try {
     const res = await fetch(BOUNDARY_URL, { signal: controller.signal });
     if (!res.ok) throw new Error(`Failed to fetch boundaries: ${res.status}`);
-    const data: unknown = await res.json();
+
+    // Guard against unexpectedly large responses (memory exhaustion)
+    const contentLength = res.headers.get('content-length');
+    if (contentLength && Number(contentLength) > MAX_RESPONSE_BYTES) {
+      throw new Error(`Boundary response too large: ${contentLength} bytes`);
+    }
+
+    const text = await res.text();
+    if (text.length > MAX_RESPONSE_BYTES) {
+      throw new Error(`Boundary response body too large: ${text.length} bytes`);
+    }
+
+    const data: unknown = JSON.parse(text);
     if (!validateBoundaryCollection(data)) {
       throw new Error('Invalid boundary GeoJSON: unexpected shape');
     }
