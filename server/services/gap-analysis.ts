@@ -86,15 +86,15 @@ function computeNonEnglishPct(censusRows: CensusRow[]): Map<string, number> {
 
 // ── Scoring ─────────────────────────────────────────────────────────
 
-function minMax(value: number, min: number, max: number): number {
+export function minMax(value: number, min: number, max: number): number {
   if (max === min) return 0;
   return Math.max(0, Math.min(1, (value - min) / (max - min)));
 }
 
-function arrayMin(values: number[]): number {
+export function arrayMin(values: number[]): number {
   return values.reduce((min, v) => Math.min(min, v), Infinity);
 }
-function arrayMax(values: number[]): number {
+export function arrayMax(values: number[]): number {
   return values.reduce((max, v) => Math.max(max, v), -Infinity);
 }
 

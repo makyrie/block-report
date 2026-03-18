@@ -15,7 +15,7 @@ export type BoundaryCollection = FeatureCollection<Polygon | MultiPolygon>;
 
 let boundaryCache: { data: BoundaryCollection; cachedAt: number } | null = null;
 
-function validateBoundaryCollection(data: unknown): data is BoundaryCollection {
+export function validateBoundaryCollection(data: unknown): data is BoundaryCollection {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;
   if (!Array.isArray(obj.features)) return false;
