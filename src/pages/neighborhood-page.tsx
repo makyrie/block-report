@@ -213,9 +213,12 @@ export default function NeighborhoodPage() {
     }
   }, [blockRadius]);
 
-  // Re-fetch block data when radius changes
+  // Re-fetch block data when radius changes (pinnedLocation changes are handled by handleMapClick)
+  const prevRadiusRef = useRef(blockRadius);
   useEffect(() => {
     if (!pinnedLocation) return;
+    if (prevRadiusRef.current === blockRadius) return;
+    prevRadiusRef.current = blockRadius;
     setBlockLoading(true);
     getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
       .then(setBlockData)
