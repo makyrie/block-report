@@ -13,6 +13,9 @@ import blockRouter from './routes/block.js';
 
 const app = express();
 
+// Trust first proxy hop so rate limiter keys on real client IP, not proxy IP
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(cors({
   origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
