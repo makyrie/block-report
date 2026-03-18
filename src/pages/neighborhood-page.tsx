@@ -75,6 +75,10 @@ export default function NeighborhoodPage() {
       setTopLanguages([]);
       setTransitScore(null);
       setAccessGap(null);
+      setBlockReport(null);
+      setBlockReportError(null);
+      setPinnedLocation(null);
+      setBlockData(null);
       return;
     }
 

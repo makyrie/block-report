@@ -265,6 +265,18 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: address, lat, lng' });
       return;
     }
+
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (isNaN(latNum) || isNaN(lngNum)) {
+      res.status(400).json({ error: 'lat and lng must be valid numbers' });
+      return;
+    }
+    if (latNum < 32.5 || latNum > 33.2 || lngNum < -117.6 || lngNum > -116.8) {
+      res.status(400).json({ error: 'Coordinates outside San Diego area' });
+      return;
+    }
+
     if (!blockMetrics || !language) {
       res.status(400).json({ error: 'Missing required fields: blockMetrics, language' });
       return;
