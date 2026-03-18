@@ -7,33 +7,12 @@ import { generateReport, generateBlockReport, generateAddressBlockReport } from 
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport, buildBlockCacheKey, getCachedReportByKey, saveCachedReportByKey } from '../services/report-cache.js';
+import { VALID_LANGUAGES, getLangCode, sanitizeFilename } from '../utils/language.js';
+import { SD_BOUNDS } from '../utils/geo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
 const BLOCK_REPORTS_DIR = path.join(REPORTS_DIR, 'blocks');
-
-const LANGUAGE_CODES: Record<string, string> = {
-  English: 'en',
-  Spanish: 'es',
-  Chinese: 'zh',
-  Vietnamese: 'vi',
-  Tagalog: 'tl',
-  Korean: 'ko',
-  Arabic: 'ar',
-  'French/Haitian/Cajun': 'fr',
-  'German/West Germanic': 'de',
-  'Russian/Polish/Slavic': 'ru',
-};
-
-function sanitizeFilename(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-}
-
-const VALID_LANGUAGES = new Set(Object.keys(LANGUAGE_CODES));
-
-function getLangCode(language: string): string {
-  return LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
-}
 
 function validateLanguage(language: string, res: Response): boolean {
   if (!VALID_LANGUAGES.has(language)) {
@@ -282,7 +261,7 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'lat and lng must be valid numbers' });
       return;
     }
-    if (latNum < 32.5 || latNum > 33.2 || lngNum < -117.6 || lngNum > -116.8) {
+    if (latNum < SD_BOUNDS.latMin || latNum > SD_BOUNDS.latMax || lngNum < SD_BOUNDS.lngMin || lngNum > SD_BOUNDS.lngMax) {
       res.status(400).json({ error: 'Coordinates outside San Diego area' });
       return;
     }

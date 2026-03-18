@@ -2,13 +2,14 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CommunityReport } from '../../src/types/index.js';
+import { sanitizeFilename } from '../utils/language.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function sanitizeKeyPart(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return sanitizeFilename(value);
 }
 
 function cacheKey(community: string, language: string): string {

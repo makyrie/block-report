@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
-import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG } from '../utils/geo.js';
+import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG, SD_BOUNDS } from '../utils/geo.js';
 
 const router = Router();
 
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
   }
 
   // Rough San Diego bounding box check
-  if (lat < 32.5 || lat > 33.2 || lng < -117.6 || lng > -116.8) {
+  if (lat < SD_BOUNDS.latMin || lat > SD_BOUNDS.latMax || lng < SD_BOUNDS.lngMin || lng > SD_BOUNDS.lngMax) {
     res.status(400).json({ error: 'Coordinates are outside the San Diego area' });
     return;
   }

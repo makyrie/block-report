@@ -9,6 +9,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor, StoredBlockReport } from '../../src/types/index.js';
+import { LANGUAGE_CODES as SHARED_LANGUAGE_CODES } from '../utils/language.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
@@ -19,20 +20,7 @@ const BASE_URL = `http://localhost:${process.env.PORT || 3001}`;
 const DELAY_MS = 1000; // 1 second between Claude API calls
 const LANGUAGE_THRESHOLD = 5; // minimum % to include a language
 
-// Map language labels to ISO-ish codes for filenames
-const LANGUAGE_CODES: Record<string, string> = {
-  English: 'en',
-  Spanish: 'es',
-  Chinese: 'zh',
-  Vietnamese: 'vi',
-  Tagalog: 'tl',
-  Korean: 'ko',
-  Arabic: 'ar',
-  'French/Haitian/Cajun': 'fr',
-  'German/West Germanic': 'de',
-  'Russian/Polish/Slavic': 'ru',
-  Other: 'other',
-};
+const LANGUAGE_CODES: Record<string, string> = { ...SHARED_LANGUAGE_CODES, Other: 'other' };
 
 interface StoredReport {
   communityName: string;

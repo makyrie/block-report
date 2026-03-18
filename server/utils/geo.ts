@@ -1,5 +1,8 @@
 // Shared geographic utility functions
 
+// San Diego bounding box
+export const SD_BOUNDS = { latMin: 32.5, latMax: 33.2, lngMin: -117.6, lngMax: -116.8 } as const;
+
 // 1 degree of latitude ~ 69 miles; longitude varies by latitude
 export const MILES_PER_LAT_DEG = 69;
 // At San Diego (~32.7°N): 1 deg longitude ~ 58.8 miles
