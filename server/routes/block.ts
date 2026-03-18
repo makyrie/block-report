@@ -49,6 +49,7 @@ router.get('/', async (req, res) => {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
         lng: { gte: lng - lngDelta, lte: lng + lngDelta },
       },
+      orderBy: { date_requested: 'desc' },
       take: 5000,
     });
   } catch (err) {
@@ -187,6 +188,7 @@ router.get('/', async (req, res) => {
     nearbyResources,
     nearestAddress,
     communityName,
+    truncated: data.length === 5000,
   });
 });
 

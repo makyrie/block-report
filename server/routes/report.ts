@@ -31,6 +31,18 @@ function sanitizeFilename(name: string): string {
 
 const VALID_LANGUAGES = new Set(Object.keys(LANGUAGE_CODES));
 
+function getLangCode(language: string): string {
+  return LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
+}
+
+function validateLanguage(language: string, res: Response): boolean {
+  if (!VALID_LANGUAGES.has(language)) {
+    res.status(400).json({ error: `Invalid language. Supported: ${[...VALID_LANGUAGES].join(', ')}` });
+    return false;
+  }
+  return true;
+}
+
 interface StoredReport {
   communityName: string;
   language: string;
@@ -57,7 +69,7 @@ async function getPreGeneratedReport(
   communityName: string,
   language: string,
 ): Promise<StoredReport | null> {
-  const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
+  const langCode = getLangCode(language);
   const filename = `${sanitizeFilename(communityName)}_${langCode}.json`;
   const filePath = path.join(REPORTS_DIR, filename);
 
@@ -88,7 +100,7 @@ router.get('/', async (req: Request, res: Response) => {
       }
 
       // Try deterministic cache key for address block reports first (O(1) lookup)
-      const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
+      const langCode = getLangCode(language);
       const cacheKey = buildBlockCacheKey(lat, lng, radius, langCode);
       const cached = await getCachedReportByKey(cacheKey);
       if (cached) {
@@ -127,6 +139,8 @@ router.get('/', async (req: Request, res: Response) => {
     const community = req.query.community as string;
     const language = req.query.language as string || 'English';
 
+    if (language !== 'English' && !validateLanguage(language, res)) return;
+
     if (!community) {
       res.status(400).json({ error: 'Missing required query parameter: community' });
       return;
@@ -156,10 +170,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: profile, language' });
       return;
     }
-    if (!VALID_LANGUAGES.has(language)) {
-      res.status(400).json({ error: `Invalid language. Supported: ${[...VALID_LANGUAGES].join(', ')}` });
-      return;
-    }
+    if (!validateLanguage(language, res)) return;
 
     // Check for a pre-generated report first
     const preGenerated = await getPreGeneratedReport(profile.communityName, language);
@@ -211,13 +222,10 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;
     }
-    if (!VALID_LANGUAGES.has(language)) {
-      res.status(400).json({ error: `Invalid language. Supported: ${[...VALID_LANGUAGES].join(', ')}` });
-      return;
-    }
+    if (!validateLanguage(language, res)) return;
 
     // Check for a pre-generated block report first
-    const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
+    const langCode = getLangCode(language);
     const filename = `${sanitizeFilename(anchor.id || anchor.name)}_${langCode}.json`;
     const filePath = path.join(BLOCK_REPORTS_DIR, filename);
 
@@ -281,10 +289,7 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: blockMetrics, language' });
       return;
     }
-    if (!VALID_LANGUAGES.has(language)) {
-      res.status(400).json({ error: `Invalid language. Supported: ${[...VALID_LANGUAGES].join(', ')}` });
-      return;
-    }
+    if (!validateLanguage(language, res)) return;
 
     logger.info('Generating address block report on-demand', {
       address,
@@ -303,7 +308,7 @@ router.post('/generate-address-block', async (req: Request, res: Response) => {
     );
 
     // Cache the generated block report for future instant access
-    const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
+    const langCode = getLangCode(language);
     const cacheKey = buildBlockCacheKey(lat, lng, blockMetrics.radiusMiles, langCode);
     try {
       await saveCachedReportByKey(cacheKey, report);

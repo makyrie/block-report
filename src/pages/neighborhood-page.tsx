@@ -288,7 +288,7 @@ export default function NeighborhoodPage() {
     } finally {
       setBlockReportLoading(false);
     }
-  }, [pinnedLocation, blockData, blockRadius, selectedCommunity, reportLang, metrics]);
+  }, [pinnedLocation, blockData, selectedCommunity, reportLang, metrics]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">
