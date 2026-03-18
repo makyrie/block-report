@@ -20,12 +20,14 @@ app.use(cors({
 }));
 
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
-const reportLimiter = rateLimit({
+const reportGenerateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { error: 'Too many report generation requests, please try again later' },
 });
-app.use('/api/report', reportLimiter);
+const blockLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+app.use('/api/report/generate', reportGenerateLimiter);
+app.use('/api/block', blockLimiter);
 app.use('/api', apiLimiter);
 
 app.use(express.json());
