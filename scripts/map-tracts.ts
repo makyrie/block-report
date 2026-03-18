@@ -1,4 +1,5 @@
 import { prisma } from '../server/services/db.js';
+import { pointInPolygon } from '../server/utils/geo.js';
 
 type Polygon = number[][][];
 interface CommunityFeature {
@@ -8,18 +9,6 @@ interface CommunityFeature {
 
 function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function pointInPolygon(lat: number, lng: number, ring: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
 }
 
 function findCommunity(lat: number, lng: number, communities: CommunityFeature[]): string | null {

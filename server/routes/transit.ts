@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
+import { pointInFeature } from '../utils/geo.js';
 
 const router = Router();
 
@@ -54,31 +55,6 @@ interface TransitScore {
   rawScore: number;
   transitScore: number; // normalized 0-100
   travelTimeToCityHall: number | null; // estimated minutes via transit
-}
-
-// Simple point-in-polygon (ray casting)
-function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-function pointInFeature(lat: number, lng: number, geometry: { type: string; coordinates: number[][][] | number[][][][] }): boolean {
-  if (geometry.type === 'Polygon') {
-    const coords = geometry.coordinates as number[][][];
-    return pointInPolygon(lat, lng, coords[0]);
-  }
-  if (geometry.type === 'MultiPolygon') {
-    const coords = geometry.coordinates as number[][][][];
-    return coords.some((poly) => pointInPolygon(lat, lng, poly[0]));
-  }
-  return false;
 }
 
 const NEIGHBORHOODS_URL =

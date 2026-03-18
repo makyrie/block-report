@@ -31,23 +31,9 @@ function parseInt_(val: string | undefined): number | null {
 
 // --- Geo helpers ---
 
-type Polygon = number[][][]; // [ring][point][lng, lat]
+import { pointInPolygon } from '../server/utils/geo.js';
 
-// Ray-casting point-in-polygon test
-function pointInPolygon(lat: number, lng: number, polygon: Polygon): boolean {
-  for (const ring of polygon) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i][1], yi = ring[i][0]; // GeoJSON is [lng, lat]
-      const xj = ring[j][1], yj = ring[j][0];
-      if ((yi > lng) !== (yj > lng) && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi) {
-        inside = !inside;
-      }
-    }
-    if (inside) return true;
-  }
-  return false;
-}
+type Polygon = number[][][]; // [ring][point][lng, lat]
 
 interface CommunityFeature {
   name: string;
@@ -57,7 +43,7 @@ interface CommunityFeature {
 function findCommunity(lat: number, lng: number, communities: CommunityFeature[]): string | null {
   for (const c of communities) {
     for (const poly of c.polygons) {
-      if (pointInPolygon(lat, lng, poly)) return c.name;
+      if (pointInPolygon(lat, lng, poly[0])) return c.name;
     }
   }
   return null;

@@ -1,5 +1,6 @@
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
+import { pointInFeature, computeBBox, pointInBBox } from '../utils/geo.js';
 
 export interface AccessGapResult {
   accessGapScore: number;
@@ -131,35 +132,6 @@ async function fetchNonEnglishPct(): Promise<Map<string, number>> {
   }
 
   return pcts;
-}
-
-// Point-in-polygon (ray casting) — same algorithm as transit.ts
-function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-function pointInFeature(
-  lat: number,
-  lng: number,
-  geometry: { type: string; coordinates: number[][][] | number[][][][] },
-): boolean {
-  if (geometry.type === 'Polygon') {
-    return pointInPolygon(lat, lng, (geometry.coordinates as number[][][])[0]);
-  }
-  if (geometry.type === 'MultiPolygon') {
-    return (geometry.coordinates as number[][][][]).some((poly) =>
-      pointInPolygon(lat, lng, poly[0]),
-    );
-  }
-  return false;
 }
 
 async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
