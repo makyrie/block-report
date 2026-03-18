@@ -62,6 +62,7 @@ router.get('/', async (req, res) => {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
         lng: { gte: lng - lngDelta, lte: lng + lngDelta },
       },
+      take: 5000,
     });
   } catch (err) {
     logger.error('Failed to fetch block data', { error: (err as Error).message });
@@ -112,8 +113,7 @@ router.get('/', async (req, res) => {
 
   // Individual reports: sort by most recent, cap at 500
   const MAX_REPORTS = 500;
-  const totalReportsAvailable = nearby.length;
-  const sortedNearby = [...nearby]
+  const sortedNearby = nearby
     .sort((a, b) => {
       const aTime = a.date_requested?.getTime() ?? 0;
       const bTime = b.date_requested?.getTime() ?? 0;
@@ -143,7 +143,6 @@ router.get('/', async (req, res) => {
     recentlyResolved,
     radiusMiles: radius,
     reports,
-    totalReportsAvailable,
   });
 });
 
