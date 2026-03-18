@@ -1,4 +1,4 @@
-import { useRef, useEffect, memo, useCallback } from 'react';
+import { useRef, useEffect, memo, useMemo } from 'react';
 import type { CitywideCommunity } from '../../types';
 import { useLanguage } from '../../i18n/context';
 import { scoreToColor, norm, titleCase } from '../../utils/community';
@@ -100,14 +100,17 @@ export default function CitywideRanking({
   const listRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
-  const makeRowRef = useCallback(
-    (community: string) => (el: HTMLButtonElement | null) => {
-      const key = norm(community);
-      if (el) rowRefs.current.set(key, el);
-      else rowRefs.current.delete(key);
-    },
-    [],
-  );
+  const rowRefCallbacks = useMemo(() => {
+    const map = new Map<string, (el: HTMLButtonElement | null) => void>();
+    for (const entry of ranking) {
+      const key = norm(entry.community);
+      map.set(entry.community, (el) => {
+        if (el) rowRefs.current.set(key, el);
+        else rowRefs.current.delete(key);
+      });
+    }
+    return map;
+  }, [ranking]);
 
   // Auto-scroll to hovered community (from map hover), debounced to prevent jitter
   useEffect(() => {
@@ -121,6 +124,8 @@ export default function CitywideRanking({
     return () => clearTimeout(timer);
   }, [hoveredCommunity]);
 
+  const normalizedHovered = hoveredCommunity ? norm(hoveredCommunity) : null;
+
   return (
     <div ref={listRef} className="overflow-y-auto h-full">
       {/* Column headers */}
@@ -133,7 +138,7 @@ export default function CitywideRanking({
       {/* Rows */}
       <ul aria-label={t('citywide.title')} className="list-none m-0 p-0">
         {ranking.map((entry) => {
-          const isHovered = !!hoveredCommunity && norm(hoveredCommunity) === norm(entry.community);
+          const isHovered = normalizedHovered !== null && normalizedHovered === norm(entry.community);
           return (
             <RankingRow
               key={entry.community}
@@ -141,7 +146,7 @@ export default function CitywideRanking({
               isHovered={isHovered}
               onHoverCommunity={onHoverCommunity}
               onClickCommunity={onClickCommunity}
-              rowRef={makeRowRef(entry.community)}
+              rowRef={rowRefCallbacks.get(entry.community)!}
             />
           );
         })}
