@@ -22,9 +22,7 @@ export function norm(s: string): string {
 export function titleCase(name: string): string {
   return name
     .toLowerCase()
-    .split(' ')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+    .replace(/(^|\s|[-:])(\w)/g, (_, sep, char) => sep + char.toUpperCase());
 }
 
 // Escape HTML entities to prevent XSS in Leaflet tooltips

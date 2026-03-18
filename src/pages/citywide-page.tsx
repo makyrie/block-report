@@ -54,7 +54,7 @@ export default function CitywidePage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center bg-gray-50">
-        <div className="text-center">
+        <div className="text-center" role="status" aria-live="polite">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3" />
           <p className="text-sm text-gray-600">{t('citywide.loading')}</p>
         </div>
@@ -92,6 +92,7 @@ export default function CitywidePage() {
           role="tabpanel"
           id="tabpanel-map"
           aria-labelledby="tab-map"
+          aria-hidden={mobileView !== 'map' ? true : undefined}
           className={`flex-1 min-h-0 ${mobileView === 'map' ? 'block' : 'hidden md:block'}`}
         >
           {boundaries ? (
@@ -114,6 +115,7 @@ export default function CitywidePage() {
           role="tabpanel"
           id="tabpanel-list"
           aria-labelledby="tab-list"
+          aria-hidden={mobileView !== 'list' ? true : undefined}
           className={`md:w-96 md:shrink-0 md:border-l md:border-gray-200 overflow-hidden ${
             mobileView === 'list' ? 'flex-1' : 'hidden md:block'
           }`}
