@@ -1,5 +1,7 @@
 import { QRCodeSVG } from 'qrcode.react';
 import type { CommunityReport, NeighborhoodProfile, BlockMetrics } from '../../types/index';
+
+const SITE_ORIGIN = typeof window !== 'undefined' ? SITE_ORIGIN : 'https://blockreport.org';
 import {
   CheckCircleIcon,
   SmartphoneIcon,
@@ -37,7 +39,7 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
     day: 'numeric',
   });
 
-  const qrUrl = `${window.location.origin}/neighborhood/${neighborhoodSlug}`;
+  const qrUrl = `${SITE_ORIGIN}/neighborhood/${neighborhoodSlug}`;
 
   const resolutionPct = metrics ? Math.round(metrics.resolutionRate * 100) : null;
   const avgDays = metrics ? Math.round(metrics.avgDaysToResolve) : null;
@@ -274,7 +276,7 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
             Block Report &mdash; Your neighborhood, your voice
           </p>
           <p className="text-[10px] text-gray-600">
-            Generated {formattedDate} &middot; {window.location.origin}/resources
+            Generated {formattedDate} &middot; {SITE_ORIGIN}/resources
           </p>
         </div>
         <div className="flex flex-col items-center">
