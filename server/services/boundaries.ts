@@ -2,6 +2,7 @@
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { FeatureCollection, Feature, Polygon, MultiPolygon } from 'geojson';
 import { logger } from '../logger.js';
 
 const BOUNDARY_URL = 'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson';
@@ -9,14 +10,8 @@ const CACHE_TTL = 24 * 60 * 60 * 1000;
 const DISK_CACHE_DIR = join(process.cwd(), 'server', 'cache');
 const DISK_CACHE_FILE = join(DISK_CACHE_DIR, 'boundaries.json');
 
-export interface BoundaryFeature {
-  properties: Record<string, string>;
-  geometry: { type: string; coordinates: number[][][] | number[][][][] };
-}
-
-export interface BoundaryCollection {
-  features: BoundaryFeature[];
-}
+export type BoundaryFeature = Feature<Polygon | MultiPolygon>;
+export type BoundaryCollection = FeatureCollection<Polygon | MultiPolygon>;
 
 let boundaryCache: { data: BoundaryCollection; cachedAt: number } | null = null;
 

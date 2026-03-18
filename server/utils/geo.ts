@@ -1,5 +1,9 @@
 // Shared geo utilities — single source of truth for point-in-polygon logic
 
+import type { Polygon, MultiPolygon } from 'geojson';
+
+type PolygonLike = Polygon | MultiPolygon | { type: string; coordinates: number[][][] | number[][][][] };
+
 // Ray-casting point-in-polygon test
 // Coordinates: lat/lng for the point, polygon ring as [lng, lat] pairs (GeoJSON convention)
 export function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
@@ -18,7 +22,7 @@ export function pointInPolygon(lat: number, lng: number, polygon: number[][]): b
 export function pointInFeature(
   lat: number,
   lng: number,
-  geometry: { type: string; coordinates: number[][][] | number[][][][] },
+  geometry: PolygonLike,
 ): boolean {
   if (geometry.type === 'Polygon') {
     return pointInPolygon(lat, lng, (geometry.coordinates as number[][][])[0]);
@@ -39,7 +43,7 @@ export interface BBox {
   maxLng: number;
 }
 
-export function computeBBox(geometry: { type: string; coordinates: number[][][] | number[][][][] }): BBox {
+export function computeBBox(geometry: PolygonLike): BBox {
   let minLat = Infinity, maxLat = -Infinity;
   let minLng = Infinity, maxLng = -Infinity;
 
@@ -79,7 +83,7 @@ export function haversineDistanceMiles(lat1: number, lng1: number, lat2: number,
 }
 
 // Compute the centroid of a GeoJSON Polygon or MultiPolygon geometry
-export function computeCentroid(geometry: { type: string; coordinates: number[][][] | number[][][][] }): { lat: number; lng: number } | null {
+export function computeCentroid(geometry: PolygonLike): { lat: number; lng: number } | null {
   let ring: number[][] = [];
   if (geometry.type === 'Polygon') {
     ring = (geometry.coordinates as number[][][])[0];
