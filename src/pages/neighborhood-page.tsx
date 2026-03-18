@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
@@ -276,6 +276,19 @@ export default function NeighborhoodPage() {
           ${mobileView === 'info' ? 'flex' : 'hidden md:flex'}
         `}
       >
+        {/* Back to citywide link */}
+        <div className="px-4 pt-3 pb-0 shrink-0">
+          <Link
+            to="/citywide"
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+            {t('citywide.backToCitywide')}
+          </Link>
+        </div>
+
         {/* Sidebar header with neighborhood selector + language buttons */}
         <div className="p-4 border-b border-gray-100 shrink-0">
           <div className="flex flex-wrap gap-1 mb-3">
