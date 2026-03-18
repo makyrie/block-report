@@ -9,10 +9,11 @@ export interface CommunityFeature {
   polygons: Polygon[];
 }
 
+// Canonical title-case — matches src/utils/community.ts titleCase()
 export function toTitleCase(str: string): string {
   return str
     .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+    .replace(/(^|\s|[-:])(\w)/g, (_, sep, char) => sep + char.toUpperCase());
 }
 
 export function findCommunity(lat: number, lng: number, communities: CommunityFeature[]): string | null {
