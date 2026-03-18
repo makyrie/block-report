@@ -46,7 +46,7 @@ export function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
       {anchor.phone && (
         <p className="text-xs mt-1">
           <a
-            href={`tel:${anchor.phone}`}
+            href={`tel:${anchor.phone.replace(/[^\d+\-() ]/g, '')}`}
             className="text-blue-600 hover:underline"
             aria-label={`Call ${anchor.name} at ${anchor.phone}`}
           >
