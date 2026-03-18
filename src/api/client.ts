@@ -30,11 +30,10 @@ export function getTransitStops(): Promise<TransitStop[]> {
 
 let boundaryPromise: Promise<FeatureCollection> | null = null;
 
-export function getNeighborhoodBoundaries(signal?: AbortSignal): Promise<FeatureCollection> {
+export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
   if (boundaryPromise) return boundaryPromise;
   boundaryPromise = fetchJSON<FeatureCollection>(
     `${BASE}/locations/neighborhoods`,
-    signal ? { signal } : undefined,
   ).catch((err) => {
     boundaryPromise = null; // Allow retry on failure
     throw err;

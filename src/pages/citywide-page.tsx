@@ -33,7 +33,7 @@ export default function CitywidePage() {
     setLoading(true);
     setError(false);
 
-    Promise.all([getCitywideGaps(signal), getNeighborhoodBoundaries(signal)])
+    Promise.all([getCitywideGaps(signal), getNeighborhoodBoundaries()])
       .then(([gapData, boundaryData]) => {
         if (signal.aborted) return;
         setRanking(gapData.ranking);
