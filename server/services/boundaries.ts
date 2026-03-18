@@ -4,6 +4,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FeatureCollection, Feature, Polygon, MultiPolygon } from 'geojson';
 import { logger } from '../logger.js';
+import { createCachedComputation } from '../utils/cached-computation.js';
 
 const BOUNDARY_URL = 'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson';
 const CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -12,8 +13,6 @@ const DISK_CACHE_FILE = join(DISK_CACHE_DIR, 'boundaries.json');
 
 export type BoundaryFeature = Feature<Polygon | MultiPolygon>;
 export type BoundaryCollection = FeatureCollection<Polygon | MultiPolygon>;
-
-let boundaryCache: { data: BoundaryCollection; cachedAt: number } | null = null;
 
 export function validateBoundaryCollection(data: unknown): data is BoundaryCollection {
   if (typeof data !== 'object' || data === null) return false;
@@ -57,48 +56,33 @@ async function writeDiskCache(data: BoundaryCollection): Promise<void> {
   }
 }
 
-let inflight: Promise<BoundaryCollection> | null = null;
-
-export async function fetchBoundaries(): Promise<BoundaryCollection> {
-  const now = Date.now();
-  if (boundaryCache && now - boundaryCache.cachedAt < CACHE_TTL) {
-    return boundaryCache.data;
+async function computeBoundaries(): Promise<BoundaryCollection> {
+  // Try disk cache before network
+  const diskData = await readDiskCache();
+  if (diskData) {
+    logger.info('Loaded boundary GeoJSON from disk cache');
+    return diskData;
   }
 
-  // Promise coalescing: reuse in-flight fetch for concurrent callers
-  if (!inflight) {
-    inflight = (async () => {
-      // Try disk cache before network
-      const diskData = await readDiskCache();
-      if (diskData) {
-        logger.info('Loaded boundary GeoJSON from disk cache');
-        boundaryCache = { data: diskData, cachedAt: Date.now() };
-        return diskData;
-      }
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10_000);
-      try {
-        const res = await fetch(BOUNDARY_URL, { signal: controller.signal });
-        if (!res.ok) throw new Error(`Failed to fetch boundaries: ${res.status}`);
-        const data: unknown = await res.json();
-        if (!validateBoundaryCollection(data)) {
-          throw new Error('Invalid boundary GeoJSON: unexpected shape');
-        }
-        boundaryCache = { data, cachedAt: Date.now() };
-        // Persist to disk for cold-start resilience
-        await writeDiskCache(data);
-        return data;
-      } finally {
-        clearTimeout(timeout);
-      }
-    })().then((result) => {
-      inflight = null;
-      return result;
-    }).catch((err) => {
-      inflight = null;
-      throw err;
-    });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(BOUNDARY_URL, { signal: controller.signal });
+    if (!res.ok) throw new Error(`Failed to fetch boundaries: ${res.status}`);
+    const data: unknown = await res.json();
+    if (!validateBoundaryCollection(data)) {
+      throw new Error('Invalid boundary GeoJSON: unexpected shape');
+    }
+    // Persist to disk for cold-start resilience
+    await writeDiskCache(data);
+    return data;
+  } finally {
+    clearTimeout(timeout);
   }
-  return inflight;
+}
+
+const cachedBoundaries = createCachedComputation(computeBoundaries, CACHE_TTL);
+
+export function fetchBoundaries(): Promise<BoundaryCollection> {
+  return cachedBoundaries.get();
 }
