@@ -91,6 +91,74 @@ async function callClaudeForReport(prompt: string, tool: Anthropic.Messages.Tool
   }
 }
 
+function sanitizeProfile(profile: NeighborhoodProfile): NeighborhoodProfile {
+  const s = (v: unknown, max: number) => sanitizeString(v, max);
+  const num = (v: unknown, min = 0, max = Infinity) => Math.min(max, Math.max(min, Number(v) || 0));
+
+  return {
+    communityName: s(profile.communityName, 100) || 'Unknown',
+    anchor: {
+      id: s(profile.anchor.id, 50),
+      name: s(profile.anchor.name, 100),
+      type: profile.anchor.type === 'library' ? 'library' : 'rec_center',
+      lat: num(profile.anchor.lat, -90, 90),
+      lng: num(profile.anchor.lng, -180, 180),
+      address: s(profile.anchor.address, 200),
+      phone: profile.anchor.phone ? s(profile.anchor.phone, 20) : undefined,
+      website: profile.anchor.website ? s(profile.anchor.website, 200) : undefined,
+      community: s(profile.anchor.community, 100),
+    },
+    metrics: {
+      totalRequests311: num(profile.metrics.totalRequests311),
+      resolvedCount: num(profile.metrics.resolvedCount),
+      resolutionRate: num(profile.metrics.resolutionRate, 0, 1),
+      avgDaysToResolve: num(profile.metrics.avgDaysToResolve),
+      topIssues: (Array.isArray(profile.metrics.topIssues) ? profile.metrics.topIssues : []).slice(0, 10).map((i) => ({
+        category: s(i.category, 100),
+        count: Math.max(0, Math.floor(Number(i.count) || 0)),
+      })),
+      recentlyResolved: (Array.isArray(profile.metrics.recentlyResolved) ? profile.metrics.recentlyResolved : []).slice(0, 10).map((r) => ({
+        category: s(r.category, 100),
+        date: s(r.date, 30),
+      })),
+      population: num(profile.metrics.population),
+      requestsPer1000Residents: profile.metrics.requestsPer1000Residents != null ? num(profile.metrics.requestsPer1000Residents) : null,
+      goodNews: (Array.isArray(profile.metrics.goodNews) ? profile.metrics.goodNews : []).slice(0, 10).map((g) => s(g, 300)),
+    },
+    transit: {
+      nearbyStopCount: num(profile.transit.nearbyStopCount),
+      nearestStopDistance: num(profile.transit.nearestStopDistance),
+      stopCount: num(profile.transit.stopCount),
+      agencyCount: num(profile.transit.agencyCount),
+      agencies: (Array.isArray(profile.transit.agencies) ? profile.transit.agencies : []).slice(0, 10).map((a) => s(a, 100)),
+      transitScore: num(profile.transit.transitScore),
+      cityAverage: num(profile.transit.cityAverage),
+      travelTimeToCityHall: profile.transit.travelTimeToCityHall != null ? num(profile.transit.travelTimeToCityHall) : null,
+    },
+    demographics: {
+      topLanguages: sanitizeTopLanguages(profile.demographics?.topLanguages),
+    },
+    accessGap: profile.accessGap ? {
+      accessGapScore: num(profile.accessGap.accessGapScore),
+      signals: {
+        lowEngagement: profile.accessGap.signals.lowEngagement != null ? num(profile.accessGap.signals.lowEngagement) : null,
+        lowTransit: profile.accessGap.signals.lowTransit != null ? num(profile.accessGap.signals.lowTransit) : null,
+        highNonEnglish: profile.accessGap.signals.highNonEnglish != null ? num(profile.accessGap.signals.highNonEnglish) : null,
+      },
+      rank: num(profile.accessGap.rank),
+      totalCommunities: num(profile.accessGap.totalCommunities),
+    } : null,
+  };
+}
+
+function sanitizeTopLanguages(langs: unknown): { language: string; percentage: number }[] {
+  if (!Array.isArray(langs)) return [];
+  return langs.slice(0, 20).map((l) => ({
+    language: sanitizeString(l?.language, 50).replace(/[^a-zA-Z /()-]/g, '') || 'Unknown',
+    percentage: Math.min(100, Math.max(0, Number(l?.percentage) || 0)),
+  }));
+}
+
 export async function generateReport(
   profile: NeighborhoodProfile,
   language: string,
@@ -105,8 +173,8 @@ export async function generateReport(
   if (profile.communityName.length > 100) {
     throw new Error('communityName must be 100 characters or fewer');
   }
-  // Strip newlines and control characters
-  profile.communityName = profile.communityName.replace(/[\x00-\x1f\x7f]/g, '');
+  // Sanitize all fields
+  profile = sanitizeProfile(profile);
 
   const prompt = `You are generating a community report for the ${profile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
 
@@ -144,8 +212,9 @@ export async function generateBlockReport(
   const anchorCommunity = sanitizeString(anchor.community, 100) || 'San Diego';
   const anchorAddress = sanitizeString(anchor.address, 200) || 'address unavailable';
   const anchorLabel = anchor.type === 'library' ? 'library' : 'recreation center';
-  // Sanitize blockMetrics
+  // Sanitize blockMetrics and demographics
   blockMetrics = sanitizeBlockMetrics(blockMetrics);
+  const sanitizedDemographics = demographics ? { topLanguages: sanitizeTopLanguages(demographics.topLanguages) } : undefined;
 
   const prompt = `You are generating a block-level community report for the area around ${anchorName} (a ${anchorLabel}) in the ${anchorCommunity} neighborhood of San Diego. The report covers a ${blockMetrics.radiusMiles}-mile radius around this location at ${anchorAddress}.
 
@@ -156,7 +225,7 @@ Write in ${language}. Use clear, warm, accessible language at a 6th-grade readin
 Here is the 311 service request data for this area:
 ${JSON.stringify(blockMetrics, null, 2)}
 
-${demographics ? `Language demographics for the surrounding area:\n${JSON.stringify(demographics, null, 2)}` : ''}
+${sanitizedDemographics ? `Language demographics for the surrounding area:\n${JSON.stringify(sanitizedDemographics, null, 2)}` : ''}
 
 Generate a report with these sections:
 1. **Welcome** — A 2-sentence greeting that names ${anchorName} and the ${anchorCommunity} neighborhood.
