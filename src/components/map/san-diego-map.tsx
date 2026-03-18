@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
@@ -148,9 +148,12 @@ function SanDiegoMap({
     [onAnchorClick],
   );
 
-  const selectedFeature = selectedCommunity && neighborhoodBoundaries
-    ? findCommunityFeature(neighborhoodBoundaries.features, selectedCommunity)
-    : null;
+  const selectedFeature = useMemo(
+    () => selectedCommunity && neighborhoodBoundaries
+      ? findCommunityFeature(neighborhoodBoundaries.features, selectedCommunity)
+      : null,
+    [selectedCommunity, neighborhoodBoundaries],
+  );
 
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
