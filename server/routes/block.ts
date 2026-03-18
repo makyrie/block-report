@@ -3,42 +3,20 @@ import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG } from '../utils/geo.js';
 import { classifyStatus } from '../utils/status.js';
+import type { BlockMetrics } from '../../src/types/index.js';
 
 // ── In-memory LRU cache for block queries (keyed by rounded lat/lng/radius) ─
-interface BlockResponse {
-  totalReports: number;
-  openCount: number;
-  resolvedCount: number;
-  referredCount: number;
-  resolutionRate: number;
-  avgDaysToResolve: number | null;
-  topIssues: { category: string; count: number }[];
-  recentlyResolved: { category: string; date: string }[];
-  radiusMiles: number;
-  reports: {
-    id: string;
-    lat: number;
-    lng: number;
-    category: string;
-    categoryDetail: string | null;
-    status: string;
-    statusCategory: 'open' | 'resolved' | 'referred';
-    dateRequested: string;
-    dateClosed: string | null;
-    address: string | null;
-  }[];
-}
 
 const BLOCK_CACHE_TTL = 5 * 60 * 1000; // 5 minutes — block data changes infrequently
 const MAX_BLOCK_CACHE_SIZE = 200;
-const blockCache = new Map<string, { data: BlockResponse; cachedAt: number }>();
+const blockCache = new Map<string, { data: BlockMetrics; cachedAt: number }>();
 
 function blockCacheKey(lat: number, lng: number, radius: number): string {
   // Round to ~55 m precision so nearby clicks share a cache entry
   return `${lat.toFixed(4)},${lng.toFixed(4)},${radius}`;
 }
 
-function getCachedBlock(key: string): BlockResponse | null {
+function getCachedBlock(key: string): BlockMetrics | null {
   const entry = blockCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.cachedAt > BLOCK_CACHE_TTL) {
@@ -51,7 +29,7 @@ function getCachedBlock(key: string): BlockResponse | null {
   return entry.data;
 }
 
-function setCachedBlock(key: string, data: BlockResponse): void {
+function setCachedBlock(key: string, data: BlockMetrics): void {
   if (blockCache.size >= MAX_BLOCK_CACHE_SIZE) {
     const oldestKey = blockCache.keys().next().value;
     if (oldestKey) blockCache.delete(oldestKey);
@@ -81,18 +59,16 @@ router.get('/', async (req, res) => {
   const snappedRadius = ALLOWED_RADII.reduce((best, r) =>
     Math.abs(r - radius) < Math.abs(best - radius) ? r : best,
   );
-  // Use snappedRadius for all downstream logic
-  const radius_ = snappedRadius;
 
-  const cacheKey = blockCacheKey(lat, lng, radius_);
+  const cacheKey = blockCacheKey(lat, lng, snappedRadius);
   const cached = getCachedBlock(cacheKey);
   if (cached) {
     res.json(cached);
     return;
   }
 
-  const latDelta = radius_ / MILES_PER_LAT_DEG;
-  const lngDelta = radius_ / MILES_PER_LNG_DEG;
+  const latDelta = snappedRadius / MILES_PER_LAT_DEG;
+  const lngDelta = snappedRadius / MILES_PER_LNG_DEG;
 
   const QUERY_SAFETY_CAP = 10_000;
 
@@ -120,7 +96,7 @@ router.get('/', async (req, res) => {
 
     if (data.length >= QUERY_SAFETY_CAP) {
       logger.warn('Block query hit safety cap — aggregates may be incomplete', {
-        lat, lng, radius: radius_, resultCount: data.length, cap: QUERY_SAFETY_CAP,
+        lat, lng, radius: snappedRadius, resultCount: data.length, cap: QUERY_SAFETY_CAP,
       });
     }
   } catch (err) {
@@ -132,7 +108,7 @@ router.get('/', async (req, res) => {
   // Refine with exact Haversine distance
   const nearby = data.filter(
     (r) => r.lat != null && r.lng != null &&
-      haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= radius_,
+      haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= snappedRadius,
   );
 
   // Single pass: compute all aggregate stats + collect resolved-with-dates
@@ -143,9 +119,12 @@ router.get('/', async (req, res) => {
   let resolveDaysSum = 0;
   let resolvedWithDatesCount = 0;
   const resolvedWithClosed: typeof nearby = [];
+  // Cache statusCategory per record to avoid recomputing in the reports mapping
+  const statusCategoryMap = new Map<string, 'open' | 'resolved' | 'referred'>();
 
   for (const r of nearby) {
     const statusCat = classifyStatus(r.status, r.date_closed);
+    statusCategoryMap.set(r.service_request_id, statusCat);
     if (statusCat === 'resolved') {
       resolvedCount++;
       if (r.date_closed) {
@@ -186,7 +165,7 @@ router.get('/', async (req, res) => {
   const reports = nearby
     .slice(0, MAX_REPORTS)
     .map((r) => {
-      const statusCategory = classifyStatus(r.status, r.date_closed);
+      const statusCategory = statusCategoryMap.get(r.service_request_id) ?? classifyStatus(r.status, r.date_closed);
       return {
         id: r.service_request_id,
         lat: Number(r.lat),
@@ -210,7 +189,7 @@ router.get('/', async (req, res) => {
     avgDaysToResolve,
     topIssues,
     recentlyResolved,
-    radiusMiles: radius_,
+    radiusMiles: snappedRadius,
     reports,
   };
 
