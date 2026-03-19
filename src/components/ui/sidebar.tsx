@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { NeighborhoodProfile, CommunityReport } from '../../types';
+import type { BlockMetrics, NeighborhoodProfile, CommunityReport } from '../../types';
 import ReportView from '../report/report-view';
+import DualScaleView from './dual-scale-view';
 import { useLanguage } from '../../i18n/context';
 import { SUPPORTED_LANGUAGES, DEMOGRAPHICS_TO_LANG } from '../../i18n/translations';
 
@@ -15,6 +16,9 @@ interface SidebarProps {
   topLanguages?: { language: string; percentage: number }[];
   transitScore?: NeighborhoodProfile['transit'] | null;
   accessGap?: NeighborhoodProfile['accessGap'];
+  blockData?: BlockMetrics | null;
+  blockRadius?: number;
+  blockLoading?: boolean;
 }
 
 function LoadingSpinner({ label }: { label: string }) {
@@ -71,6 +75,9 @@ export default function Sidebar({
   topLanguages,
   transitScore,
   accessGap,
+  blockData,
+  blockRadius,
+  blockLoading,
 }: SidebarProps) {
   const [showDetails, setShowDetails] = useState(false);
   const { t, reportLang, setReportLang } = useLanguage();
@@ -105,6 +112,22 @@ export default function Sidebar({
   return (
     <div className="p-4 space-y-5" aria-live="polite" aria-atomic="false">
       <h1 className="text-lg font-semibold">{community}</h1>
+
+      {/* Dual-scale view: block + neighborhood comparison */}
+      {blockLoading && (
+        <div role="status" aria-label="Loading block data" className="flex items-center gap-2 py-3">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-orange-300 border-t-orange-600" />
+          <span className="text-xs text-orange-600">Loading block data...</span>
+        </div>
+      )}
+      {blockData && metrics && community && blockRadius != null && (
+        <DualScaleView
+          blockData={blockData}
+          blockRadius={blockRadius}
+          communityName={community}
+          metrics={metrics}
+        />
+      )}
 
       {metrics && (
         <>

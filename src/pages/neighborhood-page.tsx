@@ -10,6 +10,7 @@ import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
+import { findCommunityAtPoint } from '../utils/point-in-polygon';
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -186,6 +187,9 @@ export default function NeighborhoodPage() {
       }
       setSelectedCommunity(community || null);
       setSelectedAnchor(null);
+      // Clear block data when user manually changes neighborhood via dropdown
+      setPinnedLocation(null);
+      setBlockData(null);
     },
     [navigate],
   );
@@ -203,6 +207,17 @@ export default function NeighborhoodPage() {
     setPinnedLocation({ lat, lng });
     setBlockData(null);
     setBlockLoading(true);
+
+    // Auto-detect enclosing neighborhood from GeoJSON boundaries
+    if (neighborhoodBoundaries) {
+      const detected = findCommunityAtPoint(lat, lng, neighborhoodBoundaries);
+      if (detected && detected !== selectedCommunity) {
+        setSelectedCommunity(detected);
+        setSelectedAnchor(null);
+        navigate(`/neighborhood/${toSlug(detected)}`);
+      }
+    }
+
     try {
       const data = await getBlockData(lat, lng, blockRadius);
       setBlockData(data);
@@ -211,7 +226,7 @@ export default function NeighborhoodPage() {
     } finally {
       setBlockLoading(false);
     }
-  }, [blockRadius]);
+  }, [blockRadius, neighborhoodBoundaries, selectedCommunity, navigate]);
 
   // Re-fetch block data when radius changes
   useEffect(() => {
@@ -312,6 +327,9 @@ export default function NeighborhoodPage() {
             topLanguages={topLanguages}
             transitScore={transitScore}
             accessGap={accessGap}
+            blockData={blockData}
+            blockRadius={blockRadius}
+            blockLoading={blockLoading}
           />
         </div>
       </aside>
