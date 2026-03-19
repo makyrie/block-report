@@ -212,7 +212,6 @@ export default function NeighborhoodPage() {
     if (neighborhoodBoundaries) {
       const detected = findCommunityAtPoint(lat, lng, neighborhoodBoundaries);
       if (detected && detected !== selectedCommunity) {
-        setSelectedCommunity(detected);
         setSelectedAnchor(null);
         navigate(`/neighborhood/${toSlug(detected)}`);
       }
