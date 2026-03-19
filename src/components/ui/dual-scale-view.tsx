@@ -53,7 +53,7 @@ export default function DualScaleView({ blockData, blockRadius, communityName, m
           <div className="flex gap-2" role="group" aria-label="Block-level statistics">
             <StatCard value={blockData.openCount} label="Open" />
             <StatCard value={blockData.resolvedCount} label="Resolved" />
-            <StatCard value={`${Math.round(blockData.resolutionRate * 100)}%`} label="Resolved" />
+            <StatCard value={`${Math.round(blockData.resolutionRate * 100)}%`} label="Resolution" />
           </div>
 
           {/* Top issues (compact) */}

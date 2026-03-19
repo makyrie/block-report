@@ -28,7 +28,7 @@ export function generateComparisons(
   const comparisons: ScaleComparison[] = [];
 
   // 1. Open count comparison
-  const neighborhoodOpenCount = neighborhood.totalRequests311 - neighborhood.resolvedCount;
+  const neighborhoodOpenCount = Math.max(0, neighborhood.totalRequests311 - neighborhood.resolvedCount);
   comparisons.push({
     text: `Your block has ${block.openCount} open report${block.openCount !== 1 ? 's' : ''}. Across ${communityName}, there are ${neighborhoodOpenCount.toLocaleString()} unresolved issues.`,
     type: 'insight',
