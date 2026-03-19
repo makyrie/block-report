@@ -203,10 +203,9 @@ export default function NeighborhoodPage() {
     [navigate],
   );
 
-  const handleMapClick = useCallback(async (lat: number, lng: number) => {
+  const handleMapClick = useCallback((lat: number, lng: number) => {
     setPinnedLocation({ lat, lng });
     setBlockData(null);
-    setBlockLoading(true);
 
     // Auto-detect enclosing neighborhood from GeoJSON boundaries
     if (neighborhoodBoundaries) {
@@ -216,16 +215,7 @@ export default function NeighborhoodPage() {
         navigate(`/neighborhood/${toSlug(detected)}`);
       }
     }
-
-    try {
-      const data = await getBlockData(lat, lng, blockRadius);
-      setBlockData(data);
-    } catch (err) {
-      console.error('Failed to fetch block data', err);
-    } finally {
-      setBlockLoading(false);
-    }
-  }, [blockRadius, neighborhoodBoundaries, selectedCommunity, navigate]);
+  }, [neighborhoodBoundaries, selectedCommunity, navigate]);
 
   // Re-fetch block data when radius changes
   useEffect(() => {
