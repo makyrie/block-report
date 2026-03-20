@@ -1,7 +1,7 @@
 ---
 title: "feat: PDF Generation for Community Briefs"
 type: feat
-status: active
+status: completed
 date: 2026-03-20
 ---
 
@@ -307,27 +307,27 @@ The HTML template in `server/services/pdf.ts` must replicate the `FlyerLayout` c
 
 ### Phase 1: Backend PDF Service (server/)
 
-- [ ] Install `puppeteer-core`, `@sparticuz/chromium`, `qrcode` (for server-side QR SVG generation)
-- [ ] Create `server/services/pdf.ts` with:
-  - [ ] `buildFlyerHtml(options)` — standalone HTML template with plain CSS (not Tailwind), inline SVG icons, CDN font links for Noto Sans/CJK/Arabic
-  - [ ] `generatePdf(options)` — Puppeteer launch → `page.setContent(html)` → `page.pdf()` → `browser.close()`
-  - [ ] Local dev detection: use `puppeteer.launch({ executablePath: '/usr/bin/chromium' })` locally, `@sparticuz/chromium` on Vercel
-- [ ] Add `POST /api/report/pdf` route to `server/routes/report.ts`
-- [ ] Add `APP_URL` to `.env.example`
+- [x] Install `puppeteer-core`, `@sparticuz/chromium`, `qrcode` (for server-side QR SVG generation)
+- [x] Create `server/services/pdf.ts` with:
+  - [x] `buildFlyerHtml(options)` — standalone HTML template with plain CSS (not Tailwind), inline SVG icons, CDN font links for Noto Sans/CJK/Arabic
+  - [x] `generatePdf(options)` — Puppeteer launch → `page.setContent(html)` → `page.pdf()` → `browser.close()`
+  - [x] Local dev detection: use `puppeteer.launch({ executablePath: '/usr/bin/chromium' })` locally, `@sparticuz/chromium` on Vercel
+- [x] Add `POST /api/report/pdf` route to `server/routes/report.ts`
+- [x] Add `APP_URL` to `.env.example`
 - [ ] Test locally with Mira Mesa English report data
 - [ ] Test with Mira Mesa Spanish report data (verify accents)
 
 ### Phase 2: Frontend Download Button (src/)
 
-- [ ] Add `handleDownloadPdf()` to `src/components/flyer/flyer-preview.tsx`
-- [ ] Add "Download PDF" button with loading/spinner state next to Print button
-- [ ] Add "Download PDF" button to `FlyerModal` header (alongside Print button)
-- [ ] Show error toast/message if PDF generation fails
-- [ ] Add i18n key `flyer.downloadPdf` in `src/i18n/translations.ts` for all 6 languages
+- [x] Add `handleDownloadPdf()` to `src/components/flyer/flyer-preview.tsx`
+- [x] Add "Download PDF" button with loading/spinner state next to Print button
+- [x] Add "Download PDF" button to `FlyerModal` header (alongside Print button)
+- [x] Show error toast/message if PDF generation fails
+- [x] Add i18n key `flyer.downloadPdf` in `src/i18n/translations.ts` for all 6 languages
 
 ### Phase 3: Deployment & Verification
 
-- [ ] Add `functions` config to `vercel.json` for PDF endpoint (`maxDuration: 30`, `memory: 1024`)
+- [x] Add `functions` config to `vercel.json` for PDF endpoint (`maxDuration: 30`, `memory: 1024`)
 - [ ] Deploy to Vercel and test PDF generation end-to-end
 - [ ] Verify multilingual PDF output: English, Spanish, Vietnamese, Chinese, Arabic, Tagalog
 - [ ] Verify QR code renders correctly in PDF and points to correct URL

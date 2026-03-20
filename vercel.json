@@ -1,6 +1,12 @@
 {
   "buildCommand": "pnpm db:generate && pnpm build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/report/pdf": {
+      "maxDuration": 30,
+      "memory": 1024
+    }
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
