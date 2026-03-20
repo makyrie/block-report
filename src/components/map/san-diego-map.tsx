@@ -405,7 +405,7 @@ function SanDiegoMap({
       {/* Choropleth layer — renders below markers */}
       {showChoropleth && neighborhoodBoundaries && (
         <GeoJSON
-          key="choropleth"
+          key={`choropleth-${accessGapScores?.size ?? 0}`}
           data={neighborhoodBoundaries}
           style={(feature) => {
             const name = (feature?.properties?.cpname || '').toUpperCase().trim();
