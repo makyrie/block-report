@@ -34,12 +34,16 @@ export function getPrisma(): PrismaClient {
 }
 
 /**
- * For backwards compatibility — a proxy that lazy-initializes on first property access.
- * Importing this module no longer throws if DATABASE_URL is unset.
+ * Lazy-initializing proxy — resolves to the real PrismaClient on first property access.
+ * After initialization, all subsequent accesses go directly to the cached client
+ * (no repeated getPrisma() overhead). Importing this module no longer throws
+ * if DATABASE_URL is unset.
  */
+let _proxyClient: PrismaClient | null = null;
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop: string | symbol) {
-    return Reflect.get(getPrisma(), prop);
+    if (!_proxyClient) _proxyClient = getPrisma();
+    return Reflect.get(_proxyClient, prop);
   },
 });
 
@@ -48,6 +52,7 @@ async function disconnect() {
   if (_prisma) {
     await _prisma.$disconnect().catch(() => {});
     _prisma = null;
+    _proxyClient = null;
   }
 }
 
