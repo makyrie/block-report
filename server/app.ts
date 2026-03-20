@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { logger } from './logger.js';
+import { isVercel } from './env.js';
 import { prisma } from './services/db.js';
 import locationsRouter from './routes/locations.js';
 import metricsRouter from './routes/metrics.js';
@@ -41,10 +42,8 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
-const isVercel = !!process.env.VERCEL;
-if (isVercel) {
-  logger.warn('In-memory rate limiting is ineffective on serverless — counters reset per cold start');
-}
+// Note: In-memory rate limiting resets per cold start on serverless (Vercel).
+// This provides best-effort protection only. For production, use Vercel WAF or Upstash Redis.
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
 const reportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

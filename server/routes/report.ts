@@ -7,8 +7,7 @@ import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
-
-const isVercel = !!process.env.VERCEL;
+import { isVercel } from '../env.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
 const BLOCK_REPORTS_DIR = path.join(REPORTS_DIR, 'blocks');

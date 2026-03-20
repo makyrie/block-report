@@ -2,8 +2,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CommunityReport } from '../../src/types/index.js';
-
-const isVercel = !!process.env.VERCEL;
+import { isVercel } from '../env.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours

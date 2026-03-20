@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-const isVercel = !!process.env.VERCEL;
+import { isVercel } from './env.js';
 
 let logStream: fs.WriteStream | null = null;
 
