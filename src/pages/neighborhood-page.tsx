@@ -265,7 +265,7 @@ export default function NeighborhoodPage() {
     } finally {
       setReportLoading(false);
     }
-  }, [selectedCommunity, metrics, buildProfile]);
+  }, [buildProfile]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">

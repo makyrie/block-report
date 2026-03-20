@@ -309,6 +309,8 @@ function SanDiegoMap({
   onToggleChoropleth,
   onCommunitySelect,
 }: SanDiegoMapProps) {
+  // Ref keeps click handlers current — onEachFeature binds once at GeoJSON mount,
+  // so a direct closure would capture a stale onCommunitySelect.
   const onCommunitySelectRef = useRef(onCommunitySelect);
   onCommunitySelectRef.current = onCommunitySelect;
 

@@ -297,6 +297,7 @@ export async function getTopUnderserved(limit = 10): Promise<
   { community: string; accessGapScore: number; signals: AccessGapResult['signals'] }[]
 > {
   const scores = await getAccessGapScores();
+  // entries() yields descending-score order — maintained by computeAllScores() insertion
   return Array.from(scores.entries())
     .slice(0, limit)
     .map(([community, data]) => ({
