@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport } from '../services/claude.js';
+import { generatePdf } from '../services/pdf.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
@@ -244,6 +245,36 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       stack: error instanceof Error ? error.stack : undefined,
     });
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/report/pdf — Generate a PDF of the community flyer
+router.post('/pdf', async (req: Request, res: Response) => {
+  try {
+    const { report, metrics, topLanguages, neighborhoodSlug } = req.body as {
+      report: import('../../src/types/index.js').CommunityReport;
+      metrics?: NeighborhoodProfile['metrics'];
+      topLanguages?: { language: string; percentage: number }[];
+      neighborhoodSlug: string;
+    };
+
+    if (!report || !neighborhoodSlug) {
+      res.status(400).json({ error: 'Missing required fields: report, neighborhoodSlug' });
+      return;
+    }
+
+    const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    const pdf = await generatePdf({ report, metrics, topLanguages, neighborhoodSlug, baseUrl });
+
+    const langCode = LANGUAGE_CODES[report.language] || 'en';
+    const filename = `block-report-${sanitizeFilename(report.neighborhoodName)}-${langCode}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdf);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('PDF generation error', { error: message, stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: 'Failed to generate PDF' });
   }
 });
 
