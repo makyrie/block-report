@@ -4,7 +4,7 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
+import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getAccessGapRanking, getBlockData } from '../api/client';
 import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
 import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
@@ -37,6 +37,9 @@ export default function NeighborhoodPage() {
   const [blockLoading, setBlockLoading] = useState(false);
   const [blockRadius, setBlockRadius] = useState(0.25);
 
+  const [accessGapScores, setAccessGapScores] = useState<Map<string, number>>(new Map());
+  const [showChoropleth, setShowChoropleth] = useState(false);
+
   const [dataError, setDataError] = useState<string | null>(null);
 
   const [report, setReport] = useState<CommunityReport | null>(null);
@@ -59,6 +62,15 @@ export default function NeighborhoodPage() {
     getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch(console.error);
     getTransitStops()
       .then(setTransitStops)
+      .catch(console.error);
+    getAccessGapRanking(100)
+      .then(({ ranking }) => {
+        const scoreMap = new Map<string, number>();
+        for (const r of ranking) {
+          scoreMap.set(r.community.toUpperCase().trim(), r.accessGapScore);
+        }
+        setAccessGapScores(scoreMap);
+      })
       .catch(console.error);
   }, []);
 
@@ -358,6 +370,9 @@ export default function NeighborhoodPage() {
           blockData={blockData}
           blockLoading={blockLoading}
           blockRadius={blockRadius}
+          accessGapScores={accessGapScores}
+          showChoropleth={showChoropleth}
+          onToggleChoropleth={() => setShowChoropleth(prev => !prev)}
         />
       </main>
 

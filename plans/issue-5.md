@@ -1,7 +1,7 @@
 ---
 title: "feat: Add choropleth/heatmap layer showing access gap scores by neighborhood"
 type: feat
-status: active
+status: completed
 date: 2026-03-20
 ---
 
@@ -56,8 +56,8 @@ const limit = Math.min(Number(_req.query.limit) || 10, 100);
 ```
 
 **Acceptance criteria:**
-- [ ] Ranking endpoint allows `limit` up to 100
-- [ ] `getAccessGapRanking(100)` returns all ~51 communities
+- [x] Ranking endpoint allows `limit` up to 100
+- [x] `getAccessGapRanking(100)` returns all ~51 communities
 
 #### Phase 1: Data Fetching & State (neighborhood-page.tsx)
 
@@ -91,8 +91,8 @@ Pass new props to `SanDiegoMap`:
 ```
 
 **Acceptance criteria:**
-- [ ] Scores fetched once on mount, stored as `Map<string, number>` keyed by uppercase community name
-- [ ] Toggle state managed in parent, passed down to map
+- [x] Scores fetched once on mount, stored as `Map<string, number>` keyed by uppercase community name
+- [x] Toggle state managed in parent, passed down to map
 
 #### Phase 2: Choropleth Layer Rendering (san-diego-map.tsx)
 
@@ -145,12 +145,12 @@ function scoreToColor(score: number | null): string {
 ```
 
 **Acceptance criteria:**
-- [ ] All ~51 community boundaries rendered as filled polygons when choropleth is active
-- [ ] Color gradient: green (score 0, well-served) → yellow (50) → red (100, underserved)
-- [ ] Communities without score data shown in gray (#d1d5db)
-- [ ] Hover tooltip shows community name and score (e.g. "Mira Mesa: 42/100")
-- [ ] Click on a polygon selects that community (triggers `onCommunitySelect`)
-- [ ] Choropleth layer renders below markers (libraries, rec centers, transit stops)
+- [x] All ~51 community boundaries rendered as filled polygons when choropleth is active
+- [x] Color gradient: green (score 0, well-served) → yellow (50) → red (100, underserved)
+- [x] Communities without score data shown in gray (#d1d5db)
+- [x] Hover tooltip shows community name and score (e.g. "Mira Mesa: 42/100")
+- [x] Click on a polygon selects that community (triggers `onCommunitySelect`)
+- [x] Choropleth layer renders below markers (libraries, rec centers, transit stops)
 
 #### Phase 3: Toggle Control
 
@@ -174,10 +174,10 @@ function ChoroplethToggle({ active, onToggle }: { active: boolean; onToggle: () 
 ```
 
 **Acceptance criteria:**
-- [ ] Toggle control visible in map's top-right corner
-- [ ] Clicking toggles choropleth on/off
-- [ ] Toggle label: "Access Gap Layer"
-- [ ] Default state: off (plain map view)
+- [x] Toggle control visible in map's top-right corner
+- [x] Clicking toggles choropleth on/off
+- [x] Toggle label: "Access Gap Layer"
+- [x] Default state: off (plain map view)
 
 #### Phase 4: Legend
 
@@ -211,10 +211,10 @@ function ChoroplethLegend() {
 ```
 
 **Acceptance criteria:**
-- [ ] Legend shows color gradient with score ranges (0-20, 20-40, ..., 80-100)
-- [ ] Legend includes "No data" entry with gray swatch
-- [ ] Legend only visible when choropleth is active
-- [ ] Legend positioned bottom-right (does not overlap existing bottom-left legend)
+- [x] Legend shows color gradient with score ranges (0-20, 20-40, ..., 80-100)
+- [x] Legend includes "No data" entry with gray swatch
+- [x] Legend only visible when choropleth is active
+- [x] Legend positioned bottom-right (does not overlap existing bottom-left legend)
 
 ## Edge Cases & Considerations
 
@@ -269,20 +269,20 @@ The choropleth layer does not need to appear in print — the print layout shows
 
 ### Functional Requirements
 
-- [ ] Choropleth layer renders all ~51 community boundaries with fill colors based on access gap score
-- [ ] Color scale: green (0, well-served) → yellow (50) → red (100, underserved)
-- [ ] Toggle control in top-right corner to show/hide the choropleth layer
-- [ ] Legend in bottom-right showing color scale and "No data" entry
-- [ ] Hover tooltip shows community name and score
-- [ ] Click on choropleth polygon selects that community
-- [ ] Communities without scores shown in gray
-- [ ] Choropleth layer renders below point markers
+- [x] Choropleth layer renders all ~51 community boundaries with fill colors based on access gap score
+- [x] Color scale: green (0, well-served) → yellow (50) → red (100, underserved)
+- [x] Toggle control in top-right corner to show/hide the choropleth layer
+- [x] Legend in bottom-right showing color scale and "No data" entry
+- [x] Hover tooltip shows community name and score
+- [x] Click on choropleth polygon selects that community
+- [x] Communities without scores shown in gray
+- [x] Choropleth layer renders below point markers
 
 ### Non-Functional Requirements
 
-- [ ] No new npm dependencies required
-- [ ] No new API endpoints required
-- [ ] Works on mobile (touch interactions for tooltips)
+- [x] No new npm dependencies required
+- [x] No new API endpoints required
+- [x] Works on mobile (touch interactions for tooltips)
 
 ## Dependencies & Risks
 

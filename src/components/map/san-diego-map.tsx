@@ -214,6 +214,22 @@ interface SanDiegoMapProps {
   blockData?: BlockMetrics | null;
   blockLoading?: boolean;
   blockRadius?: number;
+  accessGapScores?: Map<string, number>;
+  showChoropleth?: boolean;
+  onToggleChoropleth?: () => void;
+}
+
+// Color utility — green (0) → yellow (50) → red (100)
+function scoreToColor(score: number | null): string {
+  if (score === null) return '#d1d5db'; // gray-300 for missing data
+  const t = score / 100;
+  if (t <= 0.5) {
+    const r = Math.round(255 * (t * 2));
+    return `rgb(${r}, 200, 50)`;
+  } else {
+    const g = Math.round(200 * (1 - (t - 0.5) * 2));
+    return `rgb(255, ${g}, 50)`;
+  }
 }
 
 // Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
@@ -302,6 +318,9 @@ function SanDiegoMap({
   blockData,
   blockLoading = false,
   blockRadius = 0.25,
+  accessGapScores,
+  showChoropleth = false,
+  onToggleChoropleth,
 }: SanDiegoMapProps) {
   const handleMarkerClick = useCallback(
     (anchor: CommunityAnchor) => () => {
@@ -316,6 +335,41 @@ function SanDiegoMap({
 
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
+    {/* Choropleth toggle */}
+    {onToggleChoropleth && accessGapScores && accessGapScores.size > 0 && (
+      <div className="absolute top-2 right-2 z-[999] print:hidden">
+        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 cursor-pointer"
+             onClick={onToggleChoropleth}>
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input type="checkbox" checked={showChoropleth} readOnly className="accent-amber-600" />
+            Access Gap Layer
+          </label>
+        </div>
+      </div>
+    )}
+
+    {/* Choropleth legend */}
+    {showChoropleth && (
+      <div className="absolute bottom-8 right-2 z-[1000] print:hidden">
+        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md p-3 text-xs">
+          <div className="font-semibold mb-1.5 text-gray-700">Access Gap Score</div>
+          {[0, 20, 40, 60, 80].map((grade) => (
+            <div key={grade} className="flex items-center gap-1.5 mb-0.5">
+              <span
+                className="inline-block w-4 h-4 rounded-sm border border-gray-300"
+                style={{ backgroundColor: scoreToColor(grade) }}
+              />
+              <span className="text-gray-600">{grade}–{grade + 20}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="inline-block w-4 h-4 rounded-sm border border-gray-300 bg-gray-300" />
+            <span className="text-gray-600">No data</span>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Legend */}
     <nav aria-label="Map legend" className="absolute bottom-8 left-2 z-[1000] bg-white/90 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 text-xs print:hidden">
       <ul className="space-y-1.5">
@@ -347,6 +401,45 @@ function SanDiegoMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+
+      {/* Choropleth layer — renders below markers */}
+      {showChoropleth && neighborhoodBoundaries && (
+        <GeoJSON
+          key="choropleth"
+          data={neighborhoodBoundaries}
+          style={(feature) => {
+            const name = (feature?.properties?.cpname || '').toUpperCase().trim();
+            const score = accessGapScores?.get(name) ?? null;
+            return {
+              fillColor: scoreToColor(score),
+              color: '#666',
+              weight: 1.5,
+              opacity: 0.8,
+              fillOpacity: 0.6,
+            };
+          }}
+          onEachFeature={(feature, layer) => {
+            const name = feature.properties?.cpname || 'Unknown';
+            const score = accessGapScores?.get(name.toUpperCase().trim());
+            layer.bindTooltip(
+              `${name}: ${score !== undefined ? score + '/100' : 'No data'}`,
+              { sticky: true }
+            );
+            layer.on('click', (e) => {
+              L.DomEvent.stopPropagation(e as L.LeafletEvent);
+              onAnchorClick({
+                id: '',
+                name,
+                type: 'library',
+                lat: 0,
+                lng: 0,
+                address: '',
+                community: name,
+              });
+            });
+          }}
+        />
+      )}
 
       {/* Click-to-explore handler */}
       {onMapClick && <MapClickHandler onClick={onMapClick} />}

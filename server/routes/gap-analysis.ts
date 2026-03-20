@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/access-gap/ranking?limit={n}
 router.get('/ranking', async (_req, res) => {
-  const limit = Math.min(Number(_req.query.limit) || 10, 50);
+  const limit = Math.min(Number(_req.query.limit) || 10, 100);
 
   try {
     const ranking = await getTopUnderserved(limit);
