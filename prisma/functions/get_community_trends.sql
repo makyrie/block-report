@@ -66,8 +66,8 @@ BEGIN
         ELSE 0
       END,
       'volumeDirection', CASE
-        WHEN h.prev_vol IS NULL OR h.prev_vol = 0 THEN
-          CASE WHEN COALESCE(h.curr_vol, 0) > 0 THEN 'declining' ELSE 'stable' END
+        -- No prior baseline: new data appearing is not a decline, default to stable
+        WHEN h.prev_vol IS NULL OR h.prev_vol = 0 THEN 'stable'
         WHEN ((h.curr_vol - h.prev_vol)::numeric / h.prev_vol::numeric) * 100 > 10 THEN 'declining'
         WHEN ((h.curr_vol - h.prev_vol)::numeric / h.prev_vol::numeric) * 100 < -10 THEN 'improving'
         ELSE 'stable'
