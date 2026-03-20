@@ -92,6 +92,9 @@ export async function generateReport(
   // Strip newlines and control characters
   profile.communityName = profile.communityName.replace(/[\x00-\x1f\x7f]/g, '');
 
+  // Sanitize language to prevent prompt injection
+  const safeLang = language.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, '');
+
   // Sanitize entire profile to prevent prompt injection via nested fields
   const safeProfile = sanitizeProfile(profile);
 
@@ -99,7 +102,7 @@ export async function generateReport(
 
   const prompt = `You are generating a community report for the ${safeProfile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
 
-Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
+Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the data for this neighborhood:
 ${JSON.stringify(safeProfile, null, 2)}
@@ -193,6 +196,9 @@ export async function generateBlockReport(
   const safeMetrics = sanitizeBlockMetrics(blockMetrics);
   const safeDemographics = demographics ? sanitizeDemographics(demographics) : undefined;
 
+  // Sanitize language to prevent prompt injection
+  const safeLang = language.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, '');
+
   const client = getClient();
 
   const anchorLabel = safeAnchor.type === 'library' ? 'library' : 'recreation center';
@@ -201,7 +207,7 @@ export async function generateBlockReport(
 
 This report will be printed and posted at ${safeAnchor.name} for visitors and neighbors to read.
 
-Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
+Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the 311 service request data for this area:
 ${JSON.stringify(safeMetrics, null, 2)}

@@ -63,6 +63,10 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: profile, language' });
       return;
     }
+    if (typeof language !== 'string' || language.length > 50) {
+      res.status(400).json({ error: 'language must be a string of 50 characters or fewer' });
+      return;
+    }
 
     // Run cache lookup and rate limit check in parallel to save a DB round trip
     const [cached, rateLimited] = await Promise.all([
