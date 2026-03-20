@@ -1,8 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getLibraries, getRecCenters } from '../../services/locations.js';
-import { validateCommunityName } from '../../services/communities.js';
-import { withErrorHandling } from './helpers.js';
+import { withErrorHandling, validateOptionalCommunity } from './helpers.js';
 
 export function registerLocationTools(server: McpServer) {
   server.tool(
@@ -33,21 +32,9 @@ export function registerLocationTools(server: McpServer) {
       community_name: z.string().optional().describe('Optional community name to filter rec centers (case-insensitive)'),
     },
     withErrorHandling('list_rec_centers', async ({ community_name }) => {
-      let filterName = community_name;
-      if (filterName) {
-        const { valid, normalized, names } = await validateCommunityName(filterName);
-        if (!valid) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `No data found for community: "${filterName}". Use list_communities to see valid names. Did you mean one of: ${names.slice(0, 10).join(', ')}?`,
-            }],
-            isError: true,
-          };
-        }
-        filterName = normalized;
-      }
-      const data = await getRecCenters(filterName);
+      const result = await validateOptionalCommunity(community_name);
+      if (result.error) return result.error;
+      const data = await getRecCenters(result.normalized);
       const curated = data.map((rc: { rec_bldg: string | null; park_name: string | null; address: string | null; zip: string | null; neighborhd: string | null; lat: number | null; lng: number | null }) => ({
         name: rc.rec_bldg,
         park: rc.park_name,

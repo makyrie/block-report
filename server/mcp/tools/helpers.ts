@@ -39,6 +39,29 @@ export function withCommunityValidation(
 }
 
 /**
+ * Validates an optional community name and returns the normalized value or an error ToolResult.
+ * Returns { normalized: string | undefined } on success, or { error: ToolResult } on invalid input.
+ */
+export async function validateOptionalCommunity(
+  communityName: string | undefined,
+): Promise<{ normalized: string | undefined; error?: undefined } | { normalized?: undefined; error: ToolResult }> {
+  if (!communityName) return { normalized: undefined };
+  const { valid, normalized, names } = await validateCommunityName(communityName);
+  if (!valid) {
+    return {
+      error: {
+        content: [{
+          type: 'text' as const,
+          text: `No data found for community: "${communityName}". Use list_communities to see valid names. Did you mean one of: ${names.slice(0, 10).join(', ')}?`,
+        }],
+        isError: true,
+      },
+    };
+  }
+  return { normalized };
+}
+
+/**
  * Wraps a generic tool handler with error catching and logging.
  */
 export function withErrorHandling<T extends Record<string, unknown>>(
