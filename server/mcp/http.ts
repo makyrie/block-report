@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { prisma } from '../services/db.js';
@@ -14,6 +15,15 @@ if (!AUTH_TOKEN && process.env.MCP_AUTH_DISABLED !== 'true') {
 
 const app = express();
 app.use(express.json());
+
+// Rate limiting — 60 requests per minute per IP
+app.use('/mcp', rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+}));
 
 // Bearer token authentication middleware
 if (AUTH_TOKEN) {
