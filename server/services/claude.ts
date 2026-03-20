@@ -140,11 +140,16 @@ export async function generateBlockReport(
 ): Promise<CommunityReport> {
   const client = getClient();
 
+  // Strip control characters from anchor fields (defense-in-depth, mirrors generateReport)
+  const anchorName = (anchor.name || '').replace(/[\x00-\x1f\x7f]/g, '');
+  const anchorCommunity = (anchor.community || '').replace(/[\x00-\x1f\x7f]/g, '');
+  const anchorAddress = (anchor.address || '').replace(/[\x00-\x1f\x7f]/g, '');
+
   const anchorLabel = anchor.type === 'library' ? 'library' : 'recreation center';
 
-  const prompt = `You are generating a block-level community report for the area around ${anchor.name} (a ${anchorLabel}) in the ${anchor.community} neighborhood of San Diego. The report covers a ${blockMetrics.radiusMiles}-mile radius around this location at ${anchor.address}.
+  const prompt = `You are generating a block-level community report for the area around ${anchorName} (a ${anchorLabel}) in the ${anchorCommunity} neighborhood of San Diego. The report covers a ${blockMetrics.radiusMiles}-mile radius around this location at ${anchorAddress}.
 
-This report will be printed and posted at ${anchor.name} for visitors and neighbors to read.
+This report will be printed and posted at ${anchorName} for visitors and neighbors to read.
 
 Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
@@ -154,11 +159,11 @@ ${JSON.stringify(blockMetrics, null, 2)}
 ${demographics ? `Language demographics for the surrounding area:\n${JSON.stringify(demographics, null, 2)}` : ''}
 
 Generate a report with these sections:
-1. **Welcome** — A 2-sentence greeting that names ${anchor.name} and the ${anchor.community} neighborhood.
+1. **Welcome** — A 2-sentence greeting that names ${anchorName} and the ${anchorCommunity} neighborhood.
 2. **Good News** — 2-3 positive things happening based on the data (resolved issues, high resolution rates, etc.).
-3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311 near ${anchor.name}, framed constructively.
-4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report, visit ${anchor.name}, attend community events.
-5. **This Location** — Reference ${anchor.name} at ${anchor.address} as the anchor community resource.
+3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311 near ${anchorName}, framed constructively.
+4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report, visit ${anchorName}, attend community events.
+5. **This Location** — Reference ${anchorName} at ${anchorAddress} as the anchor community resource.
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 
@@ -223,8 +228,8 @@ Keep the total report under 400 words. It should fit on one printed page.`;
   } catch (error) {
     logger.error('Claude API call failed for block report', {
       error: error instanceof Error ? error.message : String(error),
-      anchor: anchor.name,
-      community: anchor.community,
+      anchor: anchorName,
+      community: anchorCommunity,
     });
     throw error;
   }
