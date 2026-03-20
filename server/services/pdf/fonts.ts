@@ -20,6 +20,7 @@ export async function getGoogleFontsCss(): Promise<string> {
         // Request woff2 format (Chromium user-agent gets the best format)
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
+      signal: AbortSignal.timeout(5_000),
     });
     const contentType = res.headers.get('content-type') || '';
     if (res.ok && contentType.includes('text/css')) {

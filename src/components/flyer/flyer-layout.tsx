@@ -1,5 +1,5 @@
 /**
- * SYNC WARNING: The PDF HTML template in server/services/pdf.ts mirrors this
+ * SYNC WARNING: The PDF HTML template in server/services/pdf/template.ts mirrors this
  * component. Any visual change here MUST be reflected there and vice-versa.
  */
 import { QRCodeSVG } from 'qrcode.react';

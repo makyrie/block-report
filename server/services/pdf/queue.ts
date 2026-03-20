@@ -37,6 +37,10 @@ export async function acquirePdfSlot(): Promise<void> {
   });
 }
 
+export function getPdfQueueDepth(): number {
+  return pdfQueue.length;
+}
+
 export function releasePdfSlot(): void {
   activePdfJobs--;
   const next = pdfQueue.shift();

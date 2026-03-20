@@ -1,6 +1,6 @@
 /**
  * SYNC WARNING: SVG icons here are duplicated as raw strings in
- * server/services/pdf.ts (ICON_CHECK_CIRCLE, ICON_SMARTPHONE, etc.).
+ * server/services/pdf/template.ts (ICON_CHECK_CIRCLE, ICON_SMARTPHONE, etc.).
  * Any visual change to an icon MUST be reflected in both places.
  */
 interface IconProps {

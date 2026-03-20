@@ -7,7 +7,7 @@
 
 import { logger } from '../../logger.js';
 import { getBrowser, closeBrowser } from './browser.js';
-import { acquirePdfSlot, releasePdfSlot } from './queue.js';
+import { acquirePdfSlot, releasePdfSlot, getPdfQueueDepth } from './queue.js';
 import { buildFlyerHtml } from './template.js';
 export type { PdfOptions } from './types.js';
 import type { PdfOptions } from './types.js';
@@ -16,7 +16,7 @@ import type { PdfOptions } from './types.js';
  * Generate a PDF buffer from community report data.
  */
 export async function generatePdf(options: PdfOptions): Promise<Buffer> {
-  logger.info('PDF generation requested', { neighborhood: options.neighborhoodSlug, queueDepth: 0 });
+  logger.info('PDF generation requested', { neighborhood: options.neighborhoodSlug, queueDepth: getPdfQueueDepth() });
   await acquirePdfSlot();
   const start = Date.now();
   try {
@@ -24,7 +24,7 @@ export async function generatePdf(options: PdfOptions): Promise<Buffer> {
     logger.info('PDF generation complete', { neighborhood: options.neighborhoodSlug, durationMs: Date.now() - start, sizeBytes: pdf.length });
     return pdf;
   } catch (err) {
-    logger.error('PDF generation failed', { neighborhood: options.neighborhoodSlug, durationMs: Date.now() - start, error: err instanceof Error ? err.message : String(err) });
+    logger.error('PDF generation failed', { neighborhood: options.neighborhoodSlug, durationMs: Date.now() - start, error: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
     throw err;
   } finally {
     releasePdfSlot();

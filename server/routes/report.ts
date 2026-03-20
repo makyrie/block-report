@@ -305,7 +305,8 @@ router.post('/pdf', async (req: Request, res: Response) => {
         ) ||
         metrics.topIssues.length > MAX_ARRAY_ITEMS ||
         !Array.isArray(metrics.goodNews) ||
-        !metrics.goodNews.every((g: unknown) => typeof g === 'string')
+        !metrics.goodNews.every((g: unknown) => typeof g === 'string') ||
+        metrics.goodNews.length > MAX_ARRAY_ITEMS
       ) {
         res.status(400).json({ error: 'Invalid metrics structure' });
         return;
