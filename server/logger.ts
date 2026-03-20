@@ -6,11 +6,16 @@ import { isVercel } from './env.js';
 let logStream: fs.WriteStream | null = null;
 
 if (!isVercel) {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const LOG_DIR = path.join(__dirname, 'logs');
-  fs.mkdirSync(LOG_DIR, { recursive: true });
-  const LOG_FILE = path.join(LOG_DIR, 'server.log');
-  logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+  try {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const LOG_DIR = path.join(__dirname, 'logs');
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    const LOG_FILE = path.join(LOG_DIR, 'server.log');
+    logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+  } catch {
+    // File logging is best-effort — fall back to console-only if filesystem is unavailable
+    console.warn('Failed to initialize file logger, falling back to console-only');
+  }
 }
 
 type LogLevel = 'info' | 'warn' | 'error';
