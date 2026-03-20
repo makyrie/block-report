@@ -15,13 +15,17 @@ export function registerProfileTools(server: McpServer) {
       community_name: z.string().describe('Community plan area name (case-insensitive). Use list_communities to see valid names.'),
     },
     withCommunityValidation('get_neighborhood_profile', async (normalized) => {
+      const TIMEOUT = 30_000;
+      const timeout = <T>(p: Promise<T>, fallback: T) =>
+        Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), TIMEOUT))]);
+
       const [metrics, transit, demographics, accessGap, recCenters, libraries] = await Promise.all([
-        getProcessedCommunityMetrics(normalized).catch(() => null),
-        getTransitScore(normalized).catch(() => null),
-        getDemographicsByCommunity(normalized).catch(() => []),
-        getAccessGapScore(normalized).catch(() => null),
-        getRecCenters(normalized).catch(() => []),
-        getLibraries().catch(() => []),
+        timeout(getProcessedCommunityMetrics(normalized).catch(() => null), null),
+        timeout(getTransitScore(normalized).catch(() => null), null),
+        timeout(getDemographicsByCommunity(normalized).catch(() => []), []),
+        timeout(getAccessGapScore(normalized).catch(() => null), null),
+        timeout(getRecCenters(normalized).catch(() => []), []),
+        timeout(getLibraries().catch(() => []), []),
       ]);
 
       const profile = {

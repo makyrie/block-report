@@ -31,7 +31,7 @@ export function withCommunityValidation(
       const message = (err as Error).message;
       logger.error(`MCP tool "${toolName}" failed`, { error: message });
       return {
-        content: [{ type: 'text' as const, text: `Error: ${message}` }],
+        content: [{ type: 'text' as const, text: `Error: An internal error occurred. Please try again.` }],
         isError: true,
       };
     }
@@ -52,7 +52,7 @@ export function withErrorHandling(
       const message = (err as Error).message;
       logger.error(`MCP tool "${toolName}" failed`, { error: message });
       return {
-        content: [{ type: 'text' as const, text: `Error: ${message}` }],
+        content: [{ type: 'text' as const, text: `Error: An internal error occurred. Please try again.` }],
         isError: true,
       };
     }
