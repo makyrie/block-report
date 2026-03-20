@@ -7,6 +7,14 @@ import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
+import { COMMUNITIES } from '../../src/types/communities.js';
+
+const COMMUNITIES_LOWER = new Set(COMMUNITIES.map(c => c.toLowerCase()));
+const VALID_LANGUAGES = new Set(Object.keys({
+  English: 'en', Spanish: 'es', Chinese: 'zh', Vietnamese: 'vi',
+  Tagalog: 'tl', Korean: 'ko', Arabic: 'ar', 'French/Haitian/Cajun': 'fr',
+  'German/West Germanic': 'de', 'Russian/Polish/Slavic': 'ru',
+}));
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
@@ -156,6 +164,18 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate community against allowlist
+    if (!profile.communityName || !COMMUNITIES_LOWER.has(profile.communityName.toLowerCase())) {
+      res.status(400).json({ error: 'Unknown community name' });
+      return;
+    }
+
+    // Validate language against known languages
+    if (!VALID_LANGUAGES.has(language)) {
+      res.status(400).json({ error: 'Unsupported language' });
+      return;
+    }
+
     // Check for a pre-generated report first
     const preGenerated = await getPreGeneratedReport(profile.communityName, language);
     if (preGenerated) {
@@ -204,6 +224,30 @@ router.post('/generate-block', async (req: Request, res: Response) => {
 
     if (!anchor || !blockMetrics || !language) {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
+      return;
+    }
+
+    // Validate anchor.community against allowlist
+    if (anchor.community && !COMMUNITIES_LOWER.has(anchor.community.toLowerCase())) {
+      res.status(400).json({ error: 'Unknown community name' });
+      return;
+    }
+
+    // Sanitize anchor fields: length limits and control character stripping
+    if (anchor.name && (typeof anchor.name !== 'string' || anchor.name.length > 200)) {
+      res.status(400).json({ error: 'Invalid anchor name' });
+      return;
+    }
+    if (anchor.address && (typeof anchor.address !== 'string' || anchor.address.length > 300)) {
+      res.status(400).json({ error: 'Invalid anchor address' });
+      return;
+    }
+    if (anchor.name) anchor.name = anchor.name.replace(/[\x00-\x1f\x7f]/g, '');
+    if (anchor.address) anchor.address = anchor.address.replace(/[\x00-\x1f\x7f]/g, '');
+
+    // Validate language
+    if (!VALID_LANGUAGES.has(language)) {
+      res.status(400).json({ error: 'Unsupported language' });
       return;
     }
 
