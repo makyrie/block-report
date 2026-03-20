@@ -1,18 +1,12 @@
 import { Router } from 'express';
 import { getDemographicsByTract, getDemographicsByCommunity } from '../services/demographics.js';
-import { normalizeCommunityName } from '../services/communities.js';
+import { parseAndValidateCommunity } from './validate-community.js';
 import { logger } from '../logger.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
   const tract = req.query.tract as string | undefined;
-  const community = req.query.community as string | undefined;
-
-  if (!tract && !community) {
-    res.status(400).json({ error: 'tract or community query parameter is required' });
-    return;
-  }
 
   if (tract) {
     // Validate tract is a 6-digit numeric string
@@ -34,17 +28,14 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  if (!community || community.length > 100) {
-    res.status(400).json({ error: 'community name too long' });
-    return;
-  }
+  const normalized = await parseAndValidateCommunity(req, res);
+  if (!normalized) return;
 
   try {
-    const normalized = normalizeCommunityName(community);
     const topLanguages = await getDemographicsByCommunity(normalized);
     res.json({ topLanguages });
   } catch (err) {
-    logger.error('Failed to fetch demographics', { error: (err as Error).message, community });
+    logger.error('Failed to fetch demographics', { error: (err as Error).message, community: normalized });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
