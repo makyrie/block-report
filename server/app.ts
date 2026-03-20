@@ -19,7 +19,11 @@ app.use(helmet());
 
 const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()).filter(Boolean) || [];
 if (process.env.VERCEL_URL) {
-  allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+  const vercelUrl = process.env.VERCEL_URL;
+  // Only trust VERCEL_URL if it's on the .vercel.app domain (prevents fork preview abuse)
+  if (vercelUrl.endsWith('.vercel.app')) {
+    allowedOrigins.push(`https://${vercelUrl}`);
+  }
 }
 if (allowedOrigins.length === 0) {
   allowedOrigins.push('http://localhost:5173', 'http://localhost:3000');
