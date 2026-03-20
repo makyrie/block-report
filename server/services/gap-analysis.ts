@@ -34,7 +34,9 @@ async function fetchEngagementRates(): Promise<Map<string, number>> {
     select: { comm_plan_name: true },
   });
 
-  // Count requests per community (normalize names to uppercase)
+  // Count requests per community (normalize names to uppercase).
+  // NOTE: server uses .toUpperCase().trim(); client uses lowercase + strip non-alphanum.
+  // The two never compare keys across the boundary — each side is self-consistent.
   const counts = new Map<string, number>();
   for (const r of requests) {
     if (!r.comm_plan_name) continue;
@@ -297,8 +299,8 @@ export async function getTopUnderserved(limit = 10): Promise<
   { community: string; accessGapScore: number; signals: AccessGapResult['signals'] }[]
 > {
   const scores = await getAccessGapScores();
-  // entries() yields descending-score order — maintained by computeAllScores() insertion
   return Array.from(scores.entries())
+    .sort(([, a], [, b]) => b.accessGapScore - a.accessGapScore)
     .slice(0, limit)
     .map(([community, data]) => ({
       community,
