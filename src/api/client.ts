@@ -16,6 +16,11 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** fetchJSON variant that accepts an AbortSignal for cancellation. */
+export function fetchJSONWithSignal<T>(url: string, signal?: AbortSignal): Promise<T> {
+  return fetchJSON(url, signal ? { signal } : undefined);
+}
+
 export function getLibraries(): Promise<CommunityAnchor[]> {
   return fetchJSON(`${BASE}/locations/libraries`);
 }
@@ -32,20 +37,20 @@ export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
   return fetchJSON(`${BASE}/locations/neighborhoods`);
 }
 
-export function getTransitScore(community: string): Promise<NeighborhoodProfile['transit']> {
-  return fetchJSON(`${BASE}/transit?community=${encodeURIComponent(community)}`);
+export function getTransitScore(community: string, signal?: AbortSignal): Promise<NeighborhoodProfile['transit']> {
+  return fetchJSON(`${BASE}/transit?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
-export function get311(community: string): Promise<NeighborhoodProfile['metrics']> {
-  return fetchJSON(`${BASE}/311?community=${encodeURIComponent(community)}`);
+export function get311(community: string, signal?: AbortSignal): Promise<NeighborhoodProfile['metrics']> {
+  return fetchJSON(`${BASE}/311?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
-export function getDemographics(tractOrCommunity: string): Promise<NeighborhoodProfile['demographics']> {
-  return fetchJSON(`${BASE}/demographics?community=${encodeURIComponent(tractOrCommunity)}`);
+export function getDemographics(tractOrCommunity: string, signal?: AbortSignal): Promise<NeighborhoodProfile['demographics']> {
+  return fetchJSON(`${BASE}/demographics?community=${encodeURIComponent(tractOrCommunity)}`, signal ? { signal } : undefined);
 }
 
-export function getAccessGap(community: string): Promise<NonNullable<NeighborhoodProfile['accessGap']>> {
-  return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`);
+export function getAccessGap(community: string, signal?: AbortSignal): Promise<NonNullable<NeighborhoodProfile['accessGap']>> {
+  return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
 export function getAccessGapRanking(limit = 10): Promise<{
@@ -74,8 +79,8 @@ export function generateReport(profile: NeighborhoodProfile, language: string): 
   });
 }
 
-export function get311Trends(community: string): Promise<CommunityTrends> {
-  return fetchJSON(`${BASE}/311/trends?community=${encodeURIComponent(community)}`);
+export function get311Trends(community: string, signal?: AbortSignal): Promise<CommunityTrends> {
+  return fetchJSON(`${BASE}/311/trends?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
 export function getBlockReport(

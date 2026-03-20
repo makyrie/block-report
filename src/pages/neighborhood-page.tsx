@@ -76,6 +76,9 @@ export default function NeighborhoodPage() {
       return;
     }
 
+    const controller = new AbortController();
+    const { signal } = controller;
+
     setMetricsLoading(true);
     setMetrics(null);
     setTopLanguages([]);
@@ -83,31 +86,32 @@ export default function NeighborhoodPage() {
     setAccessGap(null);
     setTrends(null);
 
-    get311(selectedCommunity)
+    get311(selectedCommunity, signal)
       .then(setMetrics)
-      .catch(console.error)
-      .finally(() => setMetricsLoading(false));
+      .catch((err) => { if (!signal.aborted) console.error(err); })
+      .finally(() => { if (!signal.aborted) setMetricsLoading(false); });
 
-    getTransitScore(selectedCommunity)
+    getTransitScore(selectedCommunity, signal)
       .then(setTransitScore)
       .catch(() => { /* transit score may not be available */ });
 
-    getAccessGap(selectedCommunity)
-      .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
+    getAccessGap(selectedCommunity, signal)
+      .then((data) => { if (!signal.aborted && data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
-    get311Trends(selectedCommunity)
+    get311Trends(selectedCommunity, signal)
       .then(setTrends)
       .catch(() => { /* trends may not be available for all communities */ });
 
-    // Try to fetch demographics for language suggestion
-    getDemographics(selectedCommunity)
+    getDemographics(selectedCommunity, signal)
       .then((data) => {
-        if (data?.topLanguages) setTopLanguages(data.topLanguages);
+        if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
       .catch(() => {
         // Demographics may not be available for all communities
       });
+
+    return () => { controller.abort(); };
   }, [selectedCommunity]);
 
   // Clear report when community or language changes
