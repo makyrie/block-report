@@ -75,6 +75,32 @@ export async function saveCachedReport(community: string, language: string, repo
 }
 
 /**
+ * DB-backed rate limit check for report generation.
+ * Counts reports created in the last windowMs. Works across serverless instances.
+ * Returns true if the limit has been exceeded.
+ */
+const GENERATION_RATE_LIMIT = 20; // max reports per window
+const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+export async function isGenerationRateLimited(): Promise<boolean> {
+  if (!isVercel) return false; // Local dev doesn't need this
+
+  try {
+    const since = new Date(Date.now() - GENERATION_RATE_WINDOW_MS);
+    const count = await prisma.reportCache.count({
+      where: { createdAt: { gte: since } },
+    });
+    return count >= GENERATION_RATE_LIMIT;
+  } catch (err) {
+    logger.error('Rate limit check failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    // Fail open — don't block if check fails
+    return false;
+  }
+}
+
+/**
  * Delete stale cache rows older than the TTL.
  * Called periodically to prevent unbounded table growth.
  */

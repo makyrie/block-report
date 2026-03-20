@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
+import { getCachedReport, saveCachedReport, isGenerationRateLimited } from '../services/report-cache.js';
 import { isVercel } from '../env.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
@@ -187,6 +187,12 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
+    // DB-backed rate limit check (works across serverless instances)
+    if (await isGenerationRateLimited()) {
+      res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
+      return;
+    }
+
     // Fall back to on-demand generation
     logger.info('No pre-generated report found, generating on-demand', {
       community: profile.communityName,
@@ -266,6 +272,12 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       } catch {
         // No cached version — generate on-demand
       }
+    }
+
+    // DB-backed rate limit check (works across serverless instances)
+    if (await isGenerationRateLimited()) {
+      res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
+      return;
     }
 
     logger.info('Generating block report on-demand', {
