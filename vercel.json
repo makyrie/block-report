@@ -2,7 +2,7 @@
   "buildCommand": "pnpm db:generate && pnpm build",
   "outputDirectory": "dist",
   "functions": {
-    "api/**": {
+    "api/index.ts": {
       "maxDuration": 30,
       "memory": 1024
     }
