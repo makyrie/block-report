@@ -74,7 +74,7 @@ const cleanupInterval = setInterval(() => {
       transports.delete(sid);
     }
   }
-}, 60 * 1000);
+}, 60 * 1000).unref();
 
 const SESSION_ID_RE = /^[\w-]{1,128}$/;
 

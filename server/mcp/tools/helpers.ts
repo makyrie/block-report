@@ -20,7 +20,7 @@ export function withCommunityValidation(
       return {
         content: [{
           type: 'text' as const,
-          text: `No data found for community: "${community_name}". Use list_communities to see valid names. Did you mean one of: ${names.slice(0, 10).join(', ')}?`,
+          text: `No data found for the specified community. Use list_communities to see valid names. Did you mean one of: ${names.slice(0, 10).join(', ')}?`,
         }],
         isError: true,
       };
@@ -43,7 +43,7 @@ export async function validateOptionalCommunity(
       error: {
         content: [{
           type: 'text' as const,
-          text: `No data found for community: "${communityName}". Use list_communities to see valid names. Did you mean one of: ${names.slice(0, 10).join(', ')}?`,
+          text: `No data found for the specified community. Use list_communities to see valid names. Did you mean one of: ${names.slice(0, 10).join(', ')}?`,
         }],
         isError: true,
       },

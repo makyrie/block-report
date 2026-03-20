@@ -18,7 +18,7 @@ export function registerGapAnalysisTools(server: McpServer) {
           text: JSON.stringify({
             ranking,
             methodology: 'Composite score (0-100) from three signals: low 311 engagement (35%), low transit access (30%), high non-English speaking population (35%). Higher score = greater access gap.',
-          }, null, 2),
+          }),
         }],
       };
     }),

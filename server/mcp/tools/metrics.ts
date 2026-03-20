@@ -8,7 +8,7 @@ export function registerMetricsTools(server: McpServer) {
     'get_311_metrics',
     'Get 311 service request metrics for a San Diego community, including total requests, resolution rate, top issues, and good news highlights. Examples: "MIRA MESA", "BARRIO LOGAN", "OCEAN BEACH".',
     {
-      community_name: z.string().describe('Community plan area name (case-insensitive). Use list_communities to see valid names.'),
+      community_name: z.string().max(100).describe('Community plan area name (case-insensitive). Use list_communities to see valid names.'),
     },
     withCommunityValidation('get_311_metrics', async (normalized) => {
       const data = await getProcessedCommunityMetrics(normalized);

@@ -20,7 +20,7 @@ export function registerBlockTools(server: McpServer) {
           text: JSON.stringify({
             location: { lat, lng },
             ...data,
-          }, null, 2),
+          }),
         }],
       };
     }),

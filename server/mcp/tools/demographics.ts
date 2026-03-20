@@ -8,7 +8,7 @@ export function registerDemographicsTools(server: McpServer) {
     'get_demographics',
     'Get Census language demographics for a San Diego community. Returns languages spoken at home with percentages, sorted by prevalence. Data from ACS 5-year estimates.',
     {
-      community_name: z.string().describe('Community plan area name (case-insensitive). Use list_communities to see valid names.'),
+      community_name: z.string().max(100).describe('Community plan area name (case-insensitive). Use list_communities to see valid names.'),
     },
     withCommunityValidation('get_demographics', async (normalized) => {
       const topLanguages = await getDemographicsByCommunity(normalized);

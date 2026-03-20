@@ -8,7 +8,7 @@ export function registerTransitTools(server: McpServer) {
     'get_transit_score',
     'Get transit accessibility score (0-100) for a San Diego community. Includes stop count, transit agencies, estimated travel time to City Hall, and city-wide average for comparison.',
     {
-      community_name: z.string().describe('Community plan area name (case-insensitive). Use list_communities to see valid names.'),
+      community_name: z.string().max(100).describe('Community plan area name (case-insensitive). Use list_communities to see valid names.'),
     },
     withCommunityValidation('get_transit_score', async (normalized) => {
       const result = await getTransitScore(normalized);
@@ -33,7 +33,7 @@ export function registerTransitTools(server: McpServer) {
             agencyCount: result.agencyCount,
             agencies: result.agencies,
             travelTimeToCityHall: formatTravelTime(result.travelTimeToCityHall),
-          }, null, 2),
+          }),
         }],
       };
     }),

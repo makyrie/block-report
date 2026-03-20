@@ -136,12 +136,12 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
     .map((d) => d.nonEnglishPct)
     .filter((v): v is number => v !== null);
 
-  const engMin = Math.min(...engagementValues);
-  const engMax = Math.max(...engagementValues);
-  const transMin = Math.min(...transitValues);
-  const transMax = Math.max(...transitValues);
-  const nelMin = Math.min(...nonEnglishValues);
-  const nelMax = Math.max(...nonEnglishValues);
+  const engMin = engagementValues.reduce((a, b) => Math.min(a, b), Infinity);
+  const engMax = engagementValues.reduce((a, b) => Math.max(a, b), -Infinity);
+  const transMin = transitValues.reduce((a, b) => Math.min(a, b), Infinity);
+  const transMax = transitValues.reduce((a, b) => Math.max(a, b), -Infinity);
+  const nelMin = nonEnglishValues.reduce((a, b) => Math.min(a, b), Infinity);
+  const nelMax = nonEnglishValues.reduce((a, b) => Math.max(a, b), -Infinity);
 
   // Compute composite scores
   // Weights: low engagement 0.35, low transit 0.30, high non-English 0.35
