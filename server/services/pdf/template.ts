@@ -1,9 +1,5 @@
 /**
- * PDF generation service using Puppeteer + headless Chromium.
- *
- * Builds a self-contained HTML string that replicates the FlyerLayout component
- * (src/components/flyer/flyer-layout.tsx) with plain CSS — no Tailwind JIT needed.
- * Puppeteer renders the HTML and captures it as a letter-size PDF.
+ * HTML template builder for the PDF flyer.
  *
  * ┌─────────────────────────────────────────────────────────────────────┐
  * │ SYNC WARNING: This HTML template mirrors FlyerLayout               │
@@ -14,204 +10,10 @@
  * └─────────────────────────────────────────────────────────────────────┘
  */
 
-import { existsSync } from 'fs';
-import puppeteer from 'puppeteer-core';
 import QRCode from 'qrcode';
-import type { CommunityReport, NeighborhoodProfile } from '../../src/types/index.js';
-import { logger } from '../logger.js';
-import { truncateSentences } from '../../src/utils/text.js';
-
-// ─── Google Fonts CSS cache ───
-// Fetched once and inlined into the HTML to avoid CDN latency on each PDF request.
-// The woff2 font files are still loaded by Puppeteer via request interception.
-const GOOGLE_FONTS_URL = 'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;900&family=Noto+Sans+SC:wght@400;700;900&family=Noto+Sans+Arabic:wght@400;700;900&family=Noto+Sans+Vietnamese:wght@400;700&display=swap';
-const FONT_CSS_TTL = 24 * 60 * 60 * 1000; // 24 hours
-let cachedFontCss: string | null = null;
-let fontCssCachedAt = 0;
-
-async function getGoogleFontsCss(): Promise<string> {
-  if (cachedFontCss && Date.now() - fontCssCachedAt < FONT_CSS_TTL) return cachedFontCss;
-  try {
-    const res = await fetch(GOOGLE_FONTS_URL, {
-      headers: {
-        // Request woff2 format (Chromium user-agent gets the best format)
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
-    const contentType = res.headers.get('content-type') || '';
-    if (res.ok && contentType.includes('text/css')) {
-      // Strip any HTML tags to prevent injection via compromised CDN
-      cachedFontCss = (await res.text()).replace(/<[^>]*>/g, '');
-      fontCssCachedAt = Date.now();
-      return cachedFontCss;
-    }
-  } catch {
-    // Fall through to empty string — fonts will use system fallback
-  }
-  return cachedFontCss ?? '';
-}
-
-let chromiumModule: typeof import('@sparticuz/chromium') | null = null;
-
-async function getChromium() {
-  if (!chromiumModule) {
-    chromiumModule = await import('@sparticuz/chromium');
-  }
-  return chromiumModule.default;
-}
-
-// Concurrency control — limit to 1 Chromium instance (~200-300MB each).
-// Vercel functions have 1024MB; a single instance is the safe limit.
-const MAX_CONCURRENT_PDF = 1;
-const MAX_QUEUE_DEPTH = 3;
-let activePdfJobs = 0;
-const pdfQueue: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
-
-async function acquirePdfSlot(): Promise<void> {
-  if (activePdfJobs < MAX_CONCURRENT_PDF) {
-    activePdfJobs++;
-    return;
-  }
-  if (pdfQueue.length >= MAX_QUEUE_DEPTH) {
-    throw new Error('PDF generation queue full — try again later');
-  }
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      const idx = pdfQueue.indexOf(entry);
-      if (idx !== -1) pdfQueue.splice(idx, 1);
-      reject(new Error('PDF generation queue timeout — too many concurrent requests'));
-    }, 30_000);
-    const entry = {
-      resolve: () => { clearTimeout(timeout); activePdfJobs++; resolve(); },
-      reject,
-    };
-    pdfQueue.push(entry);
-  });
-}
-
-function releasePdfSlot(): void {
-  activePdfJobs--;
-  const next = pdfQueue.shift();
-  if (next) next.resolve();
-}
-
-export interface PdfOptions {
-  report: CommunityReport;
-  metrics?: NeighborhoodProfile['metrics'] | null;
-  topLanguages?: { language: string; percentage: number }[];
-  neighborhoodSlug: string;
-  baseUrl: string;
-}
-
-/**
- * Generate a PDF buffer from community report data.
- */
-export async function generatePdf(options: PdfOptions): Promise<Buffer> {
-  logger.info('PDF generation requested', { neighborhood: options.neighborhoodSlug, queueDepth: pdfQueue.length });
-  await acquirePdfSlot();
-  const start = Date.now();
-  try {
-    const pdf = await generatePdfInternal(options);
-    logger.info('PDF generation complete', { neighborhood: options.neighborhoodSlug, durationMs: Date.now() - start, sizeBytes: pdf.length });
-    return pdf;
-  } catch (err) {
-    logger.error('PDF generation failed', { neighborhood: options.neighborhoodSlug, durationMs: Date.now() - start, error: err instanceof Error ? err.message : String(err) });
-    throw err;
-  } finally {
-    releasePdfSlot();
-  }
-}
-
-// ─── Browser singleton — reuse across warm function invocations ───
-let browserInstance: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
-
-async function getBrowser(): Promise<Awaited<ReturnType<typeof puppeteer.launch>>> {
-  if (browserInstance && browserInstance.connected) {
-    return browserInstance;
-  }
-
-  const isVercel = !!process.env.VERCEL;
-  let executablePath: string;
-  let args: string[];
-
-  if (isVercel) {
-    const chromium = await getChromium();
-    executablePath = await chromium.executablePath();
-    args = chromium.args;
-  } else {
-    executablePath = await findLocalChromium();
-    args = [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-    ];
-  }
-
-  browserInstance = await puppeteer.launch({
-    args,
-    executablePath,
-    headless: true,
-  });
-
-  browserInstance.on('disconnected', () => {
-    browserInstance = null;
-  });
-
-  return browserInstance;
-}
-
-async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
-  const html = await buildFlyerHtml(options);
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-
-  try {
-    // Block all external requests — the HTML is self-contained except for fonts
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const url = req.url();
-      if (url.startsWith('data:') || url.startsWith('about:') || url.startsWith('https://fonts.googleapis.com/') || url.startsWith('https://fonts.gstatic.com/')) {
-        req.continue();
-      } else {
-        req.abort();
-      }
-    });
-
-    await page.setContent(html, { waitUntil: 'networkidle2', timeout: 15000 });
-    const pdf = await page.pdf({
-      format: 'Letter',
-      margin: { top: '0.5in', right: '0.6in', bottom: '0.5in', left: '0.6in' },
-      printBackground: true,
-    });
-    return Buffer.from(pdf);
-  } finally {
-    await page.close();
-  }
-}
-
-/** Find a locally installed Chromium or Chrome binary. */
-async function findLocalChromium(): Promise<string> {
-  if (process.env.CHROME_PATH) {
-    return process.env.CHROME_PATH;
-  }
-
-  const candidates = [
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ];
-
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
-
-  throw new Error(
-    'No local Chromium/Chrome found. Install chromium-browser or set CHROME_PATH env var.',
-  );
-}
+import type { PdfOptions } from './types.js';
+import { getGoogleFontsCss } from './fonts.js';
+import { truncateSentences } from '../../../src/utils/text.js';
 
 // ─── SVG Icons (copied from src/components/flyer/flyer-icons.tsx) ───
 
@@ -227,7 +29,7 @@ const ICON_GLOBE = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" 
 
 // ─── Helpers ───
 
-function escapeHtml(value: unknown): string {
+export function escapeHtml(value: unknown): string {
   const str = typeof value === 'string' ? value : String(value ?? '');
   return str
     .replace(/&/g, '&amp;')
@@ -239,7 +41,7 @@ function escapeHtml(value: unknown): string {
 
 // ─── HTML Template Builder ───
 
-async function buildFlyerHtml(options: PdfOptions): Promise<string> {
+export async function buildFlyerHtml(options: PdfOptions): Promise<string> {
   const { report, metrics, topLanguages, neighborhoodSlug, baseUrl } = options;
   const fontCss = await getGoogleFontsCss();
 

@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport } from '../services/claude.js';
-import { generatePdf } from '../services/pdf.js';
+import { generatePdf } from '../services/pdf/index.js';
 import { logger } from '../logger.js';
 import type { CommunityReport, NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
