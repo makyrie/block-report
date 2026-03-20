@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { logger } from './logger.js';
+import { prisma } from './services/db.js';
 import locationsRouter from './routes/locations.js';
 import metricsRouter from './routes/metrics.js';
 import demographicsRouter from './routes/demographics.js';
@@ -14,8 +15,17 @@ import blockRouter from './routes/block.js';
 const app = express();
 
 app.use(helmet());
+
+const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [];
+if (process.env.VERCEL_URL) {
+  allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+if (allowedOrigins.length === 0) {
+  allowedOrigins.push('http://localhost:5173', 'http://localhost:3000');
+}
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+  origin: allowedOrigins,
   methods: ['GET', 'POST'],
 }));
 
@@ -41,6 +51,15 @@ app.use((req, res, next) => {
     });
   });
   next();
+});
+
+app.get('/api/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', db: 'connected' });
+  } catch {
+    res.status(503).json({ status: 'error', db: 'disconnected' });
+  }
 });
 
 app.use('/api/locations', locationsRouter);
