@@ -51,12 +51,7 @@ export async function getDemographicsByTract(tract: string): Promise<LanguageBre
 export async function getDemographicsByCommunity(communityName: string): Promise<LanguageBreakdown[]> {
   const key = normalizeCommunityName(communityName);
   const rows = await prisma.censusLanguage.findMany({
-    where: {
-      community: {
-        equals: key,
-        mode: 'insensitive',
-      },
-    },
+    where: { community: key },
   });
 
   if (rows.length === 0) return [];
