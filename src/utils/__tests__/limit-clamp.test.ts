@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-
-/** Replicate the limit clamping logic from gap-analysis ranking route. */
-function clampLimit(raw: unknown): number {
-  return Math.max(1, Math.min(Number(raw) || 10, 100));
-}
+import { clampLimit } from '../../../server/clamp-limit';
 
 describe('limit clamping (gap-analysis ranking)', () => {
   it('defaults to 10 for undefined', () => {

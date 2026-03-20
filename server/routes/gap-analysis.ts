@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getAccessGapScore, getTopUnderserved } from '../services/gap-analysis.js';
 import { logger } from '../logger.js';
+import { clampLimit } from '../clamp-limit.js';
 
 const router = Router();
 
@@ -40,7 +41,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/access-gap/ranking?limit={n}
 router.get('/ranking', async (req, res) => {
-  const limit = Math.max(1, Math.min(Number(req.query.limit) || 10, 100));
+  const limit = clampLimit(req.query.limit);
 
   try {
     const ranking = await getTopUnderserved(limit);
