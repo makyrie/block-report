@@ -8,7 +8,19 @@ const router = Router();
 
 // In-memory cache for trends data (24h TTL, keyed by community name)
 const TRENDS_TTL = 24 * 60 * 60 * 1000;
+const TRENDS_MAX_SIZE = 100;
+const TRENDS_SWEEP_INTERVAL = 60 * 60 * 1000; // sweep every hour
 const trendsCache = new Map<string, { data: CommunityTrends; cachedAt: number }>();
+
+// Periodic sweep to evict stale entries proactively
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of trendsCache) {
+    if (now - entry.cachedAt >= TRENDS_TTL) {
+      trendsCache.delete(key);
+    }
+  }
+}, TRENDS_SWEEP_INTERVAL).unref();
 
 router.get('/', async (req, res) => {
   const cleaned = validateCommunity(req, res);
@@ -119,6 +131,11 @@ router.get('/trends', async (req, res) => {
       return;
     }
     const data = row.get_community_trends;
+    // Evict oldest entry if at max size
+    if (trendsCache.size >= TRENDS_MAX_SIZE) {
+      const oldestKey = trendsCache.keys().next().value;
+      if (oldestKey !== undefined) trendsCache.delete(oldestKey);
+    }
     trendsCache.set(cacheKey, { data, cachedAt: Date.now() });
     res.json(data);
   } catch (err) {
