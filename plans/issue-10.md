@@ -1,7 +1,7 @@
 ---
 title: "feat: Deploy Block Report to Vercel"
 type: feat
-status: active
+status: completed
 date: 2026-03-20
 ---
 
@@ -248,16 +248,16 @@ This uses the full Express server (not serverless), so file-based caching works 
 
 - [ ] Environment variables set in Vercel dashboard (not in code)
 - [ ] No API keys exposed to the browser
-- [ ] CORS configured for production domain and preview deployments
-- [ ] Logger uses console-only on Vercel (no file writes)
+- [x] CORS configured for production domain and preview deployments
+- [x] Logger uses console-only on Vercel (no file writes)
 
 ### Deployment Verification
 
-- [ ] `vercel.json` has correct build command, output directory, rewrites, and function config
-- [ ] `api/index.ts` entry point correctly exports Express app
+- [x] `vercel.json` has correct build command, output directory, rewrites, and function config
+- [x] `api/index.ts` entry point correctly exports Express app
 - [ ] Neon DB connection works from Vercel serverless function
 - [ ] `get_community_metrics` stored function exists in production database
-- [ ] Preview deployments work (CORS allows dynamic Vercel URLs)
+- [x] Preview deployments work (CORS allows dynamic Vercel URLs)
 
 ## Success Metrics
 
