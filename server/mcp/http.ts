@@ -13,6 +13,11 @@ if (!AUTH_TOKEN && process.env.MCP_AUTH_DISABLED !== 'true') {
   process.exit(1);
 }
 
+if (process.env.MCP_AUTH_DISABLED === 'true' && process.env.NODE_ENV === 'production') {
+  console.error('MCP HTTP transport: MCP_AUTH_DISABLED must not be true in production.');
+  process.exit(1);
+}
+
 const app = express();
 app.use(express.json({ limit: '16kb' }));
 

@@ -34,13 +34,13 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  if (community!.length > 100) {
+  if (!community || community.length > 100) {
     res.status(400).json({ error: 'community name too long' });
     return;
   }
 
   try {
-    const normalized = normalizeCommunityName(community!);
+    const normalized = normalizeCommunityName(community);
     const topLanguages = await getDemographicsByCommunity(normalized);
     res.json({ topLanguages });
   } catch (err) {
