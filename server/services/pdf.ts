@@ -21,6 +21,36 @@ async function getChromium() {
   return chromiumModule.default;
 }
 
+// Concurrency control — limit simultaneous Chromium instances (~200-300MB each)
+const MAX_CONCURRENT_PDF = 2;
+let activePdfJobs = 0;
+const pdfQueue: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
+
+async function acquirePdfSlot(): Promise<void> {
+  if (activePdfJobs < MAX_CONCURRENT_PDF) {
+    activePdfJobs++;
+    return;
+  }
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      const idx = pdfQueue.indexOf(entry);
+      if (idx !== -1) pdfQueue.splice(idx, 1);
+      reject(new Error('PDF generation queue timeout — too many concurrent requests'));
+    }, 30_000);
+    const entry = {
+      resolve: () => { clearTimeout(timeout); activePdfJobs++; resolve(); },
+      reject,
+    };
+    pdfQueue.push(entry);
+  });
+}
+
+function releasePdfSlot(): void {
+  activePdfJobs--;
+  const next = pdfQueue.shift();
+  if (next) next.resolve();
+}
+
 export interface PdfOptions {
   report: CommunityReport;
   metrics?: NeighborhoodProfile['metrics'] | null;
@@ -33,6 +63,15 @@ export interface PdfOptions {
  * Generate a PDF buffer from community report data.
  */
 export async function generatePdf(options: PdfOptions): Promise<Buffer> {
+  await acquirePdfSlot();
+  try {
+    return await generatePdfInternal(options);
+  } finally {
+    releasePdfSlot();
+  }
+}
+
+async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
   const html = await buildFlyerHtml(options);
 
   const isVercel = !!process.env.VERCEL;
@@ -62,6 +101,18 @@ export async function generatePdf(options: PdfOptions): Promise<Buffer> {
 
   try {
     const page = await browser.newPage();
+
+    // Block all external requests — the HTML is self-contained except for fonts
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const url = req.url();
+      if (url.startsWith('data:') || url.startsWith('about:') || url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
+        req.continue();
+      } else {
+        req.abort();
+      }
+    });
+
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
     const pdf = await page.pdf({
       format: 'Letter',
