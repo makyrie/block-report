@@ -34,7 +34,6 @@ export async function getBlockMetrics(lat: number, lng: number, radius: number =
       lat: { gte: lat - latDelta, lte: lat + latDelta },
       lng: { gte: lng - lngDelta, lte: lng + lngDelta },
     },
-    orderBy: { date_requested: 'desc' },
     take: ROW_LIMIT,
   });
 
