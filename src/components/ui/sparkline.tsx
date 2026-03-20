@@ -3,14 +3,13 @@ interface SparklineProps {
   width?: number;
   height?: number;
   color?: string;
-  className?: string;
 }
 
-export default function Sparkline({ data, width = 80, height = 24, color = '#3b82f6', className }: SparklineProps) {
+export default function Sparkline({ data, width = 80, height = 24, color = '#3b82f6' }: SparklineProps) {
   if (data.length < 2) return null;
 
-  const max = Math.max(...data);
-  const min = Math.min(...data);
+  const max = data.reduce((a, b) => Math.max(a, b), data[0]);
+  const min = data.reduce((a, b) => Math.min(a, b), data[0]);
   const range = max - min || 1;
   const padding = 2;
 
@@ -21,7 +20,7 @@ export default function Sparkline({ data, width = 80, height = 24, color = '#3b8
   }).join(' ');
 
   return (
-    <svg width={width} height={height} className={className} aria-hidden="true">
+    <svg width={width} height={height} aria-hidden="true">
       <polyline
         points={points}
         fill="none"

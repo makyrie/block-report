@@ -1,7 +1,8 @@
+import type { TrendSummary } from '../../types';
 import Sparkline from './sparkline';
 
 interface TrendIndicatorProps {
-  direction: 'improving' | 'declining' | 'stable';
+  direction: TrendSummary['direction'];
   label: string;
   sparklineData?: number[];
 }
