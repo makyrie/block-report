@@ -263,7 +263,11 @@ router.post('/pdf', async (req: Request, res: Response) => {
       return;
     }
 
-    const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    if (!process.env.APP_URL) {
+      res.status(500).json({ error: 'APP_URL environment variable is not configured' });
+      return;
+    }
+    const baseUrl = process.env.APP_URL;
     const pdf = await generatePdf({ report, metrics, topLanguages, neighborhoodSlug, baseUrl });
 
     const langCode = LANGUAGE_CODES[report.language] || 'en';
