@@ -6,6 +6,10 @@ describe('scoreToColor', () => {
     expect(scoreToColor(null)).toBe('#d1d5db');
   });
 
+  it('returns gray for undefined', () => {
+    expect(scoreToColor(undefined)).toBe('#d1d5db');
+  });
+
   it('returns green for scores below 20', () => {
     expect(scoreToColor(0)).toBe('#22c55e');
     expect(scoreToColor(19)).toBe('#22c55e');
