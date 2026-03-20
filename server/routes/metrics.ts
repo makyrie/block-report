@@ -2,12 +2,26 @@ import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import type { CommunityTrends } from '../../src/types/index.js';
+import { COMMUNITIES } from '../../src/types/communities.js';
+
+const COMMUNITIES_LOWER = new Set(COMMUNITIES.map(c => c.toLowerCase()));
 
 const router = Router();
 
-// In-memory cache for trends data (24h TTL, keyed by community name)
+// In-memory cache for trends data (24h TTL, keyed by community name, capped at 200 entries)
 const TRENDS_TTL = 24 * 60 * 60 * 1000;
+const TRENDS_CACHE_MAX = 200;
 const trendsCache = new Map<string, { data: CommunityTrends; cachedAt: number }>();
+
+// Evict expired entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of trendsCache) {
+    if (now - entry.cachedAt >= TRENDS_TTL) {
+      trendsCache.delete(key);
+    }
+  }
+}, 10 * 60 * 1000).unref();
 
 router.get('/', async (req, res) => {
   const community = req.query.community as string | undefined;
@@ -115,6 +129,11 @@ router.get('/trends', async (req, res) => {
     return;
   }
 
+  if (!COMMUNITIES_LOWER.has(cleaned.toLowerCase())) {
+    res.status(400).json({ error: 'Unknown community name' });
+    return;
+  }
+
   try {
     const cacheKey = cleaned.toLowerCase();
     const cached = trendsCache.get(cacheKey);
@@ -127,10 +146,14 @@ router.get('/trends', async (req, res) => {
       SELECT get_community_trends(${cleaned})
     `;
     const data = result[0].get_community_trends;
+    if (trendsCache.size >= TRENDS_CACHE_MAX) {
+      const oldest = trendsCache.keys().next().value!;
+      trendsCache.delete(oldest);
+    }
     trendsCache.set(cacheKey, { data, cachedAt: Date.now() });
     res.json(data);
   } catch (err) {
-    logger.error('Failed to fetch 311 trends', { error: (err as Error).message, community });
+    logger.error('Failed to fetch 311 trends', { error: (err as Error).message, community: cleaned });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
