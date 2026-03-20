@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm db:generate && pnpm build",
+  "buildCommand": "pnpm db:migrate && pnpm db:generate && pnpm build",
   "outputDirectory": "dist",
   "functions": {
     "api/index.ts": {
