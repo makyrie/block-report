@@ -115,6 +115,26 @@ export default function NeighborhoodPage() {
       });
   }, [selectedCommunity]);
 
+  const buildProfile = useCallback((): NeighborhoodProfile => {
+    const anchor = selectedAnchor ?? {
+      id: '',
+      name: selectedCommunity!,
+      type: 'library' as const,
+      lat: 0,
+      lng: 0,
+      address: '',
+      community: selectedCommunity!,
+    };
+    return {
+      communityName: selectedCommunity!,
+      anchor,
+      metrics: metrics!,
+      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
+      demographics: { topLanguages },
+      accessGap: accessGap ?? null,
+    };
+  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
+
   // Clear report when community or language changes
   const generatingRef = useRef(false);
   useEffect(() => {
@@ -156,24 +176,7 @@ export default function NeighborhoodPage() {
 
       generatingRef.current = true;
 
-      const anchor = selectedAnchor ?? {
-        id: '',
-        name: selectedCommunity,
-        type: 'library' as const,
-        lat: 0,
-        lng: 0,
-        address: '',
-        community: selectedCommunity,
-      };
-
-      const profile: NeighborhoodProfile = {
-        communityName: selectedCommunity,
-        anchor,
-        metrics,
-        transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-        demographics: { topLanguages },
-        accessGap: accessGap ?? null,
-      };
+      const profile = buildProfile();
 
       try {
         const result = await generateReport(profile, reportLang);
@@ -249,24 +252,7 @@ export default function NeighborhoodPage() {
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
-    const anchor = selectedAnchor ?? {
-      id: '',
-      name: selectedCommunity,
-      type: 'library' as const,
-      lat: 0,
-      lng: 0,
-      address: '',
-      community: selectedCommunity,
-    };
-
-    const profile: NeighborhoodProfile = {
-      communityName: selectedCommunity,
-      anchor,
-      metrics,
-      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-      demographics: { topLanguages },
-      accessGap: accessGap ?? null,
-    };
+    const profile = buildProfile();
 
     setReportLoading(true);
     setReportError(null);
@@ -279,7 +265,7 @@ export default function NeighborhoodPage() {
     } finally {
       setReportLoading(false);
     }
-  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
+  }, [selectedCommunity, metrics, buildProfile]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">
