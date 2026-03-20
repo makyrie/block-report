@@ -1,5 +1,6 @@
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
+import { getTransitScores } from './transit.js';
 
 export interface AccessGapResult {
   accessGapScore: number;
@@ -28,18 +29,19 @@ function normalize(value: number, min: number, max: number): number {
   return Math.max(0, Math.min(1, (value - min) / (max - min)));
 }
 
-// Fetch 311 engagement rates for all communities from the requests_311 table
+// Fetch 311 engagement rates for all communities using database-level aggregation
 async function fetchEngagementRates(): Promise<Map<string, number>> {
-  const requests = await prisma.request311.findMany({
-    select: { comm_plan_name: true },
+  const grouped = await prisma.request311.groupBy({
+    by: ['comm_plan_name'],
+    _count: { _all: true },
+    where: { comm_plan_name: { not: null } },
   });
 
-  // Count requests per community (normalize names to uppercase)
   const counts = new Map<string, number>();
-  for (const r of requests) {
-    if (!r.comm_plan_name) continue;
-    const key = r.comm_plan_name.toUpperCase().trim();
-    counts.set(key, (counts.get(key) || 0) + 1);
+  for (const row of grouped) {
+    if (!row.comm_plan_name) continue;
+    const key = row.comm_plan_name.toUpperCase().trim();
+    counts.set(key, (counts.get(key) || 0) + row._count._all);
   }
 
   // Fetch population per community from census data
@@ -65,46 +67,14 @@ async function fetchEngagementRates(): Promise<Map<string, number>> {
   return rates;
 }
 
-// Fetch transit scores for all communities
+// Reuse cached transit scores from the transit service (avoids duplicating the O(stops×communities) computation)
 async function fetchTransitScores(): Promise<Map<string, number>> {
-  const stops = await prisma.transitStop.findMany({
-    select: { lat: true, lng: true, stop_agncy: true },
-  });
-
-  const boundaryRes = await fetch(
-    'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson'
-  );
-  if (!boundaryRes.ok) throw new Error(`Failed to fetch boundaries: ${boundaryRes.status}`);
-  const geojson = await boundaryRes.json();
-
-  const scores = new Map<string, number>();
-
-  for (const feature of geojson.features) {
-    const name: string = feature.properties?.cpname || feature.properties?.name || '';
-    if (!name) continue;
-
-    let stopCount = 0;
-    const agencies = new Set<string>();
-
-    for (const stop of stops) {
-      if (stop.lat == null || stop.lng == null) continue;
-      if (pointInFeature(stop.lat, stop.lng, feature.geometry)) {
-        stopCount++;
-        if (stop.stop_agncy) agencies.add(stop.stop_agncy);
-      }
-    }
-
-    const rawScore = stopCount * 0.4 + agencies.size * 10 * 0.6;
-    scores.set(name.toUpperCase(), rawScore);
+  const allScores = await getTransitScores();
+  const result = new Map<string, number>();
+  for (const [community, score] of allScores) {
+    result.set(community, score.transitScore);
   }
-
-  // Normalize to 0-100
-  const maxRaw = Math.max(...Array.from(scores.values()), 1);
-  for (const [key, raw] of scores) {
-    scores.set(key, Math.round((raw / maxRaw) * 100));
-  }
-
-  return scores;
+  return result;
 }
 
 // Fetch non-English speaking percentage per community
@@ -131,35 +101,6 @@ async function fetchNonEnglishPct(): Promise<Map<string, number>> {
   }
 
   return pcts;
-}
-
-// Point-in-polygon (ray casting) — same algorithm as transit.ts
-function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-function pointInFeature(
-  lat: number,
-  lng: number,
-  geometry: { type: string; coordinates: number[][][] | number[][][][] },
-): boolean {
-  if (geometry.type === 'Polygon') {
-    return pointInPolygon(lat, lng, (geometry.coordinates as number[][][])[0]);
-  }
-  if (geometry.type === 'MultiPolygon') {
-    return (geometry.coordinates as number[][][][]).some((poly) =>
-      pointInPolygon(lat, lng, poly[0]),
-    );
-  }
-  return false;
 }
 
 async function computeAllScores(): Promise<Map<string, AccessGapResult>> {

@@ -1,20 +1,11 @@
 import { prisma } from './db.js';
 import { getNeighborhoodsGeoJSON } from './communities.js';
+import { haversineDistanceMiles, pointInFeature } from './geo.js';
 
 const CITY_HALL = { lat: 32.7157, lng: -117.1611 };
 const WALKING_SPEED_MPH = 3;
 const BUS_SPEED_MPH = 12;
 const ROUTE_INDIRECTNESS = 1.4;
-
-function haversineDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 3958.8;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 function computeCentroid(geometry: { type: string; coordinates: number[][][] | number[][][][] }): { lat: number; lng: number } | null {
   let ring: number[][] = [];
@@ -37,28 +28,6 @@ function computeCentroid(geometry: { type: string; coordinates: number[][][] | n
     lngSum += lng;
   }
   return { lat: latSum / ring.length, lng: lngSum / ring.length };
-}
-
-function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-function pointInFeature(lat: number, lng: number, geometry: { type: string; coordinates: number[][][] | number[][][][] }): boolean {
-  if (geometry.type === 'Polygon') {
-    return pointInPolygon(lat, lng, (geometry.coordinates as number[][][])[0]);
-  }
-  if (geometry.type === 'MultiPolygon') {
-    return (geometry.coordinates as number[][][][]).some((poly) => pointInPolygon(lat, lng, poly[0]));
-  }
-  return false;
 }
 
 export interface TransitScore {
