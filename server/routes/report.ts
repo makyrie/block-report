@@ -178,16 +178,17 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // Check DB/file cache (works on both local and Vercel)
-    const cached = await getCachedReport(profile.communityName, language);
+    // Run cache lookup and rate limit check in parallel to save a DB round trip
+    const [cached, rateLimited] = await Promise.all([
+      getCachedReport(profile.communityName, language),
+      isGenerationRateLimited(),
+    ]);
     if (cached) {
       logger.info('Serving cached report', { community: profile.communityName, language });
       res.json(cached);
       return;
     }
-
-    // DB-backed rate limit check (works across serverless instances)
-    if (await isGenerationRateLimited()) {
+    if (rateLimited) {
       res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
@@ -275,17 +276,18 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       }
     }
 
-    // Check DB/file cache for previously generated block reports
+    // Run cache lookup and rate limit check in parallel to save a DB round trip
     const anchorCacheId = anchor.id || anchor.name;
-    const cached = await getCachedBlockReport(anchorCacheId, language);
+    const [cached, rateLimited] = await Promise.all([
+      getCachedBlockReport(anchorCacheId, language),
+      isGenerationRateLimited(),
+    ]);
     if (cached) {
       logger.info('Serving cached block report', { anchor: anchor.name, language });
       res.json(cached);
       return;
     }
-
-    // DB-backed rate limit check (works across serverless instances)
-    if (await isGenerationRateLimited()) {
+    if (rateLimited) {
       res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
