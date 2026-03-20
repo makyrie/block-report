@@ -8,6 +8,7 @@ import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
 
+const isVercel = !!process.env.VERCEL;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
 const BLOCK_REPORTS_DIR = path.join(REPORTS_DIR, 'blocks');
@@ -55,6 +56,8 @@ async function getPreGeneratedReport(
   communityName: string,
   language: string,
 ): Promise<StoredReport | null> {
+  if (isVercel) return null; // No persistent filesystem on serverless
+
   const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
   const filename = `${sanitizeFilename(communityName)}_${langCode}.json`;
   const filePath = path.join(REPORTS_DIR, filename);
@@ -82,6 +85,11 @@ router.get('/', async (req: Request, res: Response) => {
 
       if (isNaN(lat) || isNaN(lng)) {
         res.status(400).json({ error: 'lat and lng must be valid numbers' });
+        return;
+      }
+
+      if (isVercel) {
+        res.status(404).json({ error: 'No pre-generated block report found for this location' });
         return;
       }
 
@@ -207,27 +215,29 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       return;
     }
 
-    // Check for a pre-generated block report first
-    const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
-    const filename = `${sanitizeFilename(anchor.id || anchor.name)}_${langCode}.json`;
-    const filePath = path.join(BLOCK_REPORTS_DIR, filename);
+    // Check for a pre-generated block report first (skip on serverless — no persistent filesystem)
+    if (!isVercel) {
+      const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
+      const filename = `${sanitizeFilename(anchor.id || anchor.name)}_${langCode}.json`;
+      const filePath = path.join(BLOCK_REPORTS_DIR, filename);
 
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const stored = JSON.parse(content) as StoredBlockReport;
-      logger.info('Serving pre-generated block report', {
-        anchor: stored.anchorName,
-        language,
-      });
-      res.json({
-        ...stored.report,
-        preGenerated: true,
-        anchorName: stored.anchorName,
-        anchorType: stored.anchorType,
-      });
-      return;
-    } catch {
-      // No cached version — generate on-demand
+      try {
+        const content = await fs.readFile(filePath, 'utf-8');
+        const stored = JSON.parse(content) as StoredBlockReport;
+        logger.info('Serving pre-generated block report', {
+          anchor: stored.anchorName,
+          language,
+        });
+        res.json({
+          ...stored.report,
+          preGenerated: true,
+          anchorName: stored.anchorName,
+          anchorType: stored.anchorType,
+        });
+        return;
+      } catch {
+        // No cached version — generate on-demand
+      }
     }
 
     logger.info('Generating block report on-demand', {
