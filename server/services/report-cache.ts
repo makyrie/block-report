@@ -1,37 +1,198 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CommunityReport } from '../../src/types/index.js';
+import { isVercel } from '../env.js';
+import { prisma } from './db.js';
+import { logger } from '../logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
-const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-function cacheKey(community: string, language: string): string {
-  return `${community.toLowerCase().replace(/\s+/g, '-')}_${language.toLowerCase().replace(/\s+/g, '-')}.json`;
+/**
+ * Shared key normalization — single source of truth for cache key generation.
+ * Exported so route handlers can reuse it instead of duplicating the logic.
+ */
+export function normalizeKey(value: string): string {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
+
+// ---------------------------------------------------------------------------
+// Cache strategy abstraction — eliminates isVercel branching in every function
+// ---------------------------------------------------------------------------
+
+interface CacheStrategy {
+  get(community: string, language: string): Promise<CommunityReport | null>;
+  set(community: string, language: string, report: CommunityReport): Promise<void>;
+  countRecent(sinceMs: number): Promise<number>;
+  purgeStale(): Promise<number>;
+}
+
+/** Database-backed cache for serverless (Vercel/Neon) */
+const dbStrategy: CacheStrategy = {
+  async get(community, language) {
+    const row = await prisma.reportCache.findUnique({
+      where: { community_language: { community: normalizeKey(community), language: normalizeKey(language) } },
+    });
+    if (!row) return null;
+    const age = Date.now() - row.createdAt.getTime();
+    if (age > CACHE_TTL_MS) return null;
+    return row.report as unknown as CommunityReport;
+  },
+
+  async set(community, language, report) {
+    await prisma.reportCache.upsert({
+      where: { community_language: { community: normalizeKey(community), language: normalizeKey(language) } },
+      update: { report: report as unknown as Record<string, unknown>, createdAt: new Date() },
+      create: { community: normalizeKey(community), language: normalizeKey(language), report: report as unknown as Record<string, unknown> },
+    });
+  },
+
+  async countRecent(sinceMs) {
+    const since = new Date(Date.now() - sinceMs);
+    return prisma.reportCache.count({ where: { createdAt: { gte: since } } });
+  },
+
+  async purgeStale() {
+    const cutoff = new Date(Date.now() - CACHE_TTL_MS);
+    const result = await prisma.reportCache.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    return result.count;
+  },
+};
+
+/** File-based cache for local development */
+const fileStrategy: CacheStrategy = {
+  async get(community, language) {
+    const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
+    try {
+      // Enforce TTL on file cache — don't serve stale files indefinitely
+      const fileStat = await stat(filePath);
+      const age = Date.now() - fileStat.mtimeMs;
+      if (age > CACHE_TTL_MS) return null;
+
+      const raw = await readFile(filePath, 'utf-8');
+      return JSON.parse(raw) as CommunityReport;
+    } catch {
+      return null;
+    }
+  },
+
+  async set(community, language, report) {
+    await mkdir(CACHE_DIR, { recursive: true });
+    const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
+    await writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
+  },
+
+  async countRecent() {
+    logger.warn('Rate limiting is not enforced in local file-based mode');
+    return 0;
+  },
+
+  async purgeStale() {
+    return 0; // File cleanup not needed locally
+  },
+};
+
+const strategy: CacheStrategy = isVercel ? dbStrategy : fileStrategy;
+
+// ---------------------------------------------------------------------------
+// Public API — delegates to the active strategy
+// ---------------------------------------------------------------------------
 
 export async function getCachedReport(community: string, language: string): Promise<CommunityReport | null> {
   try {
-    const filePath = join(CACHE_DIR, cacheKey(community, language));
-    const raw = await readFile(filePath, 'utf-8');
-    const report: CommunityReport = JSON.parse(raw);
-
-    // Check staleness — still return stale reports but mark them
-    const age = Date.now() - new Date(report.generatedAt).getTime();
-    if (age > STALE_THRESHOLD_MS) {
-      // Return stale report — caller can decide to regenerate in background
-      return report;
-    }
-
-    return report;
-  } catch {
+    return await strategy.get(community, language);
+  } catch (err) {
+    logger.error('Failed to read report cache', {
+      error: err instanceof Error ? err.message : String(err),
+      community,
+      language,
+    });
     return null;
   }
 }
 
 export async function saveCachedReport(community: string, language: string, report: CommunityReport): Promise<void> {
-  await mkdir(CACHE_DIR, { recursive: true });
-  const filePath = join(CACHE_DIR, cacheKey(community, language));
-  await writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
+  try {
+    await strategy.set(community, language, report);
+  } catch (err) {
+    logger.error('Failed to write report cache', {
+      error: err instanceof Error ? err.message : String(err),
+      community,
+      language,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Block report cache — reuses the same strategy with a "block:" key prefix
+// ---------------------------------------------------------------------------
+
+function blockCacheKey(anchorId: string): string {
+  return `block:${normalizeKey(anchorId)}`;
+}
+
+export async function getCachedBlockReport(anchorId: string, language: string): Promise<CommunityReport | null> {
+  try {
+    return await strategy.get(blockCacheKey(anchorId), language);
+  } catch (err) {
+    logger.error('Failed to read block report cache', {
+      error: err instanceof Error ? err.message : String(err),
+      anchorId,
+      language,
+    });
+    return null;
+  }
+}
+
+export async function saveCachedBlockReport(anchorId: string, language: string, report: CommunityReport): Promise<void> {
+  try {
+    await strategy.set(blockCacheKey(anchorId), language, report);
+  } catch (err) {
+    logger.error('Failed to write block report cache', {
+      error: err instanceof Error ? err.message : String(err),
+      anchorId,
+      language,
+    });
+  }
+}
+
+/**
+ * DB-backed rate limit check for report generation.
+ * Counts reports created in the last windowMs. Works across serverless instances.
+ * Returns true if the limit has been exceeded.
+ */
+const GENERATION_RATE_LIMIT = 20; // max reports per window
+const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+export async function isGenerationRateLimited(): Promise<boolean> {
+  try {
+    const count = await strategy.countRecent(GENERATION_RATE_WINDOW_MS);
+    return count >= GENERATION_RATE_LIMIT;
+  } catch (err) {
+    logger.error('Rate limit check failed — failing closed to protect Claude API budget', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return true; // Fail closed: block generation if we can't verify the rate limit
+  }
+}
+
+/**
+ * Delete stale cache rows older than the TTL.
+ * Called periodically via cron to prevent unbounded table growth.
+ */
+export async function purgeStaleCache(): Promise<number> {
+  try {
+    const count = await strategy.purgeStale();
+    if (count > 0) {
+      logger.info('Purged stale report cache rows', { count });
+    }
+    return count;
+  } catch (err) {
+    logger.error('Failed to purge stale report cache', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
 }
