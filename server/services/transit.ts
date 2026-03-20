@@ -42,6 +42,7 @@ export interface TransitScore {
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 let scoresCache: Map<string, TransitScore> | null = null;
 let scoresCachedAt = 0;
+let inflightComputation: Promise<Map<string, TransitScore>> | null = null;
 
 async function computeAllScores(): Promise<Map<string, TransitScore>> {
   const stops = await prisma.transitStop.findMany({
@@ -132,9 +133,19 @@ export async function getTransitScores(): Promise<Map<string, TransitScore>> {
   if (scoresCache && now - scoresCachedAt < CACHE_TTL) {
     return scoresCache;
   }
-  scoresCache = await computeAllScores();
-  scoresCachedAt = now;
-  return scoresCache;
+  if (inflightComputation) {
+    return inflightComputation;
+  }
+  inflightComputation = computeAllScores()
+    .then((result) => {
+      scoresCache = result;
+      scoresCachedAt = Date.now();
+      return result;
+    })
+    .finally(() => {
+      inflightComputation = null;
+    });
+  return inflightComputation;
 }
 
 export async function getTransitScore(communityName: string): Promise<TransitScore & { cityAverage: number } | null> {

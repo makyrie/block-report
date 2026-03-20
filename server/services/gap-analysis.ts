@@ -22,6 +22,7 @@ interface CommunityRawData {
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 let scoresCache: Map<string, AccessGapResult> | null = null;
 let scoresCachedAt = 0;
+let inflightComputation: Promise<Map<string, AccessGapResult>> | null = null;
 
 // Min-max normalize a value to 0-1. Returns null if bounds are equal.
 function normalize(value: number, min: number, max: number): number {
@@ -224,9 +225,19 @@ export async function getAccessGapScores(): Promise<Map<string, AccessGapResult>
   if (scoresCache && now - scoresCachedAt < CACHE_TTL) {
     return scoresCache;
   }
-  scoresCache = await computeAllScores();
-  scoresCachedAt = now;
-  return scoresCache;
+  if (inflightComputation) {
+    return inflightComputation;
+  }
+  inflightComputation = computeAllScores()
+    .then((result) => {
+      scoresCache = result;
+      scoresCachedAt = Date.now();
+      return result;
+    })
+    .finally(() => {
+      inflightComputation = null;
+    });
+  return inflightComputation;
 }
 
 export async function getAccessGapScore(community: string): Promise<AccessGapResult | null> {
