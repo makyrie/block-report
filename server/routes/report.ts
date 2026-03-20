@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport, isGenerationRateLimited } from '../services/report-cache.js';
+import { getCachedReport, saveCachedReport, isGenerationRateLimited, normalizeKey } from '../services/report-cache.js';
 import { isVercel } from '../env.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
@@ -25,9 +25,8 @@ const LANGUAGE_CODES: Record<string, string> = {
   'Russian/Polish/Slavic': 'ru',
 };
 
-function sanitizeFilename(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-}
+// Use normalizeKey from report-cache.ts as the single source of truth for key/filename normalization
+const sanitizeFilename = normalizeKey;
 
 interface StoredReport {
   communityName: string;
