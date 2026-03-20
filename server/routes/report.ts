@@ -46,8 +46,8 @@ router.get('/', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'No cached report available' });
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Report lookup error', { error: message });
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Report lookup error', { error: message, stack: error instanceof Error ? error.stack : undefined });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -90,16 +90,12 @@ router.post('/generate', async (req: Request, res: Response) => {
     });
     const report = await generateReport(profile, language);
 
-    // Cache the generated report for future instant access
-    try {
-      await saveCachedReport(profile.communityName, language, report);
-    } catch (err) {
-      logger.error('Failed to cache report', { error: err instanceof Error ? err.message : String(err) });
-    }
+    // Cache the generated report for future instant access (saveCachedReport handles its own errors)
+    await saveCachedReport(profile.communityName, language, report);
 
     res.json(report);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error generating report';
+    const message = error instanceof Error ? error.message : String(error);
     logger.error('Report generation error', {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
@@ -164,16 +160,12 @@ router.post('/generate-block', async (req: Request, res: Response) => {
 
     const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
 
-    // Cache the generated block report for future requests
-    try {
-      await saveCachedBlockReport(anchorCacheId, language, report);
-    } catch (err) {
-      logger.error('Failed to cache block report', { error: err instanceof Error ? err.message : String(err) });
-    }
+    // Cache the generated block report for future requests (saveCachedBlockReport handles its own errors)
+    await saveCachedBlockReport(anchorCacheId, language, report);
 
     res.json(report);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error generating block report';
+    const message = error instanceof Error ? error.message : String(error);
     logger.error('Block report generation error', {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
