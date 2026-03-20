@@ -13,6 +13,7 @@ export interface BlockMetricsResult {
   topIssues: { category: string; count: number }[];
   recentlyResolved: { category: string; date: string }[];
   radiusMiles: number;
+  truncated: boolean;
 }
 
 export async function getBlockMetrics(lat: number, lng: number, radius: number = 0.25): Promise<BlockMetricsResult> {
@@ -33,6 +34,7 @@ export async function getBlockMetrics(lat: number, lng: number, radius: number =
       lat: { gte: lat - latDelta, lte: lat + latDelta },
       lng: { gte: lng - lngDelta, lte: lng + lngDelta },
     },
+    orderBy: { date_requested: 'desc' },
     take: ROW_LIMIT,
   });
 
@@ -82,5 +84,6 @@ export async function getBlockMetrics(lat: number, lng: number, radius: number =
     topIssues,
     recentlyResolved,
     radiusMiles: radius,
+    truncated: data.length >= ROW_LIMIT,
   };
 }
