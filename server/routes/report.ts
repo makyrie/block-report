@@ -222,6 +222,27 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate anchor fields to prevent prompt injection via user-controlled strings
+    const MAX_FIELD_LEN = 200;
+    const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
+    for (const field of ['name', 'address', 'community', 'type'] as const) {
+      if (anchor[field] !== undefined) {
+        if (typeof anchor[field] !== 'string') {
+          res.status(400).json({ error: `anchor.${field} must be a string` });
+          return;
+        }
+        if (anchor[field].length > MAX_FIELD_LEN) {
+          res.status(400).json({ error: `anchor.${field} must be ${MAX_FIELD_LEN} characters or fewer` });
+          return;
+        }
+        anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
+      }
+    }
+    if (typeof language !== 'string' || language.length > 50) {
+      res.status(400).json({ error: 'language must be a string of 50 characters or fewer' });
+      return;
+    }
+
     // Check for a pre-generated block report first (skip on serverless — no persistent filesystem)
     if (!isVercel) {
       const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
