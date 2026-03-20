@@ -5,6 +5,10 @@ import type { CommunityTrends } from '../../src/types/index.js';
 
 const router = Router();
 
+// In-memory cache for trends data (24h TTL, keyed by community name)
+const TRENDS_TTL = 24 * 60 * 60 * 1000;
+const trendsCache = new Map<string, { data: CommunityTrends; cachedAt: number }>();
+
 router.get('/', async (req, res) => {
   const community = req.query.community as string | undefined;
   if (!community) {
@@ -112,10 +116,19 @@ router.get('/trends', async (req, res) => {
   }
 
   try {
+    const cacheKey = cleaned.toLowerCase();
+    const cached = trendsCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < TRENDS_TTL) {
+      res.json(cached.data);
+      return;
+    }
+
     const result = await prisma.$queryRaw<{ get_community_trends: CommunityTrends }[]>`
       SELECT get_community_trends(${cleaned})
     `;
-    res.json(result[0].get_community_trends);
+    const data = result[0].get_community_trends;
+    trendsCache.set(cacheKey, { data, cachedAt: Date.now() });
+    res.json(data);
   } catch (err) {
     logger.error('Failed to fetch 311 trends', { error: (err as Error).message, community });
     res.status(500).json({ error: 'Internal server error' });
