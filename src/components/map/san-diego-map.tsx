@@ -337,7 +337,7 @@ function SanDiegoMap({
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
     {/* Choropleth toggle */}
     {onToggleChoropleth && accessGapScores && accessGapScores.size > 0 && (
-      <div className="absolute top-2 right-2 z-[999] print:hidden">
+      <div className="absolute top-14 right-2 z-[999] print:hidden">
         <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 cursor-pointer"
              onClick={onToggleChoropleth}>
           <label className="flex items-center gap-2 cursor-pointer text-sm">
