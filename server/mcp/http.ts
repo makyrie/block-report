@@ -14,7 +14,7 @@ if (!AUTH_TOKEN && process.env.MCP_AUTH_DISABLED !== 'true') {
 }
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '16kb' }));
 
 // Rate limiting — 60 requests per minute per IP
 app.use('/mcp', rateLimit({
