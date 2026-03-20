@@ -58,14 +58,16 @@ export default function NeighborhoodPage() {
 
   // Fetch map data on mount
   useEffect(() => {
-    getLibraries().then(setLibraries).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
-    getRecCenters().then(setRecCenters).catch(console.error);
-    getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch(console.error);
+    let cancelled = false;
+    getLibraries().then((d) => { if (!cancelled) setLibraries(d); }).catch((err) => { console.error(err); if (!cancelled) setDataError('Failed to load map data'); });
+    getRecCenters().then((d) => { if (!cancelled) setRecCenters(d); }).catch(console.error);
+    getNeighborhoodBoundaries().then((d) => { if (!cancelled) setNeighborhoodBoundaries(d); }).catch(console.error);
     getTransitStops()
-      .then(setTransitStops)
+      .then((d) => { if (!cancelled) setTransitStops(d); })
       .catch(console.error);
     getAccessGapRanking(100)
       .then(({ ranking }) => {
+        if (cancelled) return;
         const scoreMap = new Map<string, number>();
         for (const r of ranking) {
           scoreMap.set(normalizeCommunityName(r.community), r.accessGapScore);
@@ -73,6 +75,7 @@ export default function NeighborhoodPage() {
         setAccessGapScores(scoreMap);
       })
       .catch(console.error);
+    return () => { cancelled = true; };
   }, []);
 
   // Fetch 311 metrics and demographics when community changes
@@ -86,6 +89,8 @@ export default function NeighborhoodPage() {
       return;
     }
 
+    let cancelled = false;
+
     setMetricsLoading(true);
     setMetrics(null);
     setTopLanguages([]);
@@ -93,26 +98,27 @@ export default function NeighborhoodPage() {
     setAccessGap(null);
 
     get311(selectedCommunity)
-      .then(setMetrics)
+      .then((data) => { if (!cancelled) setMetrics(data); })
       .catch(console.error)
-      .finally(() => setMetricsLoading(false));
+      .finally(() => { if (!cancelled) setMetricsLoading(false); });
 
     getTransitScore(selectedCommunity)
-      .then(setTransitScore)
+      .then((data) => { if (!cancelled) setTransitScore(data); })
       .catch(() => { /* transit score may not be available */ });
 
     getAccessGap(selectedCommunity)
-      .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
+      .then((data) => { if (!cancelled && data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
-    // Try to fetch demographics for language suggestion
     getDemographics(selectedCommunity)
       .then((data) => {
-        if (data?.topLanguages) setTopLanguages(data.topLanguages);
+        if (!cancelled && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
       .catch(() => {
         // Demographics may not be available for all communities
       });
+
+    return () => { cancelled = true; };
   }, [selectedCommunity]);
 
   const buildProfile = useCallback((): NeighborhoodProfile => {
