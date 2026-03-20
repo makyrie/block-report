@@ -2,6 +2,22 @@ import { prisma } from './db.js';
 import { normalizeCommunityName, getNeighborhoodsGeoJSON } from './communities.js';
 import { pointInFeature } from './geo.js';
 
+const CACHE_TTL = 24 * 60 * 60 * 1000;
+let librariesCache: { lat: number | null; lng: number | null }[] | null = null;
+let librariesCachedAt = 0;
+
+async function getCachedLibraryCoords() {
+  const now = Date.now();
+  if (librariesCache && now - librariesCachedAt < CACHE_TTL) {
+    return librariesCache;
+  }
+  librariesCache = await prisma.library.findMany({
+    select: { lat: true, lng: true },
+  });
+  librariesCachedAt = Date.now();
+  return librariesCache;
+}
+
 export async function getLibraries() {
   return prisma.library.findMany();
 }
@@ -15,9 +31,7 @@ export async function getLibraryCountByCommunity(communityName: string): Promise
   });
   if (!feature) return 0;
 
-  const libraries = await prisma.library.findMany({
-    select: { lat: true, lng: true },
-  });
+  const libraries = await getCachedLibraryCoords();
 
   return libraries.filter((lib) =>
     lib.lat != null && lib.lng != null && pointInFeature(lib.lat, lib.lng, feature.geometry),
