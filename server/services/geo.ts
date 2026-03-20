@@ -16,9 +16,9 @@ export function haversineDistanceMiles(lat1: number, lng1: number, lat2: number,
 export function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+    const [lngI, latI] = polygon[i];
+    const [lngJ, latJ] = polygon[j];
+    if ((latI > lat) !== (latJ > lat) && lng < ((lngJ - lngI) * (lat - latI)) / (latJ - latI) + lngI) {
       inside = !inside;
     }
   }

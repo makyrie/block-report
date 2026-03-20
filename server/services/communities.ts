@@ -37,15 +37,7 @@ export async function getNeighborhoodsGeoJSON(): Promise<NeighborhoodsGeoJSON> {
   return inflightFetch;
 }
 
-let communityNamesCache: string[] | null = null;
-let communityNamesCachedAt = 0;
-
 export async function getCommunityNames(): Promise<string[]> {
-  const now = Date.now();
-  if (communityNamesCache && now - communityNamesCachedAt < NEIGHBORHOODS_TTL) {
-    return communityNamesCache;
-  }
-
   const geojson = await getNeighborhoodsGeoJSON();
   const names: string[] = [];
 
@@ -54,10 +46,7 @@ export async function getCommunityNames(): Promise<string[]> {
     if (name) names.push(name.toUpperCase());
   }
 
-  names.sort();
-  communityNamesCache = names;
-  communityNamesCachedAt = now;
-  return names;
+  return names.sort();
 }
 
 export function normalizeCommunityName(input: string): string {

@@ -32,12 +32,12 @@ app.use('/mcp', rateLimit({
 
 // Bearer token authentication middleware
 if (AUTH_TOKEN) {
-  const tokenBuf = Buffer.from(AUTH_TOKEN);
+  const tokenHash = crypto.createHash('sha256').update(AUTH_TOKEN).digest();
   app.use('/mcp', (req, res, next) => {
     const auth = req.headers.authorization;
     const supplied = auth?.startsWith('Bearer ') ? auth.slice(7) : '';
-    const suppliedBuf = Buffer.from(supplied);
-    if (suppliedBuf.length !== tokenBuf.length || !crypto.timingSafeEqual(suppliedBuf, tokenBuf)) {
+    const suppliedHash = crypto.createHash('sha256').update(supplied).digest();
+    if (!crypto.timingSafeEqual(suppliedHash, tokenHash)) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }

@@ -37,6 +37,7 @@ model RecCenter {
   lat       Float?
   lng       Float?
 
+  @@index([neighborhd], name: "idx_rec_center_neighborhd")
   @@map("rec_centers")
 }
 
