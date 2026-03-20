@@ -55,7 +55,6 @@ export interface TrendDataPoint {
   totalRequests: number;
   resolvedCount: number;
   resolutionRate: number;  // 0-1
-  avgDaysToResolve: number | null;
 }
 
 export interface TrendSummary {
@@ -63,6 +62,7 @@ export interface TrendSummary {
   previousResolutionRate: number;
   direction: 'improving' | 'declining' | 'stable';
   volumeChange: number;   // percentage change
+  volumeDirection: 'improving' | 'declining' | 'stable';
 }
 
 export interface CommunityTrends {
