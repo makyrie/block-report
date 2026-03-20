@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import type { CommunityTrends } from '../../src/types/index.js';
-import { COMMUNITIES } from '../communities.js';
+import { COMMUNITIES } from '../../src/types/communities.js';
 
 const COMMUNITIES_LOWER = new Set(COMMUNITIES.map(c => c.toLowerCase()));
 
@@ -121,15 +121,25 @@ router.get('/trends', async (req, res) => {
   try {
     const cacheKey = cleaned.toLowerCase();
     const cached = trendsCache.get(cacheKey);
-    if (cached && Date.now() - cached.cachedAt < TRENDS_TTL) {
-      res.json(cached.data);
-      return;
+    if (cached) {
+      if (Date.now() - cached.cachedAt < TRENDS_TTL) {
+        res.json(cached.data);
+        return;
+      }
+      // Evict stale entry
+      trendsCache.delete(cacheKey);
     }
 
     const result = await prisma.$queryRaw<{ get_community_trends: CommunityTrends }[]>`
       SELECT get_community_trends(${cleaned})
     `;
-    const data = result[0].get_community_trends;
+    const row = result[0];
+    if (!row?.get_community_trends) {
+      logger.error('get_community_trends returned no data', { community: cleaned });
+      res.status(404).json({ error: 'No trend data available for this community' });
+      return;
+    }
+    const data = row.get_community_trends;
     trendsCache.set(cacheKey, { data, cachedAt: Date.now() });
     res.json(data);
   } catch (err) {
