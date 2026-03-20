@@ -2,34 +2,13 @@ import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import type { CommunityTrends } from '../../src/types/index.js';
-import { COMMUNITIES } from '../../src/types/communities.js';
-
-const COMMUNITIES_LOWER = new Set(COMMUNITIES.map(c => c.toLowerCase()));
+import { validateCommunity } from '../utils/validation.js';
 
 const router = Router();
 
 // In-memory cache for trends data (24h TTL, keyed by community name)
 const TRENDS_TTL = 24 * 60 * 60 * 1000;
 const trendsCache = new Map<string, { data: CommunityTrends; cachedAt: number }>();
-
-/** Validate and sanitize the community query parameter. Returns cleaned name or sends an error response. */
-function validateCommunity(req: { query: Record<string, unknown> }, res: { status: (code: number) => { json: (body: unknown) => void } }): string | null {
-  const community = req.query.community as string | undefined;
-  if (!community) {
-    res.status(400).json({ error: 'community query parameter is required' });
-    return null;
-  }
-  const cleaned = community.replace(/[%_]/g, '');
-  if (cleaned.length > 100 || cleaned.length === 0) {
-    res.status(400).json({ error: 'Invalid community name' });
-    return null;
-  }
-  if (!COMMUNITIES_LOWER.has(cleaned.toLowerCase())) {
-    res.status(400).json({ error: 'Unknown community name' });
-    return null;
-  }
-  return cleaned;
-}
 
 router.get('/', async (req, res) => {
   const cleaned = validateCommunity(req, res);

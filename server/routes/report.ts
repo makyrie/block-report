@@ -7,31 +7,11 @@ import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
-import { COMMUNITIES } from '../../src/types/communities.js';
-
-const COMMUNITIES_LOWER = new Set(COMMUNITIES.map(c => c.toLowerCase()));
-const VALID_LANGUAGES = new Set(Object.keys({
-  English: 'en', Spanish: 'es', Chinese: 'zh', Vietnamese: 'vi',
-  Tagalog: 'tl', Korean: 'ko', Arabic: 'ar', 'French/Haitian/Cajun': 'fr',
-  'German/West Germanic': 'de', 'Russian/Polish/Slavic': 'ru',
-}));
+import { COMMUNITIES_LOWER, LANGUAGE_CODES, VALID_LANGUAGES, VALID_LANGUAGE_CODES } from '../utils/validation.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
 const BLOCK_REPORTS_DIR = path.join(REPORTS_DIR, 'blocks');
-
-const LANGUAGE_CODES: Record<string, string> = {
-  English: 'en',
-  Spanish: 'es',
-  Chinese: 'zh',
-  Vietnamese: 'vi',
-  Tagalog: 'tl',
-  Korean: 'ko',
-  Arabic: 'ar',
-  'French/Haitian/Cajun': 'fr',
-  'German/West Germanic': 'de',
-  'Russian/Polish/Slavic': 'ru',
-};
 
 function sanitizeFilename(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -94,8 +74,7 @@ router.get('/', async (req: Request, res: Response) => {
       }
 
       // Validate language code — only allow known short codes for block lookups
-      const validLangCodes = new Set(Object.values(LANGUAGE_CODES));
-      if (!validLangCodes.has(language)) {
+      if (!VALID_LANGUAGE_CODES.has(language)) {
         res.status(400).json({ error: 'Unsupported language code' });
         return;
       }
