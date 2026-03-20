@@ -32,7 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Community-level lookup by name
     const community = req.query.community as string;
-    const language = req.query.language as string || 'English';
+    const language = req.query.language as string || 'en';
 
     if (!community) {
       res.status(400).json({ error: 'Missing required query parameter: community' });
@@ -119,7 +119,7 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     const anchor = { ...rawAnchor };
     const MAX_FIELD_LEN = 200;
     const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
-    for (const field of ['name', 'address', 'community', 'type'] as const) {
+    for (const field of ['id', 'name', 'address', 'community', 'type'] as const) {
       if (anchor[field] !== undefined) {
         if (typeof anchor[field] !== 'string') {
           res.status(400).json({ error: `anchor.${field} must be a string` });
