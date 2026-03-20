@@ -71,8 +71,20 @@ const cleanupInterval = setInterval(() => {
   }
 }, 60 * 1000);
 
-app.post('/mcp', async (req, res) => {
+const SESSION_ID_RE = /^[\w-]{1,128}$/;
+
+function validateSessionId(req: express.Request, res: express.Response): string | undefined | false {
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  if (sessionId && !SESSION_ID_RE.test(sessionId)) {
+    res.status(400).json({ error: 'Invalid session ID format' });
+    return false;
+  }
+  return sessionId;
+}
+
+app.post('/mcp', async (req, res) => {
+  const sessionId = validateSessionId(req, res);
+  if (sessionId === false) return;
 
   if (sessionId && transports.has(sessionId)) {
     const entry = transports.get(sessionId)!;
@@ -112,7 +124,8 @@ app.post('/mcp', async (req, res) => {
 });
 
 app.get('/mcp', async (req, res) => {
-  const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  const sessionId = validateSessionId(req, res);
+  if (sessionId === false) return;
   if (!sessionId || !transports.has(sessionId)) {
     res.status(400).json({ error: 'Missing or invalid session ID. Send a POST to /mcp first.' });
     return;
@@ -123,7 +136,8 @@ app.get('/mcp', async (req, res) => {
 });
 
 app.delete('/mcp', async (req, res) => {
-  const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  const sessionId = validateSessionId(req, res);
+  if (sessionId === false) return;
   if (!sessionId || !transports.has(sessionId)) {
     res.status(400).json({ error: 'Missing or invalid session ID' });
     return;
