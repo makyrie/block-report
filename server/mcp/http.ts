@@ -57,7 +57,7 @@ function createServer(): McpServer {
 // Map to store transports by session ID, with last-activity tracking
 const MAX_SESSIONS = 1000;
 const SESSION_TTL = 30 * 60 * 1000; // 30 minutes
-const transports = new Map<string, { transport: StreamableHTTPServerTransport; lastActivity: number }>();
+const transports = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer; lastActivity: number }>();
 
 // Periodic cleanup of stale sessions
 setInterval(() => {
@@ -65,6 +65,7 @@ setInterval(() => {
   for (const [sid, entry] of transports) {
     if (now - entry.lastActivity > SESSION_TTL) {
       entry.transport.close?.();
+      entry.server.close().catch(() => {});
       transports.delete(sid);
     }
   }
@@ -98,7 +99,7 @@ app.post('/mcp', async (req, res) => {
   await server.connect(transport);
 
   if (transport.sessionId) {
-    transports.set(transport.sessionId, { transport, lastActivity: Date.now() });
+    transports.set(transport.sessionId, { transport, server, lastActivity: Date.now() });
   }
 
   await transport.handleRequest(req, res, req.body);
@@ -123,6 +124,7 @@ app.delete('/mcp', async (req, res) => {
   }
   const entry = transports.get(sessionId)!;
   await entry.transport.handleRequest(req, res);
+  entry.server.close().catch(() => {});
   transports.delete(sessionId);
 });
 
