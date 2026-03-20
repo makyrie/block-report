@@ -373,6 +373,7 @@ export default function NeighborhoodPage() {
           accessGapScores={accessGapScores}
           showChoropleth={showChoropleth}
           onToggleChoropleth={() => setShowChoropleth(prev => !prev)}
+          onCommunitySelect={handleCommunityChange}
         />
       </main>
 

@@ -217,6 +217,7 @@ interface SanDiegoMapProps {
   accessGapScores?: Map<string, number>;
   showChoropleth?: boolean;
   onToggleChoropleth?: () => void;
+  onCommunitySelect?: (community: string) => void;
 }
 
 // Color utility — green (0) → yellow (50) → red (100)
@@ -321,6 +322,7 @@ function SanDiegoMap({
   accessGapScores,
   showChoropleth = false,
   onToggleChoropleth,
+  onCommunitySelect,
 }: SanDiegoMapProps) {
   const handleMarkerClick = useCallback(
     (anchor: CommunityAnchor) => () => {
@@ -427,15 +429,7 @@ function SanDiegoMap({
             );
             layer.on('click', (e) => {
               L.DomEvent.stopPropagation(e as L.LeafletEvent);
-              onAnchorClick({
-                id: '',
-                name,
-                type: 'library',
-                lat: 0,
-                lng: 0,
-                address: '',
-                community: name,
-              });
+              onCommunitySelect?.(name);
             });
           }}
         />
