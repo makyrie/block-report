@@ -171,10 +171,10 @@ export async function isGenerationRateLimited(): Promise<boolean> {
     const count = await strategy.countRecent(GENERATION_RATE_WINDOW_MS);
     return count >= GENERATION_RATE_LIMIT;
   } catch (err) {
-    logger.error('Rate limit check failed', {
+    logger.error('Rate limit check failed — failing closed to protect Claude API budget', {
       error: err instanceof Error ? err.message : String(err),
     });
-    return false;
+    return true; // Fail closed: block generation if we can't verify the rate limit
   }
 }
 
