@@ -115,6 +115,9 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
           metrics={metrics}
           topLanguages={topLanguages}
           onClose={() => setModalOpen(false)}
+          downloading={downloading}
+          downloadError={downloadError}
+          handleDownloadPdf={handleDownloadPdf}
         />
       )}
     </>
@@ -127,15 +130,20 @@ function FlyerModal({
   metrics,
   topLanguages,
   onClose,
+  downloading,
+  downloadError,
+  handleDownloadPdf,
 }: {
   report: CommunityReport;
   slug: string;
   metrics?: NeighborhoodProfile['metrics'] | null;
   topLanguages?: { language: string; percentage: number }[];
   onClose: () => void;
+  downloading: boolean;
+  downloadError: string | null;
+  handleDownloadPdf: () => void;
 }) {
   const { t } = useLanguage();
-  const { downloading, downloadError, handleDownloadPdf } = useDownloadPdf(report, slug, metrics, topLanguages);
 
   // Close on Escape
   useEffect(() => {

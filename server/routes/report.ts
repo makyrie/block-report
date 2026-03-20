@@ -301,8 +301,9 @@ router.post('/pdf', async (req: Request, res: Response) => {
         typeof metrics.avgDaysToResolve !== 'number' ||
         !Array.isArray(metrics.topIssues) ||
         !metrics.topIssues.every((i: unknown) =>
-          i && typeof i === 'object' && typeof (i as Record<string, unknown>).category === 'string' && typeof (i as Record<string, unknown>).count === 'number'
+          i && typeof i === 'object' && typeof (i as Record<string, unknown>).category === 'string' && (i as Record<string, unknown>).category !== '' && ((i as Record<string, unknown>).category as string).length <= 200 && typeof (i as Record<string, unknown>).count === 'number'
         ) ||
+        metrics.topIssues.length > MAX_ARRAY_ITEMS ||
         !Array.isArray(metrics.goodNews) ||
         !metrics.goodNews.every((g: unknown) => typeof g === 'string')
       ) {

@@ -4,7 +4,11 @@ import { logger } from './logger.js';
 // Validate APP_URL is a well-formed URL if set (required for PDF QR code generation)
 if (process.env.APP_URL) {
   try {
-    new URL(process.env.APP_URL);
+    const parsed = new URL(process.env.APP_URL);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      logger.error('APP_URL must use http or https protocol', { value: process.env.APP_URL });
+      process.exit(1);
+    }
   } catch {
     logger.error('APP_URL environment variable is not a valid URL', { value: process.env.APP_URL });
     process.exit(1);
