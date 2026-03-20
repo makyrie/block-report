@@ -210,17 +210,21 @@ async function handleDownloadPdf() {
 
 The HTML template in `server/services/pdf.ts` must replicate the `FlyerLayout` component without React/browser dependencies:
 
+**Rendering strategy:** Build a standalone HTML string (no React SSR, no live URL navigation). This avoids depending on a running frontend and keeps the PDF endpoint self-contained. The HTML template duplicates the `FlyerLayout` structure with plain HTML/CSS.
+
 **Key challenges and solutions:**
 
-1. **Tailwind CSS** — Extract the minimal CSS needed for the flyer classes. Use the project's compiled CSS output or build a small utility-class subset inline.
+1. **Tailwind CSS** — The project uses Tailwind v4 with JIT compilation via Vite plugin. Tailwind classes like `text-[32px]` and `tracking-[0.35em]` won't resolve without the JIT compiler. **Solution:** Run `npx @tailwindcss/cli` at build time to generate a CSS file containing all classes used by the flyer template, OR write plain CSS equivalents for the ~40 utility classes used in the flyer. The latter is simpler and avoids a build dependency.
 
 2. **QR Code** — Use the `qrcode` npm package (pure Node, SVG output) instead of `qrcode.react`. Generate SVG string and embed inline.
 
-3. **`window.location.origin`** — Replace with `baseUrl` parameter (from `APP_URL` env var or request origin).
+3. **`window.location.origin`** — `FlyerLayout` references `window.location.origin` on lines 34 and 212 for the QR code URL and footer text. **Solution:** The HTML template uses the `baseUrl` parameter (from `APP_URL` env var or request origin). This is a template-only concern — no change needed to the React component.
 
-4. **SVG Icons** — Already defined as inline SVG in `flyer-icons.tsx`. Copy the SVG strings into the HTML template.
+4. **SVG Icons** — Already defined as inline SVG in `flyer-icons.tsx`. Copy the SVG path data into the HTML template as static `<svg>` elements.
 
-5. **Fonts** — Use system fonts (the flyer uses `font-sans` which maps to the system font stack). Chromium includes good system font coverage.
+5. **Fonts for multilingual support** — The flyer uses `font-sans` (system font stack). In headless Chromium on serverless, CJK (Chinese, Korean) and Arabic fonts may be missing. **Solution:** Include Google Fonts CDN links in the HTML template for Noto Sans and Noto Sans CJK/Arabic. Load via `<link rel="stylesheet">` — Puppeteer's `waitUntil: 'networkidle0'` ensures fonts load before PDF capture.
+
+6. **Arabic RTL support** — Arabic is a supported language (`LANGUAGE_CODES` includes `Arabic: 'ar'`), but `FlyerLayout` has no RTL support. **Solution:** When the report language is Arabic, the HTML template adds `dir="rtl"` to the root element and swaps left-aligned classes to right-aligned. This is a template-level concern for MVP; full RTL support in the React component can follow later.
 
 ## System-Wide Impact
 
@@ -237,16 +241,38 @@ The HTML template in `server/services/pdf.ts` must replicate the `FlyerLayout` c
 
 ## Acceptance Criteria
 
-- [ ] `POST /api/report/pdf` endpoint accepts report data and returns a valid PDF
+### Functional Requirements
+
+- [ ] `POST /api/report/pdf` endpoint accepts report data and returns a valid PDF (`Content-Type: application/pdf`)
 - [ ] PDF visually matches the existing `FlyerLayout` print output (letter size, same sections, QR code)
+- [ ] PDF fits on a single letter-size page (content must not overflow to page 2)
 - [ ] "Download PDF" button appears next to the "Print" button in `FlyerPreview`
-- [ ] Button shows loading state while PDF generates
-- [ ] PDF filename includes the neighborhood name (e.g., `block-report-mira-mesa.pdf`)
-- [ ] Non-English reports generate PDFs with correct character rendering
+- [ ] "Download PDF" button also appears in `FlyerModal` header alongside Print button
+- [ ] Button shows loading/spinner state while PDF generates (5-15 seconds)
+- [ ] PDF filename includes community name and language code (e.g., `block-report-mira-mesa-en.pdf`)
+- [ ] `Content-Disposition` header set correctly for browser download
+
+### Multilingual Requirements
+
+- [ ] English PDF renders correctly
+- [ ] Spanish PDF renders correctly (accents, ñ)
+- [ ] Vietnamese PDF renders correctly (diacritics)
+- [ ] Chinese PDF renders correctly (CJK characters, requires Noto Sans CJK font)
+- [ ] Arabic PDF renders with correct character rendering (RTL text direction as stretch goal)
+- [ ] Tagalog PDF renders correctly
+
+### Error Handling
+
+- [ ] Missing required fields → 400 JSON error response
+- [ ] Puppeteer/Chromium failure → 500 JSON error with user-friendly message
+- [ ] Frontend shows error state (not silent failure) when PDF generation fails
 - [ ] Endpoint respects existing rate limiting (10 req/15min on `/api/report`)
-- [ ] Works in local development (`npx tsx server/index.ts`)
+
+### Deployment
+
+- [ ] Works in local development (`npx tsx server/index.ts`) with locally installed Chromium
 - [ ] Works on Vercel serverless deployment (via `@sparticuz/chromium`)
-- [ ] Error states handled gracefully (Puppeteer failure → user-friendly message)
+- [ ] Vercel function configured with adequate memory (1024MB) and timeout (30s)
 
 ## Success Metrics
 
@@ -268,36 +294,45 @@ The HTML template in `server/services/pdf.ts` must replicate the `FlyerLayout` c
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Chromium binary too large for Vercel | Endpoint fails to deploy | `@sparticuz/chromium` is designed for this; stays under Vercel's 250MB limit. May need Vercel Pro for larger function bundles. |
-| Cold start latency (~5-10s) | First PDF request is slow | Accept this for MVP. Could pre-warm with a cron ping. |
-| Memory usage (~300MB per Puppeteer instance) | Vercel function OOM | Use Vercel's 1024MB function memory config. Close browser immediately after PDF capture. |
-| HTML template drifts from React component | PDF doesn't match screen | Keep template simple. Document that changes to `FlyerLayout` must be mirrored in `buildFlyerHtml`. |
-| Font rendering for CJK/Arabic | Characters missing in PDF | Chromium includes Noto fonts. Test with Vietnamese, Chinese, Arabic, Tagalog. |
-| Rate limiting insufficiency | Server overloaded by PDF requests | Existing 10 req/15min limiter applies. Could add a dedicated stricter limiter for PDF. |
+| Chromium binary too large for Vercel | Endpoint fails to deploy | `@sparticuz/chromium` is designed for this (~50MB compressed, within Vercel's 250MB limit). Verify with a minimal test function before full implementation. May need Vercel Pro. |
+| Cold start latency (~5-10s) | First PDF request is slow | Accept for MVP. Frontend shows loading state. Could pre-warm with a cron ping later. |
+| Memory usage (~300MB per Puppeteer instance) | Vercel function OOM | Configure `vercel.json` with `"memory": 1024` for the PDF function. Close browser immediately in `finally` block. |
+| HTML template drifts from React component | PDF doesn't match screen | Keep template simple with plain CSS (not Tailwind utilities). Document that visual changes to `FlyerLayout` must be mirrored in `buildFlyerHtml()`. Add a comment at top of both files cross-referencing each other. |
+| Font rendering for CJK/Arabic | Characters appear as blank boxes (tofu) | Load Google Noto fonts via CDN `<link>` in the HTML template. Puppeteer's `waitUntil: 'networkidle0'` ensures fonts load. Test all 6 supported languages. |
+| Rate limiting insufficiency | Server overloaded by PDF requests | Existing 10 req/15min limiter on `/api/report` applies. Consider a dedicated stricter limiter (e.g., 5 req/15min) for the `/pdf` sub-route specifically. |
+| Tailwind CSS classes not resolving | PDF renders as unstyled HTML | Use plain CSS in the HTML template instead of Tailwind classes. This eliminates the JIT compilation dependency entirely. |
+| `vercel.json` not configured for PDF function | Timeout/OOM on Vercel | Add explicit `functions` config for the PDF API route with `maxDuration: 30` and `memory: 1024`. |
 
 ## Implementation Checklist
 
-### Phase 1: Backend (server/)
+### Phase 1: Backend PDF Service (server/)
 
-- [ ] Install `puppeteer-core`, `@sparticuz/chromium`, `qrcode`
-- [ ] Create `server/services/pdf.ts` with `generatePdf()` and `buildFlyerHtml()`
+- [ ] Install `puppeteer-core`, `@sparticuz/chromium`, `qrcode` (for server-side QR SVG generation)
+- [ ] Create `server/services/pdf.ts` with:
+  - [ ] `buildFlyerHtml(options)` — standalone HTML template with plain CSS (not Tailwind), inline SVG icons, CDN font links for Noto Sans/CJK/Arabic
+  - [ ] `generatePdf(options)` — Puppeteer launch → `page.setContent(html)` → `page.pdf()` → `browser.close()`
+  - [ ] Local dev detection: use `puppeteer.launch({ executablePath: '/usr/bin/chromium' })` locally, `@sparticuz/chromium` on Vercel
 - [ ] Add `POST /api/report/pdf` route to `server/routes/report.ts`
 - [ ] Add `APP_URL` to `.env.example`
-- [ ] Test locally with Mira Mesa report data
+- [ ] Test locally with Mira Mesa English report data
+- [ ] Test with Mira Mesa Spanish report data (verify accents)
 
-### Phase 2: Frontend (src/)
+### Phase 2: Frontend Download Button (src/)
 
-- [ ] Add download handler to `src/components/flyer/flyer-preview.tsx`
-- [ ] Add "Download PDF" button with loading state
-- [ ] Add download button to `FlyerModal` header (alongside Print button)
-- [ ] Add i18n key for download button label in `src/i18n/translations.ts`
+- [ ] Add `handleDownloadPdf()` to `src/components/flyer/flyer-preview.tsx`
+- [ ] Add "Download PDF" button with loading/spinner state next to Print button
+- [ ] Add "Download PDF" button to `FlyerModal` header (alongside Print button)
+- [ ] Show error toast/message if PDF generation fails
+- [ ] Add i18n key `flyer.downloadPdf` in `src/i18n/translations.ts` for all 6 languages
 
-### Phase 3: Deployment & Testing
+### Phase 3: Deployment & Verification
 
-- [ ] Configure Vercel function for PDF endpoint (memory, timeout)
-- [ ] Test PDF generation on Vercel deployment
-- [ ] Verify multilingual PDF output (Spanish, Vietnamese, Chinese, Arabic, Tagalog)
-- [ ] Verify QR code renders correctly in PDF
+- [ ] Add `functions` config to `vercel.json` for PDF endpoint (`maxDuration: 30`, `memory: 1024`)
+- [ ] Deploy to Vercel and test PDF generation end-to-end
+- [ ] Verify multilingual PDF output: English, Spanish, Vietnamese, Chinese, Arabic, Tagalog
+- [ ] Verify QR code renders correctly in PDF and points to correct URL
+- [ ] Verify PDF is a single page (content does not overflow)
+- [ ] Verify PDF filename in browser download dialog
 
 ## Files to Create/Modify
 
@@ -311,12 +346,22 @@ The HTML template in `server/services/pdf.ts` must replicate the `FlyerLayout` c
 | `package.json` | Modify | Add `puppeteer-core`, `@sparticuz/chromium`, `qrcode` deps |
 | `vercel.json` | Modify | Configure function memory/timeout for PDF endpoint (if needed) |
 
+## Open Questions
+
+These were identified during spec-flow analysis and should be resolved during implementation:
+
+1. **Vercel plan tier** — Is the project on Vercel Free or Pro? Free tier has 10s function timeout (insufficient for Puppeteer cold start). Pro allows 60s and larger function bundles.
+2. **PDF caching for MVP?** — Should generated PDFs be cached to `server/cache/pdfs/{community}_{langCode}.pdf` with 24h TTL? This avoids re-rendering identical reports. Recommended for post-MVP.
+3. **Block-level PDF in scope?** — The endpoint currently targets community-level reports only. Block-level reports use `lat/lng/radius` instead of community name. Defer to a follow-up?
+
 ## Future Considerations
 
-- **Batch PDF generation** — Extend the `generate-reports` script to also produce PDFs for all pre-generated reports, creating a `server/cache/pdfs/` directory.
-- **PDF caching** — Cache generated PDFs on disk to avoid re-rendering identical reports. Key by `{community}_{language}_hash.pdf`.
+- **PDF caching** — Cache generated PDFs on disk (`server/cache/pdfs/`) to avoid re-rendering. Key by `{community}_{langCode}.pdf` with 24h TTL. Check cache before launching Puppeteer.
+- **Batch PDF generation** — Extend `scripts/generate-reports.ts` to also produce PDFs for all pre-generated reports alongside the JSON files.
+- **Block-level PDFs** — Add support for anchor-specific block reports via optional `lat/lng/radius` parameters on the PDF endpoint.
 - **Email integration** — Attach generated PDFs to community notification emails.
-- **Block-level PDFs** — Extend to support block-level reports (anchor-specific briefs) with the same flow.
+- **PDF accessibility** — Add PDF tags and reading order metadata (PDF/UA compliance) for screen reader support. Puppeteer's `page.pdf()` does not produce tagged PDFs by default; may need post-processing with a library like `pdf-lib`.
+- **Full Arabic RTL** — Extend `FlyerLayout` React component itself to support `dir="rtl"` and RTL-aware layout classes, not just the server-side HTML template.
 
 ## Sources & References
 
