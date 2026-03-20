@@ -191,9 +191,10 @@ export default function Sidebar({
                 sparklineData={trends.monthly.map(d => d.resolutionRate)}
               />
               <div className="mt-1.5">
+                {/* Inverted: more 311 requests = declining neighborhood health, fewer = improving */}
                 <TrendIndicator
                   direction={trends.summary.volumeChange > 10 ? 'declining' : trends.summary.volumeChange < -10 ? 'improving' : 'stable'}
-                  label="Request volume"
+                  label="Neighborhood activity"
                   sparklineData={trends.monthly.map(d => d.totalRequests)}
                 />
               </div>
