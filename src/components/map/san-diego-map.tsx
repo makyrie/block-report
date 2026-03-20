@@ -50,7 +50,7 @@ function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
           <span className="font-medium">Neighborhood:</span> {anchor.community}
         </p>
       )}
-      {anchor.phone && (
+      {anchor.phone && /^[\d\s()+\-]+$/.test(anchor.phone) && (
         <p className="text-xs mt-1">
           <a
             href={`tel:${anchor.phone}`}
@@ -61,7 +61,7 @@ function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
           </a>
         </p>
       )}
-      {anchor.website && (
+      {anchor.website && /^https?:\/\//i.test(anchor.website) && (
         <p className="text-xs mt-0.5">
           <a
             href={anchor.website}
@@ -397,7 +397,7 @@ function SanDiegoMap({
       {/* Choropleth layer — renders below markers */}
       {showChoropleth && neighborhoodBoundaries && (
         <GeoJSON
-          key="choropleth"
+          key={`choropleth-${accessGapScores?.size ?? 0}`}
           data={neighborhoodBoundaries}
           style={(feature) => {
             const name = normalizeCommunityName(feature?.properties?.cpname || '');
