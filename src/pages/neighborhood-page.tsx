@@ -4,8 +4,8 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
-import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
+import { getLibraries, getRecCenters, getTransitStops, getPermits, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
+import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, Permit, TransitStop } from '../types';
 import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
@@ -20,6 +20,7 @@ export default function NeighborhoodPage() {
   const [libraries, setLibraries] = useState<CommunityAnchor[]>([]);
   const [recCenters, setRecCenters] = useState<CommunityAnchor[]>([]);
   const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
+  const [permits, setPermits] = useState<Permit[]>([]);
   const [neighborhoodBoundaries, setNeighborhoodBoundaries] = useState<FeatureCollection | null>(null);
 
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
@@ -60,6 +61,7 @@ export default function NeighborhoodPage() {
     getTransitStops()
       .then(setTransitStops)
       .catch(console.error);
+    getPermits().then(setPermits).catch(console.error);
   }, []);
 
   // Fetch 311 metrics and demographics when community changes
@@ -350,6 +352,7 @@ export default function NeighborhoodPage() {
           libraries={libraries}
           recCenters={recCenters}
           transitStops={transitStops}
+          permits={permits}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
           onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}

@@ -43,6 +43,42 @@ router.get('/transit-stops', async (_req, res) => {
   }
 });
 
+router.get('/permits', async (req, res) => {
+  try {
+    const community = req.query.community as string | undefined;
+    const where: Record<string, unknown> = {
+      lat: { not: null },
+      lng: { not: null },
+    };
+
+    if (community) {
+      where.community = community;
+    }
+
+    const data = await prisma.permit.findMany({
+      where,
+      select: {
+        id: true,
+        permit_number: true,
+        permit_type: true,
+        description: true,
+        date_issued: true,
+        status: true,
+        street_address: true,
+        community: true,
+        lat: true,
+        lng: true,
+      },
+      orderBy: { date_issued: 'desc' },
+      take: 5000,
+    });
+    res.json(data);
+  } catch (err) {
+    logger.error('Failed to fetch permits', { error: (err as Error).message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/neighborhoods', async (_req, res) => {
   const now = Date.now();
   if (neighborhoodsCache && now - neighborhoodsCachedAt < NEIGHBORHOODS_TTL) {

@@ -5,7 +5,7 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
+import type { BlockMetrics, CommunityAnchor, Permit, TransitStop } from '../../types';
 
 // ── Popup content components ─────────────────────────────────────────────────
 
@@ -15,10 +15,11 @@ type TypeConfig = {
   text: string;  // text color for label
 };
 
-const TYPE_CONFIG: Record<'library' | 'rec_center' | 'transit', TypeConfig> = {
+const TYPE_CONFIG: Record<'library' | 'rec_center' | 'transit' | 'permit', TypeConfig> = {
   library:    { dot: 'bg-blue-500',  label: 'Library',      text: 'text-blue-700'  },
   rec_center: { dot: 'bg-green-500', label: 'Rec Center',   text: 'text-green-700' },
   transit:    { dot: 'bg-violet-600', label: 'Transit Stop', text: 'text-violet-700' },
+  permit:     { dot: 'bg-amber-500', label: 'Permit',       text: 'text-amber-700' },
 };
 
 function TypeBadge({ type }: { type: keyof typeof TYPE_CONFIG }) {
@@ -81,6 +82,36 @@ function TransitPopupContent({ name }: { name: string }) {
     <div className="min-w-[160px] max-w-[240px]">
       <TypeBadge type="transit" />
       <p className="font-semibold text-gray-900 text-sm leading-snug">{name}</p>
+    </div>
+  );
+}
+
+function PermitPopupContent({ permit }: { permit: Permit }) {
+  return (
+    <div className="min-w-[200px] max-w-[260px]">
+      <TypeBadge type="permit" />
+      {permit.permit_type && (
+        <p className="font-semibold text-gray-900 text-sm leading-snug mb-1">{permit.permit_type}</p>
+      )}
+      {permit.description && (
+        <p className="text-xs text-gray-600 mb-1.5 line-clamp-3">{permit.description}</p>
+      )}
+      {permit.street_address && (
+        <p className="text-xs text-gray-600 flex items-start gap-1 mb-1">
+          <span aria-hidden="true" className="mt-px shrink-0">📍</span>
+          <span>{permit.street_address}</span>
+        </p>
+      )}
+      {permit.date_issued && (
+        <p className="text-xs text-gray-500">
+          Issued: {new Date(permit.date_issued).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </p>
+      )}
+      {permit.status && (
+        <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+          {permit.status}
+        </span>
+      )}
     </div>
   );
 }
@@ -206,6 +237,7 @@ interface SanDiegoMapProps {
   libraries: CommunityAnchor[];
   recCenters: CommunityAnchor[];
   transitStops: TransitStop[];
+  permits: Permit[];
   neighborhoodBoundaries: FeatureCollection | null;
   selectedCommunity: string | null;
   onAnchorClick: (anchor: CommunityAnchor) => void;
@@ -294,6 +326,7 @@ function SanDiegoMap({
   libraries,
   recCenters,
   transitStops,
+  permits,
   neighborhoodBoundaries,
   selectedCommunity,
   onAnchorClick,
@@ -330,6 +363,10 @@ function SanDiegoMap({
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
           <span className="text-gray-700">Transit Stop</span>
+        </li>
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-amber-500 shrink-0" />
+          <span className="text-gray-700">Permit</span>
         </li>
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-orange-500 shrink-0" />
@@ -392,6 +429,20 @@ function SanDiegoMap({
           }}
         />
       )}
+
+      {/* Permit markers — amber circles */}
+      {permits.map((permit) => (
+        <CircleMarker
+          key={`permit-${permit.id}`}
+          center={[permit.lat, permit.lng]}
+          radius={5}
+          pathOptions={{ color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.8, weight: 1 }}
+        >
+          <Popup>
+            <PermitPopupContent permit={permit} />
+          </Popup>
+        </CircleMarker>
+      ))}
 
       {/* Transit stops — violet circles */}
       {transitStops.map((stop) => (

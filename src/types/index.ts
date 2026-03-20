@@ -49,6 +49,19 @@ export interface NeighborhoodProfile {
   } | null;
 }
 
+export interface Permit {
+  id: number;
+  permit_number: string;
+  permit_type: string | null;
+  description: string | null;
+  date_issued: string | null;
+  status: string | null;
+  street_address: string | null;
+  community: string | null;
+  lat: number;
+  lng: number;
+}
+
 export interface TransitStop {
   id: string;
   name: string;

@@ -322,6 +322,54 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
   console.log(`  ✓ ${mapped} tracts mapped to communities`);
 }
 
+async function seedPermits() {
+  console.log('Seeding permits (last 12 months)...');
+  const cutoffDate = new Date();
+  cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+
+  const rows = await fetchCsv(
+    'https://seshat.datasd.org/dsd_permits/dsd_permits_all_pts_datasd.csv'
+  );
+
+  const filtered = rows.filter((r) => {
+    const dateStr = r.date_issued || r.approval_date || '';
+    if (!dateStr || new Date(dateStr) < cutoffDate) return false;
+    const status = (r.status || '').toLowerCase();
+    return !['denied', 'withdrawn', 'cancelled', 'void'].includes(status);
+  });
+
+  console.log(`  Filtered to ${filtered.length} recent permits`);
+
+  const mapped = filtered.map((r) => ({
+    permit_number: r.permit_number || r.approval_id || r.project_id || '',
+    permit_type: r.permit_type || r.approval_type || null,
+    description: r.project_title || r.description || null,
+    date_issued: (r.date_issued || r.approval_date) ? new Date(r.date_issued || r.approval_date) : null,
+    status: r.status || null,
+    street_address: r.street_address || r.address || null,
+    community: r.comm_plan_name ? toTitleCase(r.comm_plan_name.trim()) : (r.community_plan ? toTitleCase(r.community_plan.trim()) : null),
+    lat: parseFloat_(r.lat),
+    lng: parseFloat_(r.lng),
+  }));
+
+  // Deduplicate by permit_number (CSV may have dupes)
+  const seen = new Set<string>();
+  const unique = mapped.filter((p) => {
+    if (!p.permit_number || seen.has(p.permit_number)) return false;
+    seen.add(p.permit_number);
+    return true;
+  });
+
+  const batchSize = 1000;
+  let inserted = 0;
+  for (let i = 0; i < unique.length; i += batchSize) {
+    const batch = unique.slice(i, i + batchSize);
+    const result = await prisma.permit.createMany({ data: batch });
+    inserted += result.count;
+  }
+  console.log(`  ✓ ${inserted} permits`);
+}
+
 // --- Main ---
 
 async function main() {
@@ -329,7 +377,7 @@ async function main() {
 
   console.log('Truncating tables...');
   await prisma.$executeRawUnsafe(
-    'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language'
+    'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language, permits'
   );
   console.log('  ✓ Tables truncated\n');
 
@@ -338,6 +386,7 @@ async function main() {
   await seedTransitStops();
   await seed311();
   await seedCensusLanguage();
+  await seedPermits();
 
   console.log('\nSeed complete.');
 }

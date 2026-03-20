@@ -84,6 +84,24 @@ router.get('/', async (req, res) => {
     );
   }
 
+  // 5. Recent permit activity as investment signal
+  try {
+    const recentPermits = await prisma.permit.count({
+      where: {
+        community: cleaned,
+        date_issued: { gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) },
+      },
+    });
+    if (recentPermits > 0) {
+      goodNews.push(
+        `${recentPermits} building permits were issued in the last 6 months — a sign of active investment in the neighborhood.`
+      );
+    }
+  } catch (err) {
+    logger.error('Failed to fetch permit good news', { error: (err as Error).message });
+    // Non-fatal — don't block the response
+  }
+
   res.json({
     totalRequests311: total,
     resolvedCount,
