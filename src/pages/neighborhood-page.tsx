@@ -236,6 +236,16 @@ export default function NeighborhoodPage() {
       .finally(() => setBlockLoading(false));
   }, [blockRadius, pinnedLocation]);
 
+  const handleAnchorClickMobile = useCallback(
+    (anchor: CommunityAnchor) => { handleAnchorClick(anchor); setMobileView('info'); },
+    [handleAnchorClick],
+  );
+
+  const handleToggleChoropleth = useCallback(
+    () => setShowChoropleth(prev => !prev),
+    [],
+  );
+
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
@@ -365,7 +375,7 @@ export default function NeighborhoodPage() {
           transitStops={transitStops}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
-          onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}
+          onAnchorClick={handleAnchorClickMobile}
           onMapClick={handleMapClick}
           pinnedLocation={pinnedLocation}
           blockData={blockData}
@@ -373,7 +383,7 @@ export default function NeighborhoodPage() {
           blockRadius={blockRadius}
           accessGapScores={accessGapScores}
           showChoropleth={showChoropleth}
-          onToggleChoropleth={() => setShowChoropleth(prev => !prev)}
+          onToggleChoropleth={handleToggleChoropleth}
           onCommunitySelect={handleCommunityChange}
         />
       </main>
