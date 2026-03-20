@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clampLimit } from '../../../server/clamp-limit';
+import { clampLimit } from '../clamp-limit';
 
 describe('limit clamping (gap-analysis ranking)', () => {
   it('defaults to 10 for undefined', () => {
@@ -14,8 +14,8 @@ describe('limit clamping (gap-analysis ranking)', () => {
     expect(clampLimit(-5)).toBe(1);
   });
 
-  it('clamps zero to 10 (falsy → default)', () => {
-    expect(clampLimit(0)).toBe(10);
+  it('clamps zero to 1 (minimum valid limit)', () => {
+    expect(clampLimit(0)).toBe(1);
   });
 
   it('caps at 100', () => {
@@ -29,5 +29,10 @@ describe('limit clamping (gap-analysis ranking)', () => {
 
   it('floors at 1 for negative string', () => {
     expect(clampLimit('-10')).toBe(1);
+  });
+
+  it('floors fractional values to integers', () => {
+    expect(clampLimit(3.7)).toBe(3);
+    expect(clampLimit('10.9')).toBe(10);
   });
 });
