@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getTransitScores, getTransitScore, getCityAverage } from '../services/transit.js';
+import { getTransitScores, getTransitScore, getCityAverage as computeCityAverage } from '../services/transit.js';
 import { normalizeCommunityName } from '../services/communities.js';
 import { logger } from '../logger.js';
 
@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
         agencyCount: 0,
         agencies: [],
         transitScore: 0,
-        cityAverage: getCityAverage(scores),
+        cityAverage: computeCityAverage(scores),
         travelTimeToCityHall: null,
       });
       return;

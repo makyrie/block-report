@@ -41,6 +41,7 @@ export interface TransitScore {
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 let scoresCache: Map<string, TransitScore> | null = null;
+let cityAverageCache: number = 0;
 let scoresCachedAt = 0;
 let inflightComputation: Promise<Map<string, TransitScore>> | null = null;
 
@@ -139,6 +140,7 @@ export async function getTransitScores(): Promise<Map<string, TransitScore>> {
   inflightComputation = computeAllScores()
     .then((result) => {
       scoresCache = result;
+      cityAverageCache = computeCityAverage(result);
       scoresCachedAt = Date.now();
       return result;
     })
@@ -152,17 +154,20 @@ export async function getTransitScore(communityName: string): Promise<TransitSco
   const scores = await getTransitScores();
   const key = normalizeCommunityName(communityName);
   const score = scores.get(key);
-  const cityAverage = getCityAverage(scores);
 
   if (!score) {
     return null;
   }
 
-  return { ...score, cityAverage };
+  return { ...score, cityAverage: cityAverageCache };
 }
 
-export function getCityAverage(scores: Map<string, TransitScore>): number {
+function computeCityAverage(scores: Map<string, TransitScore>): number {
   const values = Array.from(scores.values());
   if (values.length === 0) return 0;
   return Math.round(values.reduce((sum, s) => sum + s.transitScore, 0) / values.length);
+}
+
+export function getCityAverage(scores: Map<string, TransitScore>): number {
+  return computeCityAverage(scores);
 }
