@@ -19,6 +19,7 @@ export async function getBlockMetrics(lat: number, lng: number, radius: number =
   const latDelta = radius / MILES_PER_LAT_DEG;
   const lngDelta = radius / MILES_PER_LNG_DEG;
 
+  const ROW_LIMIT = 10_000;
   const data = await prisma.request311.findMany({
     select: {
       service_name: true,
@@ -32,6 +33,7 @@ export async function getBlockMetrics(lat: number, lng: number, radius: number =
       lat: { gte: lat - latDelta, lte: lat + latDelta },
       lng: { gte: lng - lngDelta, lte: lng + lngDelta },
     },
+    take: ROW_LIMIT,
   });
 
   const nearby = data.filter(
