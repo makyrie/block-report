@@ -36,10 +36,18 @@ app.use(cors({
 
 app.use(express.json());
 
-// Health check — registered before rate limiter so monitoring doesn't consume API budget
-app.get('/api/health', async (_req, res) => {
+// Liveness probe — no DB, instant response for load balancers
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// Readiness probe — deep DB check with timeout for deploy verification
+app.get('/api/health/ready', async (_req, res) => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('DB health check timed out')), 5000),
+    );
+    await Promise.race([prisma.$queryRaw`SELECT 1`, timeout]);
     res.json({ status: 'ok' });
   } catch {
     res.status(503).json({ status: 'error' });
