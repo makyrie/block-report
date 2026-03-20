@@ -9,5 +9,11 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/purge-cache",
+      "schedule": "0 */6 * * *"
+    }
   ]
 }

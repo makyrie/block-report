@@ -101,7 +101,24 @@ app.use('/api/transit', transitRouter);
 app.use('/api/access-gap', gapAnalysisRouter);
 app.use('/api/block', blockRouter);
 
-// Purge stale cache rows on startup (fire-and-forget)
-purgeStaleCache().catch(() => {});
+// Cron-triggered cache purge — call via Vercel Cron or manual GET
+// Protected by CRON_SECRET to prevent abuse
+app.get('/api/cron/purge-cache', async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  try {
+    const count = await purgeStaleCache();
+    logger.info('Cron: purged stale cache', { count });
+    res.json({ purged: count });
+  } catch (err) {
+    logger.error('Cron: cache purge failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    res.status(500).json({ error: 'Purge failed' });
+  }
+});
 
 export default app;
