@@ -60,11 +60,16 @@ async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
     await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.evaluate(() => document.fonts.ready);
 
-    const pdf = await page.pdf({
+    const PDF_TIMEOUT_MS = 10_000;
+    const pdfPromise = page.pdf({
       format: 'Letter',
       margin: { top: '0.5in', right: '0.6in', bottom: '0.5in', left: '0.6in' },
       printBackground: true,
     });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('PDF rendering timed out')), PDF_TIMEOUT_MS),
+    );
+    const pdf = await Promise.race([pdfPromise, timeoutPromise]);
     return Buffer.from(pdf);
   } finally {
     await page.close();
