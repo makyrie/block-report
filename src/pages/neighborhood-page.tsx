@@ -1,16 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { getLibraries, getRecCenters, getTransitStops, get311, get311Trends, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
-import type { BlockMetrics, CommunityAnchor, CommunityReport, CommunityTrends, NeighborhoodProfile, TransitStop } from '../types';
+import { getLibraries, getRecCenters, getTransitStops, get311, get311Trends, getDemographics, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
+import type { BlockMetrics, CommunityAnchor, CommunityTrends, NeighborhoodProfile, TransitStop } from '../types';
 import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
-import { buildNeighborhoodProfile } from '../utils/build-profile';
+import { useReport } from '../hooks/use-report';
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -34,16 +34,13 @@ export default function NeighborhoodPage() {
   const [transitScore, setTransitScore] = useState<NeighborhoodProfile['transit'] | null>(null);
   const [accessGap, setAccessGap] = useState<NeighborhoodProfile['accessGap']>(null);
   const [trends, setTrends] = useState<CommunityTrends | null>(null);
+  const [trendsSettled, setTrendsSettled] = useState(false);
   const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [blockData, setBlockData] = useState<BlockMetrics | null>(null);
   const [blockLoading, setBlockLoading] = useState(false);
   const [blockRadius, setBlockRadius] = useState(0.25);
 
   const [dataError, setDataError] = useState<string | null>(null);
-
-  const [report, setReport] = useState<CommunityReport | null>(null);
-  const [reportLoading, setReportLoading] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
 
   // Sync URL -> state when slug changes (e.g. browser back/forward)
   useEffect(() => {
@@ -73,6 +70,7 @@ export default function NeighborhoodPage() {
       setTransitScore(null);
       setAccessGap(null);
       setTrends(null);
+      setTrendsSettled(false);
       return;
     }
 
@@ -85,6 +83,7 @@ export default function NeighborhoodPage() {
     setTransitScore(null);
     setAccessGap(null);
     setTrends(null);
+    setTrendsSettled(false);
 
     get311(selectedCommunity, signal)
       .then(setMetrics)
@@ -101,7 +100,8 @@ export default function NeighborhoodPage() {
 
     get311Trends(selectedCommunity, signal)
       .then(setTrends)
-      .catch(() => { /* trends may not be available for all communities */ });
+      .catch(() => { /* trends may not be available for all communities */ })
+      .finally(() => { if (!signal.aborted) setTrendsSettled(true); });
 
     getDemographics(selectedCommunity, signal)
       .then((data) => {
@@ -114,71 +114,17 @@ export default function NeighborhoodPage() {
     return () => { controller.abort(); };
   }, [selectedCommunity]);
 
-  // Clear report when community or language changes
-  const generatingRef = useRef(false);
-  useEffect(() => {
-    setReport(null);
-    setReportError(null);
-  }, [selectedCommunity, reportLang]);
-
-  // Auto-fetch pre-generated report, falling back to on-demand generation
-  useEffect(() => {
-    if (!selectedCommunity) return;
-    if (generatingRef.current) return;
-
-    let cancelled = false;
-    setReportLoading(true);
-
-    (async () => {
-      // Step 1: Try to load pre-generated report instantly
-      const cached = await getPreGeneratedReport(selectedCommunity, reportLang);
-      if (cancelled) return;
-
-      if (cached) {
-        setReport(cached);
-        setReportLoading(false);
-        return;
-      }
-
-      // Step 2: No cached report — generate on-demand if metrics are available
-      if (!metrics) {
-        // Metrics haven't loaded yet; this effect will re-run when they do
-        setReportLoading(false);
-        return;
-      }
-
-      // Already have a report — don't regenerate on metrics updates
-      if (report) {
-        setReportLoading(false);
-        return;
-      }
-
-      generatingRef.current = true;
-
-      const profile = buildNeighborhoodProfile({
-        communityName: selectedCommunity,
-        anchor: selectedAnchor,
-        metrics,
-        transitScore,
-        topLanguages,
-        trends,
-        accessGap,
-      });
-
-      try {
-        const result = await generateReport(profile, reportLang);
-        if (!cancelled) setReport(result);
-      } catch (err) {
-        if (!cancelled) setReportError(err instanceof Error ? err.message : 'Failed to generate report');
-      } finally {
-        generatingRef.current = false;
-        if (!cancelled) setReportLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCommunity, reportLang, metrics, trends]);
+  const { report, reportLoading, reportError, regenerate: handleGenerateReport } = useReport({
+    community: selectedCommunity,
+    reportLang,
+    metrics,
+    trends,
+    trendsSettled,
+    topLanguages,
+    anchor: selectedAnchor,
+    transitScore,
+    accessGap,
+  });
 
   const handleCommunityChange = useCallback(
     (community: string) => {
@@ -225,32 +171,6 @@ export default function NeighborhoodPage() {
       .catch((err) => console.error('Failed to fetch block data', err))
       .finally(() => setBlockLoading(false));
   }, [blockRadius, pinnedLocation]);
-
-  const handleGenerateReport = useCallback(async (language: string) => {
-    if (!selectedCommunity || !metrics) return;
-
-    const profile = buildNeighborhoodProfile({
-      communityName: selectedCommunity,
-      anchor: selectedAnchor,
-      metrics,
-      transitScore,
-      topLanguages,
-      trends,
-      accessGap,
-    });
-
-    setReportLoading(true);
-    setReportError(null);
-    try {
-      const result = await generateReport(profile, language);
-      setReport(result);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate report';
-      setReportError(message);
-    } finally {
-      setReportLoading(false);
-    }
-  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap, trends]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">

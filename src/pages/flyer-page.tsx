@@ -1,13 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { COMMUNITIES } from '../types/communities';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
-import { buildNeighborhoodProfile } from '../utils/build-profile';
-import { get311, get311Trends, getDemographics, getPreGeneratedReport, generateReport } from '../api/client';
-import type { CommunityReport, CommunityTrends, NeighborhoodProfile } from '../types';
+import { get311, get311Trends, getDemographics } from '../api/client';
+import type { CommunityTrends, NeighborhoodProfile } from '../types';
+import { useReport } from '../hooks/use-report';
 
 export default function FlyerPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -19,74 +19,39 @@ export default function FlyerPage() {
   const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
   const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
   const [trends, setTrends] = useState<CommunityTrends | null>(null);
-  const [report, setReport] = useState<CommunityReport | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const generatingRef = useRef(false);
+  const [trendsSettled, setTrendsSettled] = useState(false);
 
   // Fetch metrics and demographics when community is set
   useEffect(() => {
     if (!community) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+
     setMetrics(null);
     setTopLanguages([]);
     setTrends(null);
-    get311(community).then(setMetrics).catch(console.error);
-    get311Trends(community).then(setTrends).catch(console.error);
-    getDemographics(community)
-      .then((data) => { if (data?.topLanguages) setTopLanguages(data.topLanguages); })
-      .catch(console.error);
+    setTrendsSettled(false);
+
+    get311(community, signal).then(setMetrics).catch((err) => { if (!signal.aborted) console.error(err); });
+    get311Trends(community, signal)
+      .then(setTrends)
+      .catch(() => { /* trends may not be available */ })
+      .finally(() => { if (!signal.aborted) setTrendsSettled(true); });
+    getDemographics(community, signal)
+      .then((data) => { if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages); })
+      .catch(() => {});
+
+    return () => { controller.abort(); };
   }, [community]);
 
-  // Auto-fetch report when community and language are ready
-  useEffect(() => {
-    if (!community) return;
-    if (generatingRef.current) return;
-
-    let cancelled = false;
-    setReport(null);
-    setError(null);
-    setLoading(true);
-
-    (async () => {
-      // Try pre-generated first
-      const cached = await getPreGeneratedReport(community, reportLang);
-      if (cancelled) return;
-
-      if (cached) {
-        setReport(cached);
-        setLoading(false);
-        return;
-      }
-
-      // Fall back to on-demand generation if metrics are ready
-      if (!metrics) {
-        setLoading(false);
-        return;
-      }
-
-      generatingRef.current = true;
-
-      const profile = buildNeighborhoodProfile({
-        communityName: community,
-        metrics,
-        topLanguages,
-        trends,
-      });
-
-      try {
-        const result = await generateReport(profile, reportLang);
-        if (!cancelled) setReport(result);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to generate report');
-      } finally {
-        generatingRef.current = false;
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [community, reportLang, metrics, trends]);
+  const { report, reportLoading: loading, reportError: error } = useReport({
+    community,
+    reportLang,
+    metrics,
+    trends,
+    trendsSettled,
+    topLanguages,
+  });
 
   function handlePrint() {
     window.print();
