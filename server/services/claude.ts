@@ -71,7 +71,7 @@ function getClient(): Anthropic {
       'ANTHROPIC_API_KEY is not set. Add it to your .env file.',
     );
   }
-  _client = new Anthropic({ apiKey, timeout: 45_000 }); // 45s timeout — leaves headroom within Vercel's 60s function limit
+  _client = new Anthropic({ apiKey, timeout: 40_000 }); // 40s timeout — leaves 20s headroom for cold start within Vercel's 60s limit
   return _client;
 }
 
