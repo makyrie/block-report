@@ -17,7 +17,7 @@ export async function getNeighborhoodsGeoJSON(): Promise<{
     return neighborhoodsCache;
   }
 
-  const response = await fetch(NEIGHBORHOODS_URL);
+  const response = await fetch(NEIGHBORHOODS_URL, { signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`Failed to fetch boundaries: ${response.status}`);
   const data = await response.json();
   neighborhoodsCache = data;
