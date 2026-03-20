@@ -60,7 +60,7 @@ const SESSION_TTL = 30 * 60 * 1000; // 30 minutes
 const transports = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer; lastActivity: number }>();
 
 // Periodic cleanup of stale sessions
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [sid, entry] of transports) {
     if (now - entry.lastActivity > SESSION_TTL) {
@@ -93,7 +93,13 @@ app.post('/mcp', async (req, res) => {
 
   transport.onclose = () => {
     const sid = transport.sessionId;
-    if (sid) transports.delete(sid);
+    if (sid) {
+      const entry = transports.get(sid);
+      if (entry) {
+        entry.server.close().catch(() => {});
+        transports.delete(sid);
+      }
+    }
   };
 
   await server.connect(transport);
@@ -131,6 +137,12 @@ app.delete('/mcp', async (req, res) => {
 // Graceful shutdown
 async function shutdown() {
   console.error('MCP HTTP server shutting down...');
+  clearInterval(cleanupInterval);
+  for (const [, entry] of transports) {
+    entry.transport.close?.();
+    await entry.server.close().catch(() => {});
+  }
+  transports.clear();
   await prisma.$disconnect();
   process.exit(0);
 }
