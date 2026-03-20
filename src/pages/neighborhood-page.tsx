@@ -61,8 +61,16 @@ export default function NeighborhoodPage() {
     getTransitStops()
       .then(setTransitStops)
       .catch(console.error);
-    getPermits().then(setPermits).catch(console.error);
   }, []);
+
+  // Fetch permits filtered by selected community
+  useEffect(() => {
+    if (!selectedCommunity) {
+      setPermits([]);
+      return;
+    }
+    getPermits(selectedCommunity).then(setPermits).catch(console.error);
+  }, [selectedCommunity]);
 
   // Fetch 311 metrics and demographics when community changes
   useEffect(() => {
