@@ -18,6 +18,8 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
   const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Fade-in animation on mount
   useEffect(() => {
@@ -26,6 +28,31 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
   }, []);
 
   const slug = toSlug(report.neighborhoodName);
+
+  async function handleDownloadPdf() {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const response = await fetch('/api/report/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report, metrics, topLanguages, neighborhoodSlug: slug }),
+      });
+      if (!response.ok) throw new Error('PDF generation failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `block-report-${slug}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF download failed:', err);
+      setDownloadError(t('flyer.downloadError'));
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <>
@@ -84,6 +111,15 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
           </button>
           <button
             type="button"
+            onClick={handleDownloadPdf}
+            disabled={downloading}
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+          >
+            <DownloadIcon />
+            {downloading ? t('flyer.generating') : t('flyer.download')}
+          </button>
+          <button
+            type="button"
             onClick={() => setModalOpen(true)}
             className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
@@ -91,6 +127,9 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
             Full Size
           </button>
         </div>
+        {downloadError && (
+          <p className="mt-2 text-sm text-red-600">{downloadError}</p>
+        )}
       </div>
 
       {/* Full-size modal */}
@@ -121,6 +160,30 @@ function FlyerModal({
   onClose: () => void;
 }) {
   const { t } = useLanguage();
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownloadPdf() {
+    setDownloading(true);
+    try {
+      const response = await fetch('/api/report/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report, metrics, topLanguages, neighborhoodSlug: slug }),
+      });
+      if (!response.ok) throw new Error('PDF generation failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `block-report-${slug}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF download failed:', err);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   // Close on Escape
   useEffect(() => {
@@ -167,6 +230,15 @@ function FlyerModal({
             </button>
             <button
               type="button"
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+            >
+              <DownloadIcon />
+              {downloading ? t('flyer.generating') : t('flyer.download')}
+            </button>
+            <button
+              type="button"
               onClick={onClose}
               className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label="Close"
@@ -197,6 +269,14 @@ function PrinterIcon() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
   );
 }
