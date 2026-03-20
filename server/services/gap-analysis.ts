@@ -31,8 +31,39 @@ function normalize(value: number, min: number, max: number): number {
   return Math.max(0, Math.min(1, (value - min) / (max - min)));
 }
 
+// Fetch census-derived data for all communities in a single query,
+// returning both population (for engagement rate) and non-English percentage.
+async function fetchCensusAggregates(): Promise<{
+  populations: Map<string, number>;
+  nonEnglishPcts: Map<string, number>;
+}> {
+  const data = await prisma.censusLanguage.findMany({
+    select: { community: true, total_pop_5plus: true, english_only: true },
+  });
+
+  const agg = new Map<string, { totalPop: number; englishOnly: number }>();
+  for (const row of data) {
+    if (!row.community) continue;
+    const key = row.community.toUpperCase().trim();
+    const existing = agg.get(key) || { totalPop: 0, englishOnly: 0 };
+    existing.totalPop += Number(row.total_pop_5plus) || 0;
+    existing.englishOnly += Number(row.english_only) || 0;
+    agg.set(key, existing);
+  }
+
+  const populations = new Map<string, number>();
+  const nonEnglishPcts = new Map<string, number>();
+  for (const [community, stats] of agg) {
+    if (stats.totalPop <= 0) continue;
+    populations.set(community, stats.totalPop);
+    nonEnglishPcts.set(community, 1 - stats.englishOnly / stats.totalPop);
+  }
+
+  return { populations, nonEnglishPcts };
+}
+
 // Fetch 311 engagement rates for all communities using database-level aggregation
-async function fetchEngagementRates(): Promise<Map<string, number>> {
+async function fetchEngagementRates(populations: Map<string, number>): Promise<Map<string, number>> {
   const grouped = await prisma.request311.groupBy({
     by: ['comm_plan_name'],
     _count: { _all: true },
@@ -44,18 +75,6 @@ async function fetchEngagementRates(): Promise<Map<string, number>> {
     if (!row.comm_plan_name) continue;
     const key = row.comm_plan_name.toUpperCase().trim();
     counts.set(key, (counts.get(key) || 0) + row._count._all);
-  }
-
-  // Fetch population per community from census data
-  const censusRows = await prisma.censusLanguage.findMany({
-    select: { community: true, total_pop_5plus: true },
-  });
-
-  const populations = new Map<string, number>();
-  for (const row of censusRows) {
-    if (!row.community) continue;
-    const key = row.community.toUpperCase().trim();
-    populations.set(key, (populations.get(key) || 0) + (Number(row.total_pop_5plus) || 0));
   }
 
   // Compute per-1000 rate for communities that have both data points
@@ -79,40 +98,16 @@ async function fetchTransitScores(): Promise<Map<string, number>> {
   return result;
 }
 
-// Fetch non-English speaking percentage per community
-async function fetchNonEnglishPct(): Promise<Map<string, number>> {
-  const data = await prisma.censusLanguage.findMany({
-    select: { community: true, total_pop_5plus: true, english_only: true },
-  });
-
-  // Aggregate by community
-  const agg = new Map<string, { totalPop: number; englishOnly: number }>();
-  for (const row of data) {
-    if (!row.community) continue;
-    const key = row.community.toUpperCase().trim();
-    const existing = agg.get(key) || { totalPop: 0, englishOnly: 0 };
-    existing.totalPop += Number(row.total_pop_5plus) || 0;
-    existing.englishOnly += Number(row.english_only) || 0;
-    agg.set(key, existing);
-  }
-
-  const pcts = new Map<string, number>();
-  for (const [community, stats] of agg) {
-    if (stats.totalPop <= 0) continue;
-    pcts.set(community, 1 - stats.englishOnly / stats.totalPop);
-  }
-
-  return pcts;
-}
-
 async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
   logger.info('Computing access gap scores for all communities...');
 
-  const [engagementRates, transitScores, nonEnglishPcts] = await Promise.all([
-    fetchEngagementRates(),
+  const [censusAgg, transitScores] = await Promise.all([
+    fetchCensusAggregates(),
     fetchTransitScores(),
-    fetchNonEnglishPct(),
   ]);
+
+  const engagementRates = await fetchEngagementRates(censusAgg.populations);
+  const nonEnglishPcts = censusAgg.nonEnglishPcts;
 
   // Collect all known communities
   const allCommunities = new Set<string>();
