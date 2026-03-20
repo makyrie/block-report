@@ -1,26 +1,28 @@
+import crypto from 'crypto';
 import express from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { prisma } from '../services/db.js';
-import { registerCommunityTools } from './tools/communities.js';
-import { registerMetricsTools } from './tools/metrics.js';
-import { registerProfileTools } from './tools/profile.js';
-import { registerGapAnalysisTools } from './tools/gap-analysis.js';
-import { registerLocationTools } from './tools/locations.js';
-import { registerDemographicsTools } from './tools/demographics.js';
-import { registerTransitTools } from './tools/transit.js';
-import { registerBlockTools } from './tools/block.js';
+import { registerAllTools } from './register-tools.js';
 
 const AUTH_TOKEN = process.env.MCP_AUTH_TOKEN;
+
+if (!AUTH_TOKEN && process.env.MCP_AUTH_DISABLED !== 'true') {
+  console.error('MCP HTTP transport: MCP_AUTH_TOKEN is required. Set MCP_AUTH_DISABLED=true to bypass (development only).');
+  process.exit(1);
+}
 
 const app = express();
 app.use(express.json());
 
 // Bearer token authentication middleware
 if (AUTH_TOKEN) {
+  const tokenBuf = Buffer.from(AUTH_TOKEN);
   app.use('/mcp', (req, res, next) => {
     const auth = req.headers.authorization;
-    if (!auth || auth !== `Bearer ${AUTH_TOKEN}`) {
+    const supplied = auth?.startsWith('Bearer ') ? auth.slice(7) : '';
+    const suppliedBuf = Buffer.from(supplied);
+    if (suppliedBuf.length !== tokenBuf.length || !crypto.timingSafeEqual(suppliedBuf, tokenBuf)) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
@@ -28,7 +30,7 @@ if (AUTH_TOKEN) {
   });
   console.error('MCP HTTP transport: bearer token authentication enabled');
 } else {
-  console.error('MCP HTTP transport: WARNING - no MCP_AUTH_TOKEN set, running without authentication');
+  console.error('MCP HTTP transport: WARNING - running without authentication (MCP_AUTH_DISABLED=true)');
 }
 
 function createServer(): McpServer {
@@ -37,27 +39,40 @@ function createServer(): McpServer {
     version: '1.0.0',
   });
 
-  registerCommunityTools(server);
-  registerMetricsTools(server);
-  registerProfileTools(server);
-  registerGapAnalysisTools(server);
-  registerLocationTools(server);
-  registerDemographicsTools(server);
-  registerTransitTools(server);
-  registerBlockTools(server);
+  registerAllTools(server);
 
   return server;
 }
 
-// Map to store transports by session ID
-const transports = new Map<string, StreamableHTTPServerTransport>();
+// Map to store transports by session ID, with last-activity tracking
+const MAX_SESSIONS = 1000;
+const SESSION_TTL = 30 * 60 * 1000; // 30 minutes
+const transports = new Map<string, { transport: StreamableHTTPServerTransport; lastActivity: number }>();
+
+// Periodic cleanup of stale sessions
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, entry] of transports) {
+    if (now - entry.lastActivity > SESSION_TTL) {
+      entry.transport.close?.();
+      transports.delete(sid);
+    }
+  }
+}, 60 * 1000);
 
 app.post('/mcp', async (req, res) => {
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
   if (sessionId && transports.has(sessionId)) {
-    const transport = transports.get(sessionId)!;
-    await transport.handleRequest(req, res, req.body);
+    const entry = transports.get(sessionId)!;
+    entry.lastActivity = Date.now();
+    await entry.transport.handleRequest(req, res, req.body);
+    return;
+  }
+
+  // Reject new sessions when at capacity
+  if (transports.size >= MAX_SESSIONS) {
+    res.status(503).json({ error: 'Too many active sessions. Try again later.' });
     return;
   }
 
@@ -73,7 +88,7 @@ app.post('/mcp', async (req, res) => {
   await server.connect(transport);
 
   if (transport.sessionId) {
-    transports.set(transport.sessionId, transport);
+    transports.set(transport.sessionId, { transport, lastActivity: Date.now() });
   }
 
   await transport.handleRequest(req, res, req.body);
@@ -85,8 +100,9 @@ app.get('/mcp', async (req, res) => {
     res.status(400).json({ error: 'Missing or invalid session ID. Send a POST to /mcp first.' });
     return;
   }
-  const transport = transports.get(sessionId)!;
-  await transport.handleRequest(req, res);
+  const entry = transports.get(sessionId)!;
+  entry.lastActivity = Date.now();
+  await entry.transport.handleRequest(req, res);
 });
 
 app.delete('/mcp', async (req, res) => {
@@ -95,8 +111,8 @@ app.delete('/mcp', async (req, res) => {
     res.status(400).json({ error: 'Missing or invalid session ID' });
     return;
   }
-  const transport = transports.get(sessionId)!;
-  await transport.handleRequest(req, res);
+  const entry = transports.get(sessionId)!;
+  await entry.transport.handleRequest(req, res);
   transports.delete(sessionId);
 });
 
