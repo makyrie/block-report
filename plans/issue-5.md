@@ -25,7 +25,7 @@ Render all ~51 community planning district boundaries as filled GeoJSON polygons
 
 ### Architecture
 
-The data flow is straightforward — no new backend work required:
+The data flow is straightforward — one minor backend fix needed (raise ranking limit cap):
 
 ```
 Frontend mount → getAccessGapRanking(100) → Map<communityName, score>
@@ -37,11 +37,27 @@ GeoJSON feature.properties.cpname → lookup score → scoreToColor() → fillCo
 
 | File | Change |
 |------|--------|
+| `server/routes/gap-analysis.ts` | Raise ranking limit cap from 50 → 100 (line ~43) |
 | `src/pages/neighborhood-page.tsx` | Add state for access gap scores map + layer toggle; fetch scores on mount |
 | `src/components/map/san-diego-map.tsx` | Add choropleth GeoJSON layer with dynamic styling; add toggle control; add color legend |
 | `src/api/client.ts` | No changes — `getAccessGapRanking()` already exists |
 
 ### Implementation Phases
+
+#### Phase 0: Backend Fix — Raise Ranking Limit (gap-analysis.ts)
+
+The `/api/access-gap/ranking` endpoint caps results at 50 via `Math.min(Number(limit) || 10, 50)`. Since ~51 communities exist, this silently excludes 1 community. Raise the cap to 100.
+
+```typescript
+// server/routes/gap-analysis.ts line ~43
+// BEFORE: const limit = Math.min(Number(_req.query.limit) || 10, 50);
+// AFTER:
+const limit = Math.min(Number(_req.query.limit) || 10, 100);
+```
+
+**Acceptance criteria:**
+- [ ] Ranking endpoint allows `limit` up to 100
+- [ ] `getAccessGapRanking(100)` returns all ~51 communities
 
 #### Phase 1: Data Fetching & State (neighborhood-page.tsx)
 
@@ -202,15 +218,19 @@ function ChoroplethLegend() {
 
 ## Edge Cases & Considerations
 
+### Click Event Propagation
+
+The map has a `MapClickHandler` for the "pin your block" feature. Clicking a choropleth polygon must NOT also trigger block-pinning. Polygon click handlers should call `L.DomEvent.stopPropagation(e)` so clicks don't bubble to the map click handler.
+
 ### Community Name Matching
 
 The GeoJSON `cpname` property and API `community` field use different casing. Both sides normalize to uppercase with `.toUpperCase().trim()` before lookup. The backend already normalizes this way in `gap-analysis.ts:41,98`.
 
 ### Interaction with Selected Community Highlight
 
-When a community is selected, the existing code renders a single highlighted boundary. When the choropleth is active:
-- The choropleth layer should render beneath the selected community highlight
-- The selected community highlight should use a distinct style (thicker border, higher opacity) to stand out from the choropleth
+When a community is selected, the existing code renders a single highlighted boundary (blue fill at 12% opacity). When the choropleth is active:
+- The selected community should retain its choropleth fill color (to preserve score info) but get a thick dark border (3-4px, `#1e3a5f`) and slightly increased opacity to distinguish it
+- The existing selected-community `<GeoJSON>` layer renders on top of the choropleth layer
 - Both layers can coexist — the selected highlight overlays on top
 
 ### Loading State
