@@ -45,6 +45,11 @@ let cityAverageCache: number = 0;
 let scoresCachedAt = 0;
 let inflightComputation: Promise<Map<string, TransitScore>> | null = null;
 
+// Yield to the event loop to avoid blocking during heavy computation
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 async function computeAllScores(): Promise<Map<string, TransitScore>> {
   const stops = await prisma.transitStop.findMany({
     select: { lat: true, lng: true, stop_agncy: true },
@@ -65,7 +70,11 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
 
   const scores = new Map<string, TransitScore>();
 
-  for (const feature of geojson.features) {
+  for (let fi = 0; fi < geojson.features.length; fi++) {
+    // Yield every 5 communities to let other requests through
+    if (fi > 0 && fi % 5 === 0) await yieldToEventLoop();
+
+    const feature = geojson.features[fi];
     const communityName: string = feature.properties?.cpname || feature.properties?.name || '';
     if (!communityName) continue;
 
@@ -121,7 +130,10 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
     });
   }
 
-  const maxRaw = Math.max(...Array.from(scores.values()).map((s) => s.rawScore), 1);
+  let maxRaw = 1;
+  for (const s of scores.values()) {
+    if (s.rawScore > maxRaw) maxRaw = s.rawScore;
+  }
   for (const score of scores.values()) {
     score.transitScore = Math.round((score.rawScore / maxRaw) * 100);
   }
