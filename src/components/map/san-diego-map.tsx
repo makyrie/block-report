@@ -309,6 +309,9 @@ function SanDiegoMap({
   onToggleChoropleth,
   onCommunitySelect,
 }: SanDiegoMapProps) {
+  const onCommunitySelectRef = useRef(onCommunitySelect);
+  onCommunitySelectRef.current = onCommunitySelect;
+
   const handleMarkerClick = useCallback(
     (anchor: CommunityAnchor) => () => {
       onAnchorClick(anchor);
@@ -325,8 +328,7 @@ function SanDiegoMap({
     {/* Choropleth toggle */}
     {onToggleChoropleth && accessGapScores && accessGapScores.size > 0 && (
       <div className="absolute top-14 right-2 z-[999] print:hidden">
-        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 cursor-pointer"
-             onClick={onToggleChoropleth}>
+        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2">
           <label className="flex items-center gap-2 cursor-pointer text-sm">
             <input type="checkbox" checked={showChoropleth} onChange={onToggleChoropleth} className="accent-amber-600" />
             Access Gap Layer
@@ -413,7 +415,7 @@ function SanDiegoMap({
             layer.bindTooltip(el, { sticky: true });
             layer.on('click', (e) => {
               L.DomEvent.stopPropagation(e as L.LeafletEvent);
-              onCommunitySelect?.(name);
+              onCommunitySelectRef.current?.(name);
             });
           }}
         />
