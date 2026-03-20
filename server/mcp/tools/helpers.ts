@@ -41,10 +41,10 @@ export function withCommunityValidation(
 /**
  * Wraps a generic tool handler with error catching and logging.
  */
-export function withErrorHandling(
+export function withErrorHandling<T extends Record<string, unknown>>(
   toolName: string,
-  handler: (args: Record<string, unknown>) => Promise<ToolResult>,
-): (args: Record<string, unknown>) => Promise<ToolResult> {
+  handler: (args: T) => Promise<ToolResult>,
+): (args: T) => Promise<ToolResult> {
   return async (args) => {
     try {
       return await handler(args);

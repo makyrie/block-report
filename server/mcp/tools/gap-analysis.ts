@@ -11,7 +11,7 @@ export function registerGapAnalysisTools(server: McpServer) {
       limit: z.number().min(1).max(50).default(10).describe('Number of communities to return (1-50, default 10)'),
     },
     withErrorHandling('get_access_gap_ranking', async ({ limit }) => {
-      const ranking = await getTopUnderserved(limit as number);
+      const ranking = await getTopUnderserved(limit);
       return {
         content: [{
           type: 'text' as const,

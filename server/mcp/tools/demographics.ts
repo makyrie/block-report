@@ -38,7 +38,7 @@ export function registerDemographicsTools(server: McpServer) {
       tract: z.string().regex(/^\d{6}$/, 'Census tract must be a 6-digit string').describe('Census tract ID (6 digits, e.g. "008301")'),
     },
     withErrorHandling('get_demographics_by_tract', async ({ tract }) => {
-      const topLanguages = await getDemographicsByTract(tract as string);
+      const topLanguages = await getDemographicsByTract(tract);
       if (topLanguages.length === 0) {
         return {
           content: [{

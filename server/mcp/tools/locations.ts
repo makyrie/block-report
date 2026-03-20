@@ -33,7 +33,7 @@ export function registerLocationTools(server: McpServer) {
       community_name: z.string().optional().describe('Optional community name to filter rec centers (case-insensitive)'),
     },
     withErrorHandling('list_rec_centers', async ({ community_name }) => {
-      let filterName = community_name as string | undefined;
+      let filterName = community_name;
       if (filterName) {
         const { valid, normalized, names } = await validateCommunityName(filterName);
         if (!valid) {

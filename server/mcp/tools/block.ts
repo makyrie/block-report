@@ -13,7 +13,7 @@ export function registerBlockTools(server: McpServer) {
       radius: z.number().min(0.1).max(2).default(0.25).describe('Search radius in miles (0.1-2, default 0.25)'),
     },
     withErrorHandling('get_block_metrics', async ({ lat, lng, radius }) => {
-      const data = await getBlockMetrics(lat as number, lng as number, radius as number);
+      const data = await getBlockMetrics(lat, lng, radius);
       return {
         content: [{
           type: 'text' as const,
