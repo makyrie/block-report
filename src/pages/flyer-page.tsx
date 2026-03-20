@@ -68,6 +68,7 @@ export default function FlyerPage() {
         transit: { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
         demographics: { topLanguages },
         accessGap: null,
+        trends: trends ?? undefined,
       };
 
       try {
