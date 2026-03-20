@@ -5,6 +5,49 @@ import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
 
+/**
+ * Validate that Claude's tool_use output contains all required CommunityReport fields
+ * with correct types. Throws a descriptive error if validation fails.
+ */
+function validateReportInput(input: unknown): Omit<CommunityReport, 'generatedAt'> {
+  if (typeof input !== 'object' || input === null) {
+    throw new Error('Claude returned non-object tool input');
+  }
+
+  const obj = input as Record<string, unknown>;
+
+  // Required string fields
+  for (const field of ['neighborhoodName', 'language', 'summary'] as const) {
+    if (typeof obj[field] !== 'string' || (obj[field] as string).trim().length === 0) {
+      throw new Error(`Claude response missing or invalid field: ${field}`);
+    }
+  }
+
+  // Required string-array fields
+  for (const field of ['goodNews', 'topIssues', 'howToParticipate'] as const) {
+    if (!Array.isArray(obj[field]) || (obj[field] as unknown[]).length === 0) {
+      throw new Error(`Claude response missing or empty array field: ${field}`);
+    }
+    if (!(obj[field] as unknown[]).every((item) => typeof item === 'string')) {
+      throw new Error(`Claude response field ${field} contains non-string items`);
+    }
+  }
+
+  // Required contactInfo object
+  const ci = obj.contactInfo;
+  if (typeof ci !== 'object' || ci === null) {
+    throw new Error('Claude response missing contactInfo object');
+  }
+  const contact = ci as Record<string, unknown>;
+  for (const field of ['councilDistrict', 'phone311', 'anchorLocation'] as const) {
+    if (typeof contact[field] !== 'string') {
+      throw new Error(`Claude response contactInfo missing field: ${field}`);
+    }
+  }
+
+  return input as Omit<CommunityReport, 'generatedAt'>;
+}
+
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
   if (_client) return _client;
@@ -116,8 +159,9 @@ Keep the total report under 400 words. It should fit on one printed page.`;
       throw new Error('No tool use block in response');
     }
 
+    const validated = validateReportInput(toolBlock.input);
     const report: CommunityReport = {
-      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
+      ...validated,
       generatedAt: new Date().toISOString(),
     };
 
@@ -219,8 +263,9 @@ Keep the total report under 400 words. It should fit on one printed page.`;
       throw new Error('No tool use block in response');
     }
 
+    const validated = validateReportInput(toolBlock.input);
     const report: CommunityReport = {
-      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
+      ...validated,
       generatedAt: new Date().toISOString(),
     };
 
