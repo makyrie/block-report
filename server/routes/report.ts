@@ -220,14 +220,16 @@ router.post('/generate', async (req: Request, res: Response) => {
 // POST /api/report/generate-block — Generate a block-level report for an anchor location
 router.post('/generate-block', async (req: Request, res: Response) => {
   try {
-    const { anchor, blockMetrics, language, demographics } = req.body;
+    const { anchor: rawAnchor, blockMetrics, language, demographics } = req.body;
 
-    if (!anchor || !blockMetrics || !language) {
+    if (!rawAnchor || !blockMetrics || !language) {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;
     }
 
     // Validate anchor fields to prevent prompt injection via user-controlled strings
+    // Work on a copy to avoid mutating req.body
+    const anchor = { ...rawAnchor };
     const MAX_FIELD_LEN = 200;
     const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
     for (const field of ['name', 'address', 'community', 'type'] as const) {

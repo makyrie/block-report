@@ -5,13 +5,18 @@ import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
 
+const MAX_RECURSION_DEPTH = 10;
+
 /** Strip any string values longer than maxLen and remove control characters */
-function sanitizeStringFields(obj: unknown, maxLen = 500): unknown {
+function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
+  if (depth > MAX_RECURSION_DEPTH) {
+    throw new Error(`Object nesting too deep (max ${MAX_RECURSION_DEPTH} levels)`);
+  }
   if (typeof obj === 'string') {
     return obj.slice(0, maxLen).replace(/[\x00-\x1f\x7f]/g, '');
   }
   if (Array.isArray(obj)) {
-    return obj.slice(0, 50).map(item => sanitizeStringFields(item, maxLen));
+    return obj.slice(0, 50).map(item => sanitizeStringFields(item, maxLen, depth + 1));
   }
   if (obj !== null && typeof obj === 'object') {
     const sanitized: Record<string, unknown> = {};
@@ -20,7 +25,7 @@ function sanitizeStringFields(obj: unknown, maxLen = 500): unknown {
       throw new Error('Object has too many keys (max 100)');
     }
     for (const key of keys) {
-      sanitized[key] = sanitizeStringFields((obj as Record<string, unknown>)[key], maxLen);
+      sanitized[key] = sanitizeStringFields((obj as Record<string, unknown>)[key], maxLen, depth + 1);
     }
     return sanitized;
   }
@@ -184,16 +189,17 @@ export async function generateBlockReport(
   demographics?: { topLanguages: { language: string; percentage: number }[] },
 ): Promise<CommunityReport> {
   // Sanitize all user-supplied objects before embedding in prompt
+  const safeAnchor = sanitizeStringFields(anchor, 200) as CommunityAnchor;
   const safeMetrics = sanitizeBlockMetrics(blockMetrics);
   const safeDemographics = demographics ? sanitizeDemographics(demographics) : undefined;
 
   const client = getClient();
 
-  const anchorLabel = anchor.type === 'library' ? 'library' : 'recreation center';
+  const anchorLabel = safeAnchor.type === 'library' ? 'library' : 'recreation center';
 
-  const prompt = `You are generating a block-level community report for the area around ${anchor.name} (a ${anchorLabel}) in the ${anchor.community} neighborhood of San Diego. The report covers a ${safeMetrics.radiusMiles}-mile radius around this location at ${anchor.address}.
+  const prompt = `You are generating a block-level community report for the area around ${safeAnchor.name} (a ${anchorLabel}) in the ${safeAnchor.community} neighborhood of San Diego. The report covers a ${safeMetrics.radiusMiles}-mile radius around this location at ${safeAnchor.address}.
 
-This report will be printed and posted at ${anchor.name} for visitors and neighbors to read.
+This report will be printed and posted at ${safeAnchor.name} for visitors and neighbors to read.
 
 Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
@@ -203,11 +209,11 @@ ${JSON.stringify(safeMetrics, null, 2)}
 ${safeDemographics ? `Language demographics for the surrounding area:\n${JSON.stringify(safeDemographics, null, 2)}` : ''}
 
 Generate a report with these sections:
-1. **Welcome** — A 2-sentence greeting that names ${anchor.name} and the ${anchor.community} neighborhood.
+1. **Welcome** — A 2-sentence greeting that names ${safeAnchor.name} and the ${safeAnchor.community} neighborhood.
 2. **Good News** — 2-3 positive things happening based on the data (resolved issues, high resolution rates, etc.).
-3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311 near ${anchor.name}, framed constructively.
-4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report, visit ${anchor.name}, attend community events.
-5. **This Location** — Reference ${anchor.name} at ${anchor.address} as the anchor community resource.
+3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311 near ${safeAnchor.name}, framed constructively.
+4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report, visit ${safeAnchor.name}, attend community events.
+5. **This Location** — Reference ${safeAnchor.name} at ${safeAnchor.address} as the anchor community resource.
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 
