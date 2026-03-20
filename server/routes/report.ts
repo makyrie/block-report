@@ -341,7 +341,7 @@ router.post('/pdf', async (req: Request, res: Response) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logger.error('PDF generation error', { error: message, stack: error instanceof Error ? error.stack : undefined });
-    if (message.includes('queue full')) {
+    if (message.includes('queue full') || message.includes('queue timeout')) {
       res.status(503).json({ error: 'Server busy — try again shortly' });
     } else {
       res.status(500).json({ error: 'Internal server error' });
