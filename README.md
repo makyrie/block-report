@@ -130,6 +130,66 @@ block-report/
 - **AI:** Anthropic Claude API
 - **Data:** San Diego Open Data Portal, U.S. Census ACS
 
+## MCP Server (Model Context Protocol)
+
+Block Report exposes its San Diego civic data as an MCP server, allowing any Claude Desktop or Claude Code user to query city data conversationally.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_communities` | List all valid San Diego community plan area names |
+| `get_311_metrics` | Get 311 service request metrics for a community |
+| `get_neighborhood_profile` | Get composite civic profile (311 + transit + demographics + access gap) |
+| `get_access_gap_ranking` | Get ranked list of underserved neighborhoods |
+| `list_libraries` | List San Diego public library locations |
+| `list_rec_centers` | List recreation center locations (filterable by community) |
+| `get_demographics` | Get Census language demographics for a community |
+| `get_transit_score` | Get transit accessibility score (0-100) for a community |
+| `get_block_metrics` | Get 311 metrics near a specific lat/lng coordinate |
+
+### Claude Desktop Configuration
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "block-report": {
+      "command": "node",
+      "args": ["--env-file=.env", "--import=tsx", "server/mcp/index.ts"],
+      "cwd": "/path/to/block-report"
+    }
+  }
+}
+```
+
+### Running the MCP Server
+
+**Stdio transport** (for Claude Desktop / Claude Code):
+
+```bash
+pnpm mcp
+```
+
+**HTTP transport** (for remote access):
+
+```bash
+# Optional: set MCP_AUTH_TOKEN in .env for bearer token auth
+pnpm mcp:http
+```
+
+The HTTP server runs on port 3002 by default (configurable via `MCP_HTTP_PORT`).
+
+### Example Queries
+
+Once connected, try asking Claude:
+
+- "What are the top issues in Mira Mesa?"
+- "Which San Diego neighborhoods are most underserved?"
+- "How does transit access in Barrio Logan compare to the city average?"
+- "What languages are spoken in City Heights?"
+
 ## Accessibility
 
 The project enforces WCAG 2.1 AA compliance with two automated tools:

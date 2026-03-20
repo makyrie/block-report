@@ -1,7 +1,7 @@
 ---
 title: "feat: MCP Server for San Diego Open Data"
 type: feat
-status: active
+status: completed
 date: 2026-03-20
 ---
 
@@ -84,13 +84,13 @@ Extract business logic from Express route handlers into reusable service modules
 
 **Tasks:**
 
-- [ ] Create `server/services/metrics.ts` — extract 311 metrics aggregation and "good news" computation from `server/routes/metrics.ts`
-- [ ] Create `server/services/transit.ts` — extract `computeAllScores`, `getScores`, `getCityAverage` from `server/routes/transit.ts`
-- [ ] Create `server/services/demographics.ts` — extract `computeTopLanguages` from `server/routes/demographics.ts` and add community-level aggregation using the `census_language.community` column (same approach as `gap-analysis.ts` lines 111-134)
-- [ ] Create `server/services/locations.ts` — extract library/rec-center queries with optional community filtering
-- [ ] Create `server/services/communities.ts` — fetch/cache canonical community names from GeoJSON boundary file, provide name normalization and validation
-- [ ] Refactor existing Express routes to use the new service modules (no behavior change)
-- [ ] Verify all existing API endpoints still work after refactoring
+- [x] Create `server/services/metrics.ts` — extract 311 metrics aggregation and "good news" computation from `server/routes/metrics.ts`
+- [x] Create `server/services/transit.ts` — extract `computeAllScores`, `getScores`, `getCityAverage` from `server/routes/transit.ts`
+- [x] Create `server/services/demographics.ts` — extract `computeTopLanguages` from `server/routes/demographics.ts` and add community-level aggregation using the `census_language.community` column (same approach as `gap-analysis.ts` lines 111-134)
+- [x] Create `server/services/locations.ts` — extract library/rec-center queries with optional community filtering
+- [x] Create `server/services/communities.ts` — fetch/cache canonical community names from GeoJSON boundary file, provide name normalization and validation
+- [x] Refactor existing Express routes to use the new service modules (no behavior change)
+- [x] Verify all existing API endpoints still work after refactoring
 
 **Key technical detail:** The demographics route currently has a TODO at `server/routes/demographics.ts:70-75` noting that community-to-tract crosswalk is not implemented. The new `demographics.ts` service should query `census_language` directly by the `community` column (which already exists in the table) rather than requiring a tract crosswalk. This is the same approach `gap-analysis.ts` uses successfully.
 
@@ -100,19 +100,19 @@ Build the MCP server infrastructure with stdio transport.
 
 **Tasks:**
 
-- [ ] Install dependencies: `@modelcontextprotocol/sdk`, `zod`
-- [ ] Create `server/mcp/index.ts` — McpServer creation, tool registration, stdio transport connection
-- [ ] Create `server/mcp/tools/communities.ts` — `list_communities` tool
-- [ ] Create `server/mcp/tools/metrics.ts` — `get_311_metrics` tool
-- [ ] Create `server/mcp/tools/profile.ts` — `get_neighborhood_profile` tool
-- [ ] Create `server/mcp/tools/gap-analysis.ts` — `get_access_gap_ranking` tool
-- [ ] Create `server/mcp/tools/locations.ts` — `list_libraries`, `list_rec_centers` tools
-- [ ] Create `server/mcp/tools/demographics.ts` — `get_demographics` tool
-- [ ] Create `server/mcp/tools/transit.ts` — `get_transit_score` tool
-- [ ] Create `server/mcp/tools/block.ts` — `get_block_metrics` tool
-- [ ] Add `"mcp"` script to `package.json`: `"node --env-file=.env --import=tsx server/mcp/index.ts"`
-- [ ] Add graceful shutdown handler (SIGTERM/SIGINT → `prisma.$disconnect()`)
-- [ ] Ensure all logging uses `console.error()` (stdout reserved for MCP protocol in stdio mode)
+- [x] Install dependencies: `@modelcontextprotocol/sdk`, `zod`
+- [x] Create `server/mcp/index.ts` — McpServer creation, tool registration, stdio transport connection
+- [x] Create `server/mcp/tools/communities.ts` — `list_communities` tool
+- [x] Create `server/mcp/tools/metrics.ts` — `get_311_metrics` tool
+- [x] Create `server/mcp/tools/profile.ts` — `get_neighborhood_profile` tool
+- [x] Create `server/mcp/tools/gap-analysis.ts` — `get_access_gap_ranking` tool
+- [x] Create `server/mcp/tools/locations.ts` — `list_libraries`, `list_rec_centers` tools
+- [x] Create `server/mcp/tools/demographics.ts` — `get_demographics` tool
+- [x] Create `server/mcp/tools/transit.ts` — `get_transit_score` tool
+- [x] Create `server/mcp/tools/block.ts` — `get_block_metrics` tool
+- [x] Add `"mcp"` script to `package.json`: `"node --env-file=.env --import=tsx server/mcp/index.ts"`
+- [x] Add graceful shutdown handler (SIGTERM/SIGINT → `prisma.$disconnect()`)
+- [x] Ensure all logging uses `console.error()` (stdout reserved for MCP protocol in stdio mode)
 
 **Community name normalization:** All tools accepting `community_name` should normalize input (trim, uppercase) and validate against the canonical community list. On mismatch, return a helpful error with the list of valid names.
 
@@ -145,13 +145,13 @@ Add Streamable HTTP transport for remote access and polish the implementation.
 
 **Tasks:**
 
-- [ ] Create `server/mcp/http.ts` — Streamable HTTP transport entry point
-- [ ] Add bearer token authentication for HTTP transport (token from `MCP_AUTH_TOKEN` env var)
-- [ ] Add `"mcp:http"` script to `package.json`
-- [ ] Document Claude Desktop configuration (`claude_desktop_config.json` snippet)
-- [ ] Add MCP configuration to `README.md`
-- [ ] Curate response field selection for list tools (return only conversationally useful fields: name, address, lat, lng, phone)
-- [ ] Add example community names to tool descriptions to help Claude use them correctly
+- [x] Create `server/mcp/http.ts` — Streamable HTTP transport entry point
+- [x] Add bearer token authentication for HTTP transport (token from `MCP_AUTH_TOKEN` env var)
+- [x] Add `"mcp:http"` script to `package.json`
+- [x] Document Claude Desktop configuration (`claude_desktop_config.json` snippet)
+- [x] Add MCP configuration to `README.md`
+- [x] Curate response field selection for list tools (return only conversationally useful fields: name, address, lat, lng, phone)
+- [x] Add example community names to tool descriptions to help Claude use them correctly
 
 ### File Structure
 
