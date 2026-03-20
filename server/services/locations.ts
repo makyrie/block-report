@@ -1,4 +1,5 @@
 import { prisma } from './db.js';
+import { normalizeCommunityName } from './communities.js';
 
 export async function getLibraries() {
   return prisma.library.findMany();
@@ -14,7 +15,7 @@ export async function getRecCenters(communityName?: string) {
   }
 
   // RecCenter neighborhd field is ALL CAPS
-  const key = communityName.toUpperCase().trim();
+  const key = normalizeCommunityName(communityName);
   return prisma.recCenter.findMany({
     where: { neighborhd: key },
   });

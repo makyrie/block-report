@@ -1,6 +1,7 @@
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
 import { getTransitScores } from './transit.js';
+import { normalizeCommunityName } from './communities.js';
 
 export interface AccessGapResult {
   accessGapScore: number;
@@ -242,7 +243,7 @@ export async function getAccessGapScores(): Promise<Map<string, AccessGapResult>
 
 export async function getAccessGapScore(community: string): Promise<AccessGapResult | null> {
   const scores = await getAccessGapScores();
-  return scores.get(community.toUpperCase().trim()) ?? null;
+  return scores.get(normalizeCommunityName(community)) ?? null;
 }
 
 export async function getTopUnderserved(limit = 10): Promise<

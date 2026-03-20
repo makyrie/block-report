@@ -1,5 +1,5 @@
 import { prisma } from './db.js';
-import { getNeighborhoodsGeoJSON } from './communities.js';
+import { getNeighborhoodsGeoJSON, normalizeCommunityName } from './communities.js';
 import { haversineDistanceMiles, pointInFeature } from './geo.js';
 
 const CITY_HALL = { lat: 32.7157, lng: -117.1611 };
@@ -150,7 +150,7 @@ export async function getTransitScores(): Promise<Map<string, TransitScore>> {
 
 export async function getTransitScore(communityName: string): Promise<TransitScore & { cityAverage: number } | null> {
   const scores = await getTransitScores();
-  const key = communityName.toUpperCase().trim();
+  const key = normalizeCommunityName(communityName);
   const score = scores.get(key);
   const cityAverage = getCityAverage(scores);
 

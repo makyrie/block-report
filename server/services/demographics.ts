@@ -1,4 +1,5 @@
 import { prisma } from './db.js';
+import { normalizeCommunityName } from './communities.js';
 
 const LANGUAGE_FIELDS: { column: string; label: string }[] = [
   { column: 'english_only', label: 'English' },
@@ -48,7 +49,7 @@ export async function getDemographicsByTract(tract: string): Promise<LanguageBre
 }
 
 export async function getDemographicsByCommunity(communityName: string): Promise<LanguageBreakdown[]> {
-  const key = communityName.toUpperCase().trim();
+  const key = normalizeCommunityName(communityName);
   const rows = await prisma.censusLanguage.findMany({
     where: {
       community: {
