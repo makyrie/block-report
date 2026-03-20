@@ -2,40 +2,38 @@ import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import type { CommunityTrends } from '../../src/types/index.js';
-import { COMMUNITIES } from '../../src/types/communities.js';
+import { COMMUNITIES } from '../communities.js';
 
 const COMMUNITIES_LOWER = new Set(COMMUNITIES.map(c => c.toLowerCase()));
 
 const router = Router();
 
-// In-memory cache for trends data (24h TTL, keyed by community name, capped at 200 entries)
+// In-memory cache for trends data (24h TTL, keyed by community name)
 const TRENDS_TTL = 24 * 60 * 60 * 1000;
-const TRENDS_CACHE_MAX = 200;
 const trendsCache = new Map<string, { data: CommunityTrends; cachedAt: number }>();
 
-// Evict expired entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of trendsCache) {
-    if (now - entry.cachedAt >= TRENDS_TTL) {
-      trendsCache.delete(key);
-    }
-  }
-}, 10 * 60 * 1000).unref();
-
-router.get('/', async (req, res) => {
+/** Validate and sanitize the community query parameter. Returns cleaned name or sends an error response. */
+function validateCommunity(req: { query: Record<string, unknown> }, res: { status: (code: number) => { json: (body: unknown) => void } }): string | null {
   const community = req.query.community as string | undefined;
   if (!community) {
     res.status(400).json({ error: 'community query parameter is required' });
-    return;
+    return null;
   }
-
-  // Strip SQL wildcards and enforce length
   const cleaned = community.replace(/[%_]/g, '');
   if (cleaned.length > 100 || cleaned.length === 0) {
     res.status(400).json({ error: 'Invalid community name' });
-    return;
+    return null;
   }
+  if (!COMMUNITIES_LOWER.has(cleaned.toLowerCase())) {
+    res.status(400).json({ error: 'Unknown community name' });
+    return null;
+  }
+  return cleaned;
+}
+
+router.get('/', async (req, res) => {
+  const cleaned = validateCommunity(req, res);
+  if (!cleaned) return;
 
   interface CommunityMetrics {
     total_requests: number;
@@ -57,7 +55,7 @@ router.get('/', async (req, res) => {
     `;
     metrics = result[0].get_community_metrics;
   } catch (err) {
-    logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community });
+    logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community: cleaned });
     res.status(500).json({ error: 'Internal server error' });
     return;
   }
@@ -117,22 +115,8 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/trends', async (req, res) => {
-  const community = req.query.community as string | undefined;
-  if (!community) {
-    res.status(400).json({ error: 'community query parameter is required' });
-    return;
-  }
-
-  const cleaned = community.replace(/[%_]/g, '');
-  if (cleaned.length > 100 || cleaned.length === 0) {
-    res.status(400).json({ error: 'Invalid community name' });
-    return;
-  }
-
-  if (!COMMUNITIES_LOWER.has(cleaned.toLowerCase())) {
-    res.status(400).json({ error: 'Unknown community name' });
-    return;
-  }
+  const cleaned = validateCommunity(req, res);
+  if (!cleaned) return;
 
   try {
     const cacheKey = cleaned.toLowerCase();
@@ -146,10 +130,6 @@ router.get('/trends', async (req, res) => {
       SELECT get_community_trends(${cleaned})
     `;
     const data = result[0].get_community_trends;
-    if (trendsCache.size >= TRENDS_CACHE_MAX) {
-      const oldest = trendsCache.keys().next().value!;
-      trendsCache.delete(oldest);
-    }
     trendsCache.set(cacheKey, { data, cachedAt: Date.now() });
     res.json(data);
   } catch (err) {
