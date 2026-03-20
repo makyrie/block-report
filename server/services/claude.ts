@@ -103,7 +103,7 @@ export async function generateReport(
 Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the data for this neighborhood:
-${JSON.stringify(safeProfile, null, 2)}
+${JSON.stringify(safeProfile)}
 
 Generate a report with these sections:
 1. **Welcome** — A 2-sentence greeting that names the neighborhood.
@@ -156,7 +156,7 @@ Keep the total report under 400 words. It should fit on one printed page.`;
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
       tools: [reportTool],
       tool_choice: { type: 'tool', name: 'community_report' },
@@ -208,9 +208,9 @@ This report will be printed and posted at ${safeAnchor.name} for visitors and ne
 Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the 311 service request data for this area:
-${JSON.stringify(safeMetrics, null, 2)}
+${JSON.stringify(safeMetrics)}
 
-${safeDemographics ? `Language demographics for the surrounding area:\n${JSON.stringify(safeDemographics, null, 2)}` : ''}
+${safeDemographics ? `Language demographics for the surrounding area:\n${JSON.stringify(safeDemographics)}` : ''}
 
 Generate a report with these sections:
 1. **Welcome** — A 2-sentence greeting that names ${safeAnchor.name} and the ${safeAnchor.community} neighborhood.
@@ -262,7 +262,7 @@ Keep the total report under 400 words. It should fit on one printed page.`;
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
       tools: [reportTool],
       tool_choice: { type: 'tool', name: 'community_report' },
