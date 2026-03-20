@@ -14,28 +14,19 @@ export function withCommunityValidation(
   toolName: string,
   handler: (normalized: string) => Promise<ToolResult>,
 ): (args: { community_name: string }) => Promise<ToolResult> {
-  return async ({ community_name }) => {
-    try {
-      const { valid, normalized, names } = await validateCommunityName(community_name);
-      if (!valid) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `No data found for community: "${community_name}". Use list_communities to see valid names. Did you mean one of: ${names.slice(0, 10).join(', ')}?`,
-          }],
-          isError: true,
-        };
-      }
-      return await handler(normalized);
-    } catch (err) {
-      const message = (err as Error).message;
-      logger.error(`MCP tool "${toolName}" failed`, { error: message });
+  return withErrorHandling<{ community_name: string }>(toolName, async ({ community_name }) => {
+    const { valid, normalized, names } = await validateCommunityName(community_name);
+    if (!valid) {
       return {
-        content: [{ type: 'text' as const, text: `Error: An internal error occurred. Please try again.` }],
+        content: [{
+          type: 'text' as const,
+          text: `No data found for community: "${community_name}". Use list_communities to see valid names. Did you mean one of: ${names.slice(0, 10).join(', ')}?`,
+        }],
         isError: true,
       };
     }
-  };
+    return await handler(normalized);
+  });
 }
 
 /**
