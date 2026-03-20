@@ -39,10 +39,10 @@
     "react-router-dom": "^7.13.1",
     "puppeteer-core": "^24.9.0",
     "qrcode": "^1.5.4",
+    "@sparticuz/chromium": "^133.0.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@sparticuz/chromium": "^133.0.0",
     "@types/qrcode": "^1.5.5",
     "@axe-core/react": "^4.11.1",
     "@eslint/js": "^9.39.4",
