@@ -6,6 +6,7 @@ import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
+import { norm } from '../../utils/normalize';
 
 // ── Popup content components ─────────────────────────────────────────────────
 
@@ -233,10 +234,6 @@ function scoreToColor(score: number | null): string {
   }
 }
 
-// Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
-function norm(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-}
 
 function findCommunityFeature(features: Feature[], community: string): Feature | null {
   const target = norm(community);
@@ -410,7 +407,7 @@ function SanDiegoMap({
           key={`choropleth-${accessGapScores?.size ?? 0}`}
           data={neighborhoodBoundaries}
           style={(feature) => {
-            const name = (feature?.properties?.cpname || '').toUpperCase().trim();
+            const name = norm(feature?.properties?.cpname || '');
             const score = accessGapScores?.get(name) ?? null;
             return {
               fillColor: scoreToColor(score),
@@ -422,7 +419,7 @@ function SanDiegoMap({
           }}
           onEachFeature={(feature, layer) => {
             const name = feature.properties?.cpname || 'Unknown';
-            const score = accessGapScores?.get(name.toUpperCase().trim());
+            const score = accessGapScores?.get(norm(name));
             layer.bindTooltip(
               `${name}: ${score !== undefined ? score + '/100' : 'No data'}`,
               { sticky: true }
