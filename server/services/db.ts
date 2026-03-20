@@ -26,7 +26,7 @@ export function getPrisma(): PrismaClient {
 
   const pool = new Pool({
     connectionString,
-    max: 5, // Bound pool size — prevents connection exhaustion in serverless
+    max: 2, // Serverless handles one request at a time; keep pool small for Neon free tier
   });
   const adapter = new PrismaNeon(pool);
   _prisma = new PrismaClient({ adapter });
@@ -42,3 +42,15 @@ export const prisma = new Proxy({} as PrismaClient, {
     return Reflect.get(getPrisma(), prop);
   },
 });
+
+/** Disconnect Prisma on process exit to release pooled connections (critical for serverless) */
+async function disconnect() {
+  if (_prisma) {
+    await _prisma.$disconnect().catch(() => {});
+    _prisma = null;
+  }
+}
+
+process.on('SIGTERM', disconnect);
+process.on('SIGINT', disconnect);
+process.on('beforeExit', disconnect);
