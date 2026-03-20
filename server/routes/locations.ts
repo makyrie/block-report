@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
+import { Prisma } from '@prisma/client';
 import { logger } from '../logger.js';
 
 const router = Router();
@@ -46,29 +47,24 @@ router.get('/transit-stops', async (_req, res) => {
 router.get('/permits', async (req, res) => {
   try {
     const community = req.query.community as string | undefined;
-    const where: Record<string, unknown> = {
+
+    // Validate community parameter (consistent with /api/311 endpoint)
+    if (community !== undefined) {
+      const cleaned = community.replace(/[%_]/g, '');
+      if (cleaned.length === 0 || cleaned.length > 100) {
+        res.status(400).json({ error: 'Invalid community name' });
+        return;
+      }
+    }
+
+    const where: Prisma.PermitWhereInput = {
       lat: { not: null },
       lng: { not: null },
+      ...(community ? { community: community.replace(/[%_]/g, '') } : {}),
     };
-
-    if (community) {
-      where.community = community;
-    }
 
     const data = await prisma.permit.findMany({
       where,
-      select: {
-        id: true,
-        permit_number: true,
-        permit_type: true,
-        description: true,
-        date_issued: true,
-        status: true,
-        street_address: true,
-        community: true,
-        lat: true,
-        lng: true,
-      },
       orderBy: { date_issued: 'desc' },
       take: 5000,
     });
