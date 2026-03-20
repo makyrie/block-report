@@ -221,17 +221,14 @@ interface SanDiegoMapProps {
   onCommunitySelect?: (community: string) => void;
 }
 
-// Color utility — green (0) → yellow (50) → red (100)
+// Color utility — green (low) → yellow → orange → red (high access gap)
 function scoreToColor(score: number | null): string {
   if (score === null) return '#d1d5db'; // gray-300 for missing data
-  const t = score / 100;
-  if (t <= 0.5) {
-    const r = Math.round(255 * (t * 2));
-    return `rgb(${r}, 200, 50)`;
-  } else {
-    const g = Math.round(200 * (1 - (t - 0.5) * 2));
-    return `rgb(255, ${g}, 50)`;
-  }
+  if (score < 20) return '#22c55e';  // green-500
+  if (score < 40) return '#a3e635';  // lime-400
+  if (score < 60) return '#facc15';  // yellow-400
+  if (score < 80) return '#f97316';  // orange-500
+  return '#ef4444';                   // red-500
 }
 
 
