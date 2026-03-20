@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { COMMUNITIES } from '../components/ui/neighborhood-selector';
+import { COMMUNITIES } from '../types/communities';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
@@ -22,6 +22,7 @@ export default function FlyerPage() {
   const [report, setReport] = useState<CommunityReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const generatingRef = useRef(false);
 
   // Fetch metrics and demographics when community is set
   useEffect(() => {
@@ -30,15 +31,16 @@ export default function FlyerPage() {
     setTopLanguages([]);
     setTrends(null);
     get311(community).then(setMetrics).catch(console.error);
-    get311Trends(community).then(setTrends).catch(() => {});
+    get311Trends(community).then(setTrends).catch(console.error);
     getDemographics(community)
       .then((data) => { if (data?.topLanguages) setTopLanguages(data.topLanguages); })
-      .catch(() => {});
+      .catch(console.error);
   }, [community]);
 
   // Auto-fetch report when community and language are ready
   useEffect(() => {
     if (!community) return;
+    if (generatingRef.current) return;
 
     let cancelled = false;
     setReport(null);
@@ -62,6 +64,8 @@ export default function FlyerPage() {
         return;
       }
 
+      generatingRef.current = true;
+
       const profile = buildNeighborhoodProfile({
         communityName: community,
         metrics,
@@ -75,6 +79,7 @@ export default function FlyerPage() {
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to generate report');
       } finally {
+        generatingRef.current = false;
         if (!cancelled) setLoading(false);
       }
     })();
