@@ -116,3 +116,6 @@ CREATE INDEX "idx_census_community" ON "census_language"("community");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "report_cache_community_language_key" ON "report_cache"("community", "language");
+
+-- CreateIndex
+CREATE INDEX "idx_report_cache_created_at" ON "report_cache"("created_at");

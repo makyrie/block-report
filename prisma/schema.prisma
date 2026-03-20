@@ -110,5 +110,6 @@ model ReportCache {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([community, language])
+  @@index([createdAt], name: "idx_report_cache_created_at")
   @@map("report_cache")
 }

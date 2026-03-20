@@ -4,17 +4,22 @@ import { fileURLToPath } from 'node:url';
 import type { CommunityReport } from '../../src/types/index.js';
 import { isVercel } from '../env.js';
 import { prisma } from './db.js';
+import { logger } from '../logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-function cacheKey(community: string, language: string): string {
-  return `${community.toLowerCase().replace(/[^a-z0-9]+/g, '-')}_${language.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`;
+/**
+ * Shared key normalization — used by both file-based and DB-based cache paths
+ * to ensure the same input produces the same cache key regardless of storage backend.
+ */
+function normalizeKey(value: string): string {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-function normalizeKey(value: string): string {
-  return value.toLowerCase().trim();
+function cacheFilename(community: string, language: string): string {
+  return `${normalizeKey(community)}_${normalizeKey(language)}.json`;
 }
 
 export async function getCachedReport(community: string, language: string): Promise<CommunityReport | null> {
@@ -27,13 +32,18 @@ export async function getCachedReport(community: string, language: string): Prom
       const age = Date.now() - row.createdAt.getTime();
       if (age > CACHE_TTL_MS) return null;
       return row.report as unknown as CommunityReport;
-    } catch {
+    } catch (err) {
+      logger.error('Failed to read report cache from DB', {
+        error: err instanceof Error ? err.message : String(err),
+        community,
+        language,
+      });
       return null;
     }
   }
 
   try {
-    const filePath = join(CACHE_DIR, cacheKey(community, language));
+    const filePath = join(CACHE_DIR, cacheFilename(community, language));
     const raw = await readFile(filePath, 'utf-8');
     return JSON.parse(raw) as CommunityReport;
   } catch {
@@ -49,13 +59,41 @@ export async function saveCachedReport(community: string, language: string, repo
         update: { report: report as unknown as Record<string, unknown>, createdAt: new Date() },
         create: { community: normalizeKey(community), language: normalizeKey(language), report: report as unknown as Record<string, unknown> },
       });
-    } catch {
-      // Best-effort cache — don't fail the request
+    } catch (err) {
+      logger.error('Failed to write report cache to DB', {
+        error: err instanceof Error ? err.message : String(err),
+        community,
+        language,
+      });
     }
     return;
   }
 
   await mkdir(CACHE_DIR, { recursive: true });
-  const filePath = join(CACHE_DIR, cacheKey(community, language));
+  const filePath = join(CACHE_DIR, cacheFilename(community, language));
   await writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
+}
+
+/**
+ * Delete stale cache rows older than the TTL.
+ * Called periodically to prevent unbounded table growth.
+ */
+export async function purgeStaleCache(): Promise<number> {
+  if (!isVercel) return 0;
+
+  try {
+    const cutoff = new Date(Date.now() - CACHE_TTL_MS);
+    const result = await prisma.reportCache.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+    if (result.count > 0) {
+      logger.info('Purged stale report cache rows', { count: result.count });
+    }
+    return result.count;
+  } catch (err) {
+    logger.error('Failed to purge stale report cache', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
 }

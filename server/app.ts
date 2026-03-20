@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { logger } from './logger.js';
 import { isVercel } from './env.js';
 import { prisma } from './services/db.js';
+import { purgeStaleCache } from './services/report-cache.js';
 import locationsRouter from './routes/locations.js';
 import metricsRouter from './routes/metrics.js';
 import demographicsRouter from './routes/demographics.js';
@@ -89,5 +90,8 @@ app.use('/api/report', reportRouter);
 app.use('/api/transit', transitRouter);
 app.use('/api/access-gap', gapAnalysisRouter);
 app.use('/api/block', blockRouter);
+
+// Purge stale cache rows on startup (fire-and-forget)
+purgeStaleCache().catch(() => {});
 
 export default app;
