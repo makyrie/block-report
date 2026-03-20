@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDemographicsByTract, getDemographicsByCommunity } from '../services/demographics.js';
+import { normalizeCommunityName } from '../services/communities.js';
 import { logger } from '../logger.js';
 
 const router = Router();
@@ -14,6 +15,11 @@ router.get('/', async (req, res) => {
   }
 
   if (tract) {
+    // Validate tract is a 6-digit numeric string
+    if (!/^\d{6}$/.test(tract)) {
+      res.status(400).json({ error: 'tract must be a 6-digit numeric string' });
+      return;
+    }
     try {
       const topLanguages = await getDemographicsByTract(tract);
       if (topLanguages.length === 0) {
@@ -28,8 +34,14 @@ router.get('/', async (req, res) => {
     return;
   }
 
+  if (community!.length > 100) {
+    res.status(400).json({ error: 'community name too long' });
+    return;
+  }
+
   try {
-    const topLanguages = await getDemographicsByCommunity(community!);
+    const normalized = normalizeCommunityName(community!);
+    const topLanguages = await getDemographicsByCommunity(normalized);
     res.json({ topLanguages });
   } catch (err) {
     logger.error('Failed to fetch demographics', { error: (err as Error).message, community });
