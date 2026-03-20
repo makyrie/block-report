@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
 import { FlyerLayout } from './flyer-layout';
 import { toSlug } from '../../utils/slug';
@@ -13,6 +13,27 @@ interface FlyerPreviewProps {
 const PREVIEW_SCALE = 0.52;
 const FLYER_WIDTH = 612; // letter width in px at 72dpi ~= 8.5in
 const FLYER_HEIGHT = 792; // letter height in px at 72dpi ~= 11in
+
+async function downloadPdf(
+  report: CommunityReport,
+  slug: string,
+  metrics?: NeighborhoodProfile['metrics'] | null,
+  topLanguages?: { language: string; percentage: number }[],
+): Promise<void> {
+  const response = await fetch('/api/report/pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report, metrics, topLanguages, neighborhoodSlug: slug }),
+  });
+  if (!response.ok) throw new Error('PDF generation failed');
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `block-report-${slug}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProps) {
   const { t } = useLanguage();
@@ -29,30 +50,18 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
 
   const slug = toSlug(report.neighborhoodName);
 
-  async function handleDownloadPdf() {
+  const handleDownloadPdf = useCallback(async () => {
     setDownloading(true);
     setDownloadError(null);
     try {
-      const response = await fetch('/api/report/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report, metrics, topLanguages, neighborhoodSlug: slug }),
-      });
-      if (!response.ok) throw new Error('PDF generation failed');
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `block-report-${slug}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadPdf(report, slug, metrics, topLanguages);
     } catch (err) {
       console.error('PDF download failed:', err);
       setDownloadError(t('flyer.downloadError'));
     } finally {
       setDownloading(false);
     }
-  }
+  }, [report, slug, metrics, topLanguages, t]);
 
   return (
     <>
@@ -161,29 +170,20 @@ function FlyerModal({
 }) {
   const { t } = useLanguage();
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  async function handleDownloadPdf() {
+  const handleDownloadPdf = useCallback(async () => {
     setDownloading(true);
+    setDownloadError(null);
     try {
-      const response = await fetch('/api/report/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report, metrics, topLanguages, neighborhoodSlug: slug }),
-      });
-      if (!response.ok) throw new Error('PDF generation failed');
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `block-report-${slug}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadPdf(report, slug, metrics, topLanguages);
     } catch (err) {
       console.error('PDF download failed:', err);
+      setDownloadError(t('flyer.downloadError'));
     } finally {
       setDownloading(false);
     }
-  }
+  }, [report, slug, metrics, topLanguages, t]);
 
   // Close on Escape
   useEffect(() => {
@@ -249,6 +249,10 @@ function FlyerModal({
             </button>
           </div>
         </div>
+
+        {downloadError && (
+          <p className="px-4 py-2 text-sm text-red-600">{downloadError}</p>
+        )}
 
         {/* Full-size flyer */}
         <div className="p-6 md:p-8">
