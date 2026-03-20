@@ -18,15 +18,18 @@ import { existsSync } from 'fs';
 import puppeteer from 'puppeteer-core';
 import QRCode from 'qrcode';
 import type { CommunityReport, NeighborhoodProfile } from '../../src/types/index.js';
+import { logger } from '../logger.js';
 
 // ─── Google Fonts CSS cache ───
 // Fetched once and inlined into the HTML to avoid CDN latency on each PDF request.
 // The woff2 font files are still loaded by Puppeteer via request interception.
 const GOOGLE_FONTS_URL = 'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;900&family=Noto+Sans+SC:wght@400;700;900&family=Noto+Sans+Arabic:wght@400;700;900&family=Noto+Sans+Vietnamese:wght@400;700&display=swap';
+const FONT_CSS_TTL = 24 * 60 * 60 * 1000; // 24 hours
 let cachedFontCss: string | null = null;
+let fontCssCachedAt = 0;
 
 async function getGoogleFontsCss(): Promise<string> {
-  if (cachedFontCss) return cachedFontCss;
+  if (cachedFontCss && Date.now() - fontCssCachedAt < FONT_CSS_TTL) return cachedFontCss;
   try {
     const res = await fetch(GOOGLE_FONTS_URL, {
       headers: {
@@ -34,14 +37,16 @@ async function getGoogleFontsCss(): Promise<string> {
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
     });
-    if (res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('text/css')) {
       cachedFontCss = await res.text();
+      fontCssCachedAt = Date.now();
       return cachedFontCss;
     }
   } catch {
     // Fall through to empty string — fonts will use system fallback
   }
-  return '';
+  return cachedFontCss ?? '';
 }
 
 let chromiumModule: typeof import('@sparticuz/chromium') | null = null;
@@ -96,9 +101,16 @@ export interface PdfOptions {
  * Generate a PDF buffer from community report data.
  */
 export async function generatePdf(options: PdfOptions): Promise<Buffer> {
+  logger.info('PDF generation requested', { neighborhood: options.neighborhoodSlug, queueDepth: pdfQueue.length });
   await acquirePdfSlot();
+  const start = Date.now();
   try {
-    return await generatePdfInternal(options);
+    const pdf = await generatePdfInternal(options);
+    logger.info('PDF generation complete', { neighborhood: options.neighborhoodSlug, durationMs: Date.now() - start, sizeBytes: pdf.length });
+    return pdf;
+  } catch (err) {
+    logger.error('PDF generation failed', { neighborhood: options.neighborhoodSlug, durationMs: Date.now() - start, error: err instanceof Error ? err.message : String(err) });
+    throw err;
   } finally {
     releasePdfSlot();
   }
@@ -146,7 +158,7 @@ async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
       }
     });
 
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
+    await page.setContent(html, { waitUntil: 'networkidle2', timeout: 15000 });
     const pdf = await page.pdf({
       format: 'Letter',
       margin: { top: '0.5in', right: '0.6in', bottom: '0.5in', left: '0.6in' },
@@ -201,7 +213,8 @@ function truncateSentences(text: string, max: number): string {
   return sentences.slice(0, max).join('').trim();
 }
 
-function escapeHtml(str: string): string {
+function escapeHtml(value: unknown): string {
+  const str = typeof value === 'string' ? value : String(value ?? '');
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

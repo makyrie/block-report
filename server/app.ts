@@ -25,6 +25,12 @@ const reportLimiter = rateLimit({
   max: 10,
   message: { error: 'Too many report generation requests, please try again later' },
 });
+const pdfLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many PDF generation requests, please try again later' },
+});
+app.use('/api/report/pdf', pdfLimiter);
 app.use('/api/report', reportLimiter);
 app.use('/api', apiLimiter);
 

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
 import { FlyerLayout } from './flyer-layout';
 import { toSlug } from '../../utils/slug';
-import { downloadPdf } from '../../utils/download-pdf';
+import { useDownloadPdf } from '../../hooks/use-download-pdf';
 import { useLanguage } from '../../i18n/context';
 
 interface FlyerPreviewProps {
@@ -19,8 +19,6 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
   const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Fade-in animation on mount
   useEffect(() => {
@@ -29,19 +27,7 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
   }, []);
 
   const slug = toSlug(report.neighborhoodName);
-
-  const handleDownloadPdf = useCallback(async () => {
-    setDownloading(true);
-    setDownloadError(null);
-    try {
-      await downloadPdf(report, slug, metrics, topLanguages);
-    } catch (err) {
-      console.error('PDF download failed:', err);
-      setDownloadError(t('flyer.downloadError'));
-    } finally {
-      setDownloading(false);
-    }
-  }, [report, slug, metrics, topLanguages, t]);
+  const { downloading, downloadError, handleDownloadPdf } = useDownloadPdf(report, slug, metrics, topLanguages);
 
   return (
     <>
@@ -149,21 +135,7 @@ function FlyerModal({
   onClose: () => void;
 }) {
   const { t } = useLanguage();
-  const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-
-  const handleDownloadPdf = useCallback(async () => {
-    setDownloading(true);
-    setDownloadError(null);
-    try {
-      await downloadPdf(report, slug, metrics, topLanguages);
-    } catch (err) {
-      console.error('PDF download failed:', err);
-      setDownloadError(t('flyer.downloadError'));
-    } finally {
-      setDownloading(false);
-    }
-  }, [report, slug, metrics, topLanguages, t]);
+  const { downloading, downloadError, handleDownloadPdf } = useDownloadPdf(report, slug, metrics, topLanguages);
 
   // Close on Escape
   useEffect(() => {

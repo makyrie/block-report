@@ -17,7 +17,10 @@ export async function downloadPdf(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ report, metrics, topLanguages, neighborhoodSlug: slug }),
   });
-  if (!response.ok) throw new Error('PDF generation failed');
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || `PDF generation failed (${response.status})`);
+  }
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

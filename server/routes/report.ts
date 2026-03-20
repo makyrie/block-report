@@ -270,8 +270,11 @@ router.post('/pdf', async (req: Request, res: Response) => {
       typeof report.language !== 'string' ||
       typeof report.generatedAt !== 'string' ||
       !Array.isArray(report.goodNews) ||
+      !report.goodNews.every((s: unknown) => typeof s === 'string') ||
       !Array.isArray(report.topIssues) ||
+      !report.topIssues.every((s: unknown) => typeof s === 'string') ||
       !Array.isArray(report.howToParticipate) ||
+      !report.howToParticipate.every((s: unknown) => typeof s === 'string') ||
       !report.contactInfo ||
       typeof report.contactInfo.councilDistrict !== 'string' ||
       typeof report.contactInfo.anchorLocation !== 'string'
@@ -332,7 +335,7 @@ router.post('/pdf', async (req: Request, res: Response) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logger.error('PDF generation error', { error: message, stack: error instanceof Error ? error.stack : undefined });
-    res.status(500).json({ error: 'Failed to generate PDF' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
