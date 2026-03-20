@@ -127,6 +127,10 @@ async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
 
 /** Find a locally installed Chromium or Chrome binary. */
 async function findLocalChromium(): Promise<string> {
+  if (process.env.CHROME_PATH) {
+    return process.env.CHROME_PATH;
+  }
+
   const candidates = [
     '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
