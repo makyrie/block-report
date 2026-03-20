@@ -69,15 +69,15 @@ export async function buildFlyerHtml(options: PdfOptions): Promise<string> {
     bigNumberCards = `
       <div class="big-numbers">
         <div class="big-card">
-          <div class="big-value">${metrics.totalRequests311.toLocaleString()}</div>
+          <div class="big-value">${escapeHtml(metrics.totalRequests311.toLocaleString())}</div>
           <div class="big-label">Issues Reported</div>
         </div>
         <div class="big-card">
-          <div class="big-value">${resolutionPct}%</div>
+          <div class="big-value">${escapeHtml(resolutionPct)}%</div>
           <div class="big-label">Resolved</div>
         </div>
         <div class="big-card">
-          <div class="big-value">${avgDays}</div>
+          <div class="big-value">${escapeHtml(avgDays)}</div>
           <div class="big-label">Avg Days to Fix</div>
         </div>
       </div>`;
@@ -90,10 +90,10 @@ export async function buildFlyerHtml(options: PdfOptions): Promise<string> {
       <div class="issue-row">
         <div class="issue-header">
           <span class="issue-name">${escapeHtml(issue.category)}</span>
-          <span class="issue-count">${issue.count}</span>
+          <span class="issue-count">${escapeHtml(issue.count)}</span>
         </div>
         <div class="bar-bg">
-          <div class="bar-fill" style="width: ${(issue.count / maxIssueCount) * 100}%"></div>
+          <div class="bar-fill" style="width: ${escapeHtml((issue.count / maxIssueCount) * 100)}%"></div>
         </div>
       </div>`).join('');
     topIssuesHtml = `<div class="issues-bars">${bars}</div>`;
