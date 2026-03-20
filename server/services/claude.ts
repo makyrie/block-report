@@ -32,8 +32,8 @@ export async function generateReport(
   if (profile.communityName.length > 100) {
     throw new Error('communityName must be 100 characters or fewer');
   }
-  // Strip newlines and control characters
-  profile.communityName = profile.communityName.replace(/[\x00-\x1f\x7f]/g, '');
+  // Strip newlines and control characters (use local copy to avoid mutating the argument)
+  const communityName = profile.communityName.replace(/[\x00-\x1f\x7f]/g, '');
 
   const client = getClient();
 
@@ -47,7 +47,7 @@ export async function generateReport(
   // Omit raw monthly trend data from the profile sent to Claude to save tokens
   const { trends: _trends, ...profileWithoutTrends } = profile;
 
-  const prompt = `You are generating a community report for the ${profile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
+  const prompt = `You are generating a community report for the ${communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
 
 Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
@@ -126,7 +126,7 @@ Keep the total report under 400 words. It should fit on one printed page.`;
     logger.error('Claude API call failed', {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      community: profile.communityName,
+      community: communityName,
     });
     throw error;
   }
