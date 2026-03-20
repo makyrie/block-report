@@ -34,6 +34,7 @@ if (allowedOrigins.length === 0) {
   allowedOrigins.push('http://localhost:5173', 'http://localhost:3000');
 }
 
+logger.info('CORS allowed origins', { origins: allowedOrigins });
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST'],
