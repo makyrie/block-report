@@ -16,6 +16,7 @@ export default function Navbar() {
 
   const navLinks = [
     { to: '/', label: t('nav.home') || 'Home' },
+    { to: '/citywide', label: t('nav.citywide') || 'Citywide' },
     { to: '/neighborhood/mira-mesa', label: t('nav.explore') || 'Explore' },
     { to: '/resources', label: t('nav.resources') || 'Resources' },
   ];

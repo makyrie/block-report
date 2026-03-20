@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
+import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
 
 const BASE = '/api';
 
@@ -28,8 +28,22 @@ export function getTransitStops(): Promise<TransitStop[]> {
   return fetchJSON(`${BASE}/locations/transit-stops`);
 }
 
+let boundaryPromise: Promise<FeatureCollection> | null = null;
+let boundaryCachedAt = 0;
+const BOUNDARY_CLIENT_TTL = 60 * 60 * 1000; // 1 hour
+
 export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
-  return fetchJSON(`${BASE}/locations/neighborhoods`);
+  if (boundaryPromise && Date.now() - boundaryCachedAt < BOUNDARY_CLIENT_TTL) {
+    return boundaryPromise;
+  }
+  boundaryCachedAt = Date.now();
+  boundaryPromise = fetchJSON<FeatureCollection>(
+    `${BASE}/locations/neighborhoods`,
+  ).catch((err) => {
+    boundaryPromise = null; // Allow retry on failure
+    throw err;
+  });
+  return boundaryPromise;
 }
 
 export function getTransitScore(community: string): Promise<NeighborhoodProfile['transit']> {
@@ -48,10 +62,11 @@ export function getAccessGap(community: string): Promise<NonNullable<Neighborhoo
   return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`);
 }
 
-export function getAccessGapRanking(limit = 10): Promise<{
-  ranking: { community: string; accessGapScore: number; signals: NonNullable<NeighborhoodProfile['accessGap']>['signals'] }[];
+export function getCitywideGaps(signal?: AbortSignal): Promise<{
+  ranking: CitywideCommunity[];
+  summary: { total: number; withGaps: number };
 }> {
-  return fetchJSON(`${BASE}/access-gap/ranking?limit=${limit}`);
+  return fetchJSON(`${BASE}/access-gap/ranking?limit=0`, signal ? { signal } : undefined);
 }
 
 export function getBlockData(lat: number, lng: number, radius = 0.25): Promise<BlockMetrics> {

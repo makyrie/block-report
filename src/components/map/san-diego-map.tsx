@@ -6,6 +6,7 @@ import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
+import { norm } from '../../utils/community';
 
 // ── Popup content components ─────────────────────────────────────────────────
 
@@ -214,11 +215,6 @@ interface SanDiegoMapProps {
   blockData?: BlockMetrics | null;
   blockLoading?: boolean;
   blockRadius?: number;
-}
-
-// Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
-function norm(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function findCommunityFeature(features: Feature[], community: string): Feature | null {
