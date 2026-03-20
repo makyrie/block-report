@@ -121,25 +121,25 @@ export default function NeighborhoodPage() {
     return () => { cancelled = true; };
   }, [selectedCommunity]);
 
-  const buildProfile = useCallback((): NeighborhoodProfile => {
+  const buildProfile = useCallback((community: string, m: NeighborhoodProfile['metrics']): NeighborhoodProfile => {
     const anchor = selectedAnchor ?? {
       id: '',
-      name: selectedCommunity!,
+      name: community,
       type: 'library' as const,
       lat: 0,
       lng: 0,
       address: '',
-      community: selectedCommunity!,
+      community,
     };
     return {
-      communityName: selectedCommunity!,
+      communityName: community,
       anchor,
-      metrics: metrics!,
+      metrics: m,
       transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
       demographics: { topLanguages },
       accessGap: accessGap ?? null,
     };
-  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
+  }, [selectedAnchor, topLanguages, transitScore, accessGap]);
 
   // Clear report when community or language changes
   const generatingRef = useRef(false);
@@ -182,7 +182,7 @@ export default function NeighborhoodPage() {
 
       generatingRef.current = true;
 
-      const profile = buildProfile();
+      const profile = buildProfile(selectedCommunity, metrics);
 
       try {
         const result = await generateReport(profile, reportLang);
@@ -238,11 +238,13 @@ export default function NeighborhoodPage() {
   // Re-fetch block data when radius changes
   useEffect(() => {
     if (!pinnedLocation) return;
+    let cancelled = false;
     setBlockLoading(true);
     getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
-      .then(setBlockData)
+      .then((d) => { if (!cancelled) setBlockData(d); })
       .catch((err) => console.error('Failed to fetch block data', err))
-      .finally(() => setBlockLoading(false));
+      .finally(() => { if (!cancelled) setBlockLoading(false); });
+    return () => { cancelled = true; };
   }, [blockRadius, pinnedLocation]);
 
   const handleAnchorClickMobile = useCallback(
@@ -258,7 +260,7 @@ export default function NeighborhoodPage() {
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
-    const profile = buildProfile();
+    const profile = buildProfile(selectedCommunity, metrics);
 
     setReportLoading(true);
     setReportError(null);
