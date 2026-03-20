@@ -263,6 +263,28 @@ router.post('/pdf', async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate report structure
+    if (
+      typeof report.neighborhoodName !== 'string' ||
+      typeof report.summary !== 'string' ||
+      typeof report.language !== 'string' ||
+      typeof report.generatedAt !== 'string' ||
+      !Array.isArray(report.goodNews) ||
+      !Array.isArray(report.topIssues) ||
+      !Array.isArray(report.howToParticipate) ||
+      !report.contactInfo ||
+      typeof report.contactInfo.councilDistrict !== 'string' ||
+      typeof report.contactInfo.anchorLocation !== 'string'
+    ) {
+      res.status(400).json({ error: 'Invalid report structure' });
+      return;
+    }
+
+    if (typeof neighborhoodSlug !== 'string' || !/^[a-z0-9-]+$/.test(neighborhoodSlug)) {
+      res.status(400).json({ error: 'Invalid neighborhoodSlug format' });
+      return;
+    }
+
     if (!process.env.APP_URL) {
       res.status(500).json({ error: 'APP_URL environment variable is not configured' });
       return;
