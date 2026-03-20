@@ -1,5 +1,6 @@
 import app from './app.js';
 import { logger } from './logger.js';
+import { closeBrowser } from './services/pdf/browser.js';
 
 // Validate APP_URL is a well-formed URL if set (required for PDF QR code generation)
 if (process.env.APP_URL) {
@@ -19,6 +20,16 @@ if (process.env.APP_URL) {
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   logger.info(`Server running on http://localhost:${PORT}`);
 });
+
+async function gracefulShutdown(signal: string) {
+  logger.info(`${signal} received — shutting down`);
+  server.close();
+  await closeBrowser();
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
