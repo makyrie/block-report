@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getProcessedCommunityMetrics } from '../services/metrics.js';
+import { normalizeCommunityName } from '../services/communities.js';
 import { logger } from '../logger.js';
 
 const router = Router();
@@ -11,14 +12,15 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  const cleaned = community.replace(/[%_]/g, '');
-  if (cleaned.length > 100 || cleaned.length === 0) {
+  if (community.length > 100 || community.trim().length === 0) {
     res.status(400).json({ error: 'Invalid community name' });
     return;
   }
 
+  const normalized = normalizeCommunityName(community);
+
   try {
-    const result = await getProcessedCommunityMetrics(cleaned);
+    const result = await getProcessedCommunityMetrics(normalized);
     res.json(result);
   } catch (err) {
     logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community });
