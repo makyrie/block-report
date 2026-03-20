@@ -15,6 +15,10 @@ import blockRouter from './routes/block.js';
 
 const app = express();
 
+if (isVercel) {
+  app.set('trust proxy', 1);
+}
+
 app.use(helmet());
 
 const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()).filter(Boolean) || [];
@@ -34,7 +38,7 @@ app.use(cors({
   methods: ['GET', 'POST'],
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '50kb' }));
 
 // Liveness probe — no DB, instant response for load balancers
 app.get('/api/health', (_req, res) => {
