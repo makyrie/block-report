@@ -3,7 +3,6 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
-import { prisma } from './db.js';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
 
 let _client: Anthropic | null = null;
@@ -38,25 +37,12 @@ export async function generateReport(
 
   const client = getClient();
 
-  // Query permit activity for this community
-  let permitSummary = '';
-  try {
-    const permitCount = await prisma.permit.count({
-      where: { community: profile.communityName },
-    });
-    if (permitCount > 0) {
-      permitSummary = `\n\nRecent permit activity: ${permitCount} building permits issued, indicating active neighborhood investment and development.`;
-    }
-  } catch {
-    // Non-fatal — proceed without permit data
-  }
-
   const prompt = `You are generating a community report for the ${profile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
 
 Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the data for this neighborhood:
-${JSON.stringify(profile, null, 2)}${permitSummary}
+${JSON.stringify(profile, null, 2)}
 
 Generate a report with these sections:
 1. **Welcome** — A 2-sentence greeting that names the neighborhood.
