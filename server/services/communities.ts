@@ -2,27 +2,39 @@ const NEIGHBORHOODS_URL =
   'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson';
 const NEIGHBORHOODS_TTL = 24 * 60 * 60 * 1000;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let neighborhoodsCache: any = null;
-let neighborhoodsCachedAt = 0;
-
-export async function getNeighborhoodsGeoJSON(): Promise<{
+type NeighborhoodsGeoJSON = {
   features: {
     properties: Record<string, string>;
     geometry: { type: string; coordinates: number[][][] | number[][][][] };
   }[];
-}> {
+};
+
+let neighborhoodsCache: NeighborhoodsGeoJSON | null = null;
+let neighborhoodsCachedAt = 0;
+let inflightFetch: Promise<NeighborhoodsGeoJSON> | null = null;
+
+export async function getNeighborhoodsGeoJSON(): Promise<NeighborhoodsGeoJSON> {
   const now = Date.now();
   if (neighborhoodsCache && now - neighborhoodsCachedAt < NEIGHBORHOODS_TTL) {
     return neighborhoodsCache;
   }
+  if (inflightFetch) {
+    return inflightFetch;
+  }
 
-  const response = await fetch(NEIGHBORHOODS_URL, { signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error(`Failed to fetch boundaries: ${response.status}`);
-  const data = await response.json();
-  neighborhoodsCache = data;
-  neighborhoodsCachedAt = now;
-  return data;
+  inflightFetch = fetch(NEIGHBORHOODS_URL, { signal: AbortSignal.timeout(30_000) })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Failed to fetch boundaries: ${response.status}`);
+      const data = await response.json();
+      neighborhoodsCache = data;
+      neighborhoodsCachedAt = Date.now();
+      return data;
+    })
+    .finally(() => {
+      inflightFetch = null;
+    });
+
+  return inflightFetch;
 }
 
 let communityNamesCache: string[] | null = null;
