@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
 import { FlyerLayout } from './flyer-layout';
 import { toSlug } from '../../utils/slug';
+import { downloadPdf } from '../../utils/download-pdf';
 import { useLanguage } from '../../i18n/context';
 
 interface FlyerPreviewProps {
@@ -13,27 +14,6 @@ interface FlyerPreviewProps {
 const PREVIEW_SCALE = 0.52;
 const FLYER_WIDTH = 612; // letter width in px at 72dpi ~= 8.5in
 const FLYER_HEIGHT = 792; // letter height in px at 72dpi ~= 11in
-
-async function downloadPdf(
-  report: CommunityReport,
-  slug: string,
-  metrics?: NeighborhoodProfile['metrics'] | null,
-  topLanguages?: { language: string; percentage: number }[],
-): Promise<void> {
-  const response = await fetch('/api/report/pdf', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ report, metrics, topLanguages, neighborhoodSlug: slug }),
-  });
-  if (!response.ok) throw new Error('PDF generation failed');
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `block-report-${slug}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProps) {
   const { t } = useLanguage();
