@@ -163,7 +163,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // Check for a pre-generated report first
+    // Check for a pre-generated report first (file-based, local only)
     const preGenerated = await getPreGeneratedReport(profile.communityName, language);
     if (preGenerated) {
       logger.info('Serving pre-generated report', {
@@ -176,6 +176,14 @@ router.post('/generate', async (req: Request, res: Response) => {
         preGenerated: true,
         dataAsOf: preGenerated.dataAsOf,
       });
+      return;
+    }
+
+    // Check DB/file cache (works on both local and Vercel)
+    const cached = await getCachedReport(profile.communityName, language);
+    if (cached) {
+      logger.info('Serving cached report', { community: profile.communityName, language });
+      res.json(cached);
       return;
     }
 
