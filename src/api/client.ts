@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
+import type { BlockMetrics, CommunityAnchor, CommunityReport, CommunityTrends, NeighborhoodProfile, TransitStop } from '../types';
 
 const BASE = '/api';
 
@@ -72,6 +72,10 @@ export function generateReport(profile: NeighborhoodProfile, language: string): 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile, language }),
   });
+}
+
+export function get311Trends(community: string): Promise<CommunityTrends> {
+  return fetchJSON(`${BASE}/311/trends?community=${encodeURIComponent(community)}`);
 }
 
 export function getBlockReport(

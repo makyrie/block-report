@@ -37,12 +37,22 @@ export async function generateReport(
 
   const client = getClient();
 
+  const trendContext = profile.trends?.summary
+    ? `\n311 Trend: Resolution rate is ${profile.trends.summary.direction} ` +
+      `(${Math.round(profile.trends.summary.previousResolutionRate * 100)}% → ` +
+      `${Math.round(profile.trends.summary.currentResolutionRate * 100)}%). ` +
+      `Request volume changed ${profile.trends.summary.volumeChange}% vs prior period.`
+    : '';
+
+  // Omit raw monthly trend data from the profile sent to Claude to save tokens
+  const { trends: _trends, ...profileWithoutTrends } = profile;
+
   const prompt = `You are generating a community report for the ${profile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
 
 Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the data for this neighborhood:
-${JSON.stringify(profile, null, 2)}
+${JSON.stringify(profileWithoutTrends, null, 2)}${trendContext}
 
 Generate a report with these sections:
 1. **Welcome** — A 2-sentence greeting that names the neighborhood.

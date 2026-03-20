@@ -1,5 +1,5 @@
 import { QRCodeSVG } from 'qrcode.react';
-import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
+import type { CommunityReport, CommunityTrends, NeighborhoodProfile } from '../../types/index';
 import {
   CheckCircleIcon,
   SmartphoneIcon,
@@ -13,6 +13,7 @@ interface FlyerLayoutProps {
   neighborhoodSlug: string;
   metrics?: NeighborhoodProfile['metrics'] | null;
   topLanguages?: { language: string; percentage: number }[];
+  trends?: CommunityTrends | null;
   /** When true, the flyer is visible on screen (used in preview). Default: hidden (print-only). */
   inline?: boolean;
 }
@@ -24,7 +25,7 @@ function truncateSentences(text: string, max: number): string {
   return sentences.slice(0, max).join('').trim();
 }
 
-export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, inline = false }: FlyerLayoutProps) {
+export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, trends, inline = false }: FlyerLayoutProps) {
   const formattedDate = new Date(report.generatedAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -75,6 +76,15 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
           <div className="border-2 border-black rounded-lg p-4 text-center">
             <div className="text-[36px] font-black leading-none">
               {resolutionPct}%
+              {trends?.summary && (
+                <span className={`text-sm ml-1 ${
+                  trends.summary.direction === 'improving' ? 'text-green-600' :
+                  trends.summary.direction === 'declining' ? 'text-red-600' : 'text-gray-500'
+                }`}>
+                  {trends.summary.direction === 'improving' ? '\u2191' :
+                   trends.summary.direction === 'declining' ? '\u2193' : '\u2192'}
+                </span>
+              )}
             </div>
             <div className="text-[12px] mt-1.5 font-semibold uppercase tracking-wide">
               Resolved

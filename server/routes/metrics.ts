@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
+import type { CommunityTrends } from '../../src/types/index.js';
 
 const router = Router();
 
@@ -95,6 +96,30 @@ router.get('/', async (req, res) => {
     requestsPer1000Residents,
     goodNews,
   });
+});
+
+router.get('/trends', async (req, res) => {
+  const community = req.query.community as string | undefined;
+  if (!community) {
+    res.status(400).json({ error: 'community query parameter is required' });
+    return;
+  }
+
+  const cleaned = community.replace(/[%_]/g, '');
+  if (cleaned.length > 100 || cleaned.length === 0) {
+    res.status(400).json({ error: 'Invalid community name' });
+    return;
+  }
+
+  try {
+    const result = await prisma.$queryRaw<{ get_community_trends: CommunityTrends }[]>`
+      SELECT get_community_trends(${cleaned})
+    `;
+    res.json(result[0].get_community_trends);
+  } catch (err) {
+    logger.error('Failed to fetch 311 trends', { error: (err as Error).message, community });
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;

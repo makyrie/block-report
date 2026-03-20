@@ -4,8 +4,8 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
-import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
+import { getLibraries, getRecCenters, getTransitStops, get311, get311Trends, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
+import type { BlockMetrics, CommunityAnchor, CommunityReport, CommunityTrends, NeighborhoodProfile, TransitStop } from '../types';
 import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
@@ -32,6 +32,7 @@ export default function NeighborhoodPage() {
 
   const [transitScore, setTransitScore] = useState<NeighborhoodProfile['transit'] | null>(null);
   const [accessGap, setAccessGap] = useState<NeighborhoodProfile['accessGap']>(null);
+  const [trends, setTrends] = useState<CommunityTrends | null>(null);
   const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [blockData, setBlockData] = useState<BlockMetrics | null>(null);
   const [blockLoading, setBlockLoading] = useState(false);
@@ -70,6 +71,7 @@ export default function NeighborhoodPage() {
       setTopLanguages([]);
       setTransitScore(null);
       setAccessGap(null);
+      setTrends(null);
       return;
     }
 
@@ -78,6 +80,7 @@ export default function NeighborhoodPage() {
     setTopLanguages([]);
     setTransitScore(null);
     setAccessGap(null);
+    setTrends(null);
 
     get311(selectedCommunity)
       .then(setMetrics)
@@ -91,6 +94,10 @@ export default function NeighborhoodPage() {
     getAccessGap(selectedCommunity)
       .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
+
+    get311Trends(selectedCommunity)
+      .then(setTrends)
+      .catch(() => { /* trends may not be available for all communities */ });
 
     // Try to fetch demographics for language suggestion
     getDemographics(selectedCommunity)
@@ -159,6 +166,7 @@ export default function NeighborhoodPage() {
         metrics,
         transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
         demographics: { topLanguages },
+        trends: trends ?? undefined,
         accessGap: accessGap ?? null,
       };
 
@@ -242,6 +250,7 @@ export default function NeighborhoodPage() {
       metrics,
       transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
       demographics: { topLanguages },
+      trends: trends ?? undefined,
       accessGap: accessGap ?? null,
     };
 
@@ -256,7 +265,7 @@ export default function NeighborhoodPage() {
     } finally {
       setReportLoading(false);
     }
-  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
+  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap, trends]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">
@@ -312,6 +321,7 @@ export default function NeighborhoodPage() {
             topLanguages={topLanguages}
             transitScore={transitScore}
             accessGap={accessGap}
+            trends={trends}
           />
         </div>
       </aside>
@@ -404,6 +414,7 @@ export default function NeighborhoodPage() {
           neighborhoodSlug={toSlug(report.neighborhoodName)}
           metrics={metrics}
           topLanguages={topLanguages}
+          trends={trends}
         />
       )}
     </div>

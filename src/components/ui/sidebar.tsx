@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { NeighborhoodProfile, CommunityReport } from '../../types';
+import type { NeighborhoodProfile, CommunityReport, CommunityTrends } from '../../types';
 import ReportView from '../report/report-view';
+import TrendIndicator from './trend-indicator';
 import { useLanguage } from '../../i18n/context';
 import { SUPPORTED_LANGUAGES, DEMOGRAPHICS_TO_LANG } from '../../i18n/translations';
 
@@ -15,6 +16,7 @@ interface SidebarProps {
   topLanguages?: { language: string; percentage: number }[];
   transitScore?: NeighborhoodProfile['transit'] | null;
   accessGap?: NeighborhoodProfile['accessGap'];
+  trends?: CommunityTrends | null;
 }
 
 function LoadingSpinner({ label }: { label: string }) {
@@ -71,6 +73,7 @@ export default function Sidebar({
   topLanguages,
   transitScore,
   accessGap,
+  trends,
 }: SidebarProps) {
   const [showDetails, setShowDetails] = useState(false);
   const { t, reportLang, setReportLang } = useLanguage();
@@ -175,6 +178,31 @@ export default function Sidebar({
               </dl>
             )}
           </section>
+
+          {/* Historical trends */}
+          {trends && trends.monthly.length >= 3 && (
+            <section aria-labelledby="trends-heading" className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <h2 id="trends-heading" className="text-sm font-medium text-blue-800 mb-2">
+                12-Month Trends
+              </h2>
+              <TrendIndicator
+                direction={trends.summary.direction}
+                label="Resolution rate"
+                sparklineData={trends.monthly.map(d => d.resolutionRate)}
+              />
+              <div className="mt-1.5">
+                <TrendIndicator
+                  direction={trends.summary.volumeChange > 10 ? 'declining' : trends.summary.volumeChange < -10 ? 'improving' : 'stable'}
+                  label="Request volume"
+                  sparklineData={trends.monthly.map(d => d.totalRequests)}
+                />
+              </div>
+              <p className="text-xs text-blue-600 mt-2">
+                Resolution rate: {Math.round(trends.summary.previousResolutionRate * 100)}%
+                {' \u2192 '}{Math.round(trends.summary.currentResolutionRate * 100)}%
+              </p>
+            </section>
+          )}
 
           {/* Transit accessibility */}
           {transitScore && transitScore.stopCount > 0 && (
@@ -380,7 +408,7 @@ export default function Sidebar({
         </div>
       )}
 
-      <ReportView report={report} loading={reportLoading} metrics={metrics} topLanguages={topLanguages} />
+      <ReportView report={report} loading={reportLoading} metrics={metrics} topLanguages={topLanguages} trends={trends} />
     </div>
   );
 }

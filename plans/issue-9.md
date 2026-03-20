@@ -1,7 +1,7 @@
 ---
 title: "feat: Historical 311 Trends Per Neighborhood"
 type: feat
-status: active
+status: completed
 date: 2026-03-20
 ---
 
@@ -393,18 +393,18 @@ Keep flyer changes minimal — a directional arrow, not a full sparkline — to 
 
 ## Acceptance Criteria
 
-- [ ] `GET /api/311/trends?community={name}` returns monthly trend data for the trailing 12 complete months
-- [ ] Response includes `monthly` array (period, totalRequests, resolvedCount, resolutionRate, avgDaysToResolve) and `summary` (direction, volumeChange, rate comparison)
-- [ ] Current incomplete month is excluded from trend data
-- [ ] Sidebar shows sparkline + trend indicator for resolution rate and request volume when >= 3 data points exist
-- [ ] Trends section loads asynchronously — does not block initial sidebar render
-- [ ] Trend summary is included in Claude report prompt (not raw monthly data)
-- [ ] Flyer shows directional arrow next to resolution rate card
-- [ ] Community name normalization uses `LOWER()` consistent with existing function
-- [ ] Input validation matches existing `/api/311` endpoint (SQL wildcard stripping, length check)
-- [ ] Endpoint returns appropriate errors (400 for missing/invalid community, 500 for server errors)
-- [ ] No new charting library dependency — uses hand-rolled SVG sparklines
-- [ ] Composite database index `(LOWER(comm_plan_name), date_requested)` added for query performance
+- [x] `GET /api/311/trends?community={name}` returns monthly trend data for the trailing 12 complete months
+- [x] Response includes `monthly` array (period, totalRequests, resolvedCount, resolutionRate, avgDaysToResolve) and `summary` (direction, volumeChange, rate comparison)
+- [x] Current incomplete month is excluded from trend data
+- [x] Sidebar shows sparkline + trend indicator for resolution rate and request volume when >= 3 data points exist
+- [x] Trends section loads asynchronously — does not block initial sidebar render
+- [x] Trend summary is included in Claude report prompt (not raw monthly data)
+- [x] Flyer shows directional arrow next to resolution rate card
+- [x] Community name normalization uses `LOWER()` consistent with existing function
+- [x] Input validation matches existing `/api/311` endpoint (SQL wildcard stripping, length check)
+- [x] Endpoint returns appropriate errors (400 for missing/invalid community, 500 for server errors)
+- [x] No new charting library dependency — uses hand-rolled SVG sparklines
+- [x] Composite database index `(LOWER(comm_plan_name), date_requested)` added for query performance
 
 ## Success Metrics
 

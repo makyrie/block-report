@@ -5,8 +5,8 @@ import { FlyerLayout } from '../components/flyer/flyer-layout';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
-import { get311, getDemographics, getPreGeneratedReport, generateReport } from '../api/client';
-import type { CommunityReport, NeighborhoodProfile } from '../types';
+import { get311, get311Trends, getDemographics, getPreGeneratedReport, generateReport } from '../api/client';
+import type { CommunityReport, CommunityTrends, NeighborhoodProfile } from '../types';
 
 export default function FlyerPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -17,6 +17,7 @@ export default function FlyerPage() {
 
   const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
   const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
+  const [trends, setTrends] = useState<CommunityTrends | null>(null);
   const [report, setReport] = useState<CommunityReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +27,9 @@ export default function FlyerPage() {
     if (!community) return;
     setMetrics(null);
     setTopLanguages([]);
+    setTrends(null);
     get311(community).then(setMetrics).catch(console.error);
+    get311Trends(community).then(setTrends).catch(() => {});
     getDemographics(community)
       .then((data) => { if (data?.topLanguages) setTopLanguages(data.topLanguages); })
       .catch(() => {});
@@ -230,6 +233,7 @@ export default function FlyerPage() {
                 neighborhoodSlug={slug!}
                 metrics={metrics}
                 topLanguages={topLanguages}
+                trends={trends}
                 inline
               />
             </div>
