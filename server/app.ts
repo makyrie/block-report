@@ -48,14 +48,17 @@ app.get('/api/health', (_req, res) => {
 
 // Readiness probe — deep DB check with timeout for deploy verification
 app.get('/api/health/ready', async (_req, res) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('DB health check timed out')), 5000),
-    );
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('DB health check timed out')), 5000);
+    });
     await Promise.race([prisma.$queryRaw`SELECT 1`, timeout]);
     res.json({ status: 'ok' });
   } catch {
     res.status(503).json({ status: 'error' });
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 });
 
