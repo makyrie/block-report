@@ -13,7 +13,7 @@ export function registerProfileTools(server: McpServer) {
     withCommunityValidation('get_neighborhood_profile', async (normalized) => {
       const profile = await getNeighborhoodProfile(normalized);
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(profile, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify(profile) }],
       };
     }),
   );

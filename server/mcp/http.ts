@@ -87,6 +87,10 @@ function validateSessionId(req: express.Request, res: express.Response): string 
   return sessionId;
 }
 
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', activeSessions: transports.size });
+});
+
 app.post('/mcp', async (req, res) => {
   const sessionId = validateSessionId(req, res);
   if (sessionId === false) return;

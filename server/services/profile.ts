@@ -1,5 +1,5 @@
 import { getProcessedCommunityMetrics } from './metrics.js';
-import { getTransitScore } from './transit.js';
+import { getTransitScore, formatTravelTime } from './transit.js';
 import { getDemographicsByCommunity } from './demographics.js';
 import { getAccessGapScore } from './gap-analysis.js';
 import { getRecCenters, getLibraryCountByCommunity } from './locations.js';
@@ -74,7 +74,7 @@ export async function getNeighborhoodProfile(normalized: string): Promise<Neighb
       cityAverage: transit.cityAverage,
       stopCount: transit.stopCount,
       agencies: transit.agencies,
-      travelTimeToCityHall: transit.travelTimeToCityHall ? `~${transit.travelTimeToCityHall} min` : null,
+      travelTimeToCityHall: formatTravelTime(transit.travelTimeToCityHall),
     } : null,
     demographics: demographics.length > 0 ? demographics.slice(0, 5) : null,
     accessGap: accessGap ? {

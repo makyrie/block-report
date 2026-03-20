@@ -12,7 +12,7 @@ export function registerCommunityTools(server: McpServer) {
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({ communities: names, count: names.length }, null, 2),
+          text: JSON.stringify({ communities: names, count: names.length }),
         }],
       };
     }),

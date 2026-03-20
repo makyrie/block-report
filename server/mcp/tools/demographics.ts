@@ -25,7 +25,7 @@ export function registerDemographicsTools(server: McpServer) {
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({ community: normalized, topLanguages }, null, 2),
+          text: JSON.stringify({ community: normalized, topLanguages }),
         }],
       };
     }),
@@ -52,7 +52,7 @@ export function registerDemographicsTools(server: McpServer) {
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({ tract, topLanguages }, null, 2),
+          text: JSON.stringify({ tract, topLanguages }),
         }],
       };
     }),

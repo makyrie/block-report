@@ -20,7 +20,7 @@ export function registerLocationTools(server: McpServer) {
         lng: lib.lng,
       }));
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify({ libraries: curated, count: curated.length }, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify({ libraries: curated, count: curated.length }) }],
       };
     }),
   );
@@ -45,7 +45,7 @@ export function registerLocationTools(server: McpServer) {
         lng: rc.lng,
       }));
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify({ recCenters: curated, count: curated.length }, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify({ recCenters: curated, count: curated.length }) }],
       };
     }),
   );

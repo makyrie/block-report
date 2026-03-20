@@ -171,3 +171,7 @@ function computeCityAverage(scores: Map<string, TransitScore>): number {
 export function getCityAverage(scores: Map<string, TransitScore>): number {
   return computeCityAverage(scores);
 }
+
+export function formatTravelTime(minutes: number | null): string | null {
+  return minutes != null ? `~${minutes} min` : null;
+}

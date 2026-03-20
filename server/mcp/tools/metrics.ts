@@ -13,7 +13,7 @@ export function registerMetricsTools(server: McpServer) {
     withCommunityValidation('get_311_metrics', async (normalized) => {
       const data = await getProcessedCommunityMetrics(normalized);
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify(data) }],
       };
     }),
   );

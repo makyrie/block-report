@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getTransitScore } from '../../services/transit.js';
+import { getTransitScore, formatTravelTime } from '../../services/transit.js';
 import { withCommunityValidation } from './helpers.js';
 
 export function registerTransitTools(server: McpServer) {
@@ -32,7 +32,7 @@ export function registerTransitTools(server: McpServer) {
             stopCount: result.stopCount,
             agencyCount: result.agencyCount,
             agencies: result.agencies,
-            travelTimeToCityHall: result.travelTimeToCityHall ? `~${result.travelTimeToCityHall} min` : null,
+            travelTimeToCityHall: formatTravelTime(result.travelTimeToCityHall),
           }, null, 2),
         }],
       };
