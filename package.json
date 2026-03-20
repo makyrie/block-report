@@ -11,6 +11,7 @@
     "build": "vite build",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "db:migrate:safe": "bash scripts/migrate-safe.sh",
     "db:push": "echo 'WARNING: db push is unsafe for production — use db:migrate instead' && prisma db push",
     "db:seed": "node --env-file=.env --import=tsx scripts/seed.ts",
     "generate-reports": "node --env-file=.env --import=tsx server/scripts/generate-reports.ts",
