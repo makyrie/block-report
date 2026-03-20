@@ -10,72 +10,65 @@ CREATE OR REPLACE FUNCTION get_community_trends(community_name TEXT)
 RETURNS JSONB AS $$
 DECLARE
   result JSONB;
-  cleaned TEXT;
 BEGIN
-  cleaned := replace(replace(community_name, '%', ''), '_', '');
 
+  WITH monthly_data AS (
+    SELECT
+      date_trunc('month', date_requested) AS month,
+      to_char(date_trunc('month', date_requested), 'YYYY-MM') AS period,
+      COUNT(*) AS "totalRequests",
+      COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL) AS "resolvedCount",
+      ROUND(
+        COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::numeric
+        / NULLIF(COUNT(*), 0)::numeric, 3
+      ) AS "resolutionRate"
+    FROM requests_311
+    WHERE LOWER(comm_plan_name) = LOWER(community_name)
+      AND date_requested >= date_trunc('month', NOW()) - INTERVAL '12 months'
+      AND date_requested < date_trunc('month', NOW())
+    GROUP BY date_trunc('month', date_requested)
+  ),
+  halves AS (
+    SELECT
+      ROUND(
+        SUM("resolvedCount") FILTER (WHERE month >= date_trunc('month', NOW()) - INTERVAL '6 months')::numeric
+        / NULLIF(SUM("totalRequests") FILTER (WHERE month >= date_trunc('month', NOW()) - INTERVAL '6 months'), 0)::numeric
+      , 3) AS curr_rate,
+      COALESCE(SUM("totalRequests") FILTER (WHERE month >= date_trunc('month', NOW()) - INTERVAL '6 months'), 0) AS curr_vol,
+      ROUND(
+        SUM("resolvedCount") FILTER (WHERE month < date_trunc('month', NOW()) - INTERVAL '6 months')::numeric
+        / NULLIF(SUM("totalRequests") FILTER (WHERE month < date_trunc('month', NOW()) - INTERVAL '6 months'), 0)::numeric
+      , 3) AS prev_rate,
+      COALESCE(SUM("totalRequests") FILTER (WHERE month < date_trunc('month', NOW()) - INTERVAL '6 months'), 0) AS prev_vol
+    FROM monthly_data
+  )
   SELECT jsonb_build_object(
-    'monthly', COALESCE(monthly.items, '[]'::jsonb),
+    'monthly', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+      'period', period,
+      'totalRequests', "totalRequests",
+      'resolvedCount', "resolvedCount",
+      'resolutionRate', "resolutionRate"
+    ) ORDER BY month) FROM monthly_data), '[]'::jsonb),
     'summary', jsonb_build_object(
-      'currentResolutionRate', COALESCE(curr.rate, 0),
-      'previousResolutionRate', COALESCE(prev.rate, 0),
+      'currentResolutionRate', COALESCE(h.curr_rate, 0),
+      'previousResolutionRate', COALESCE(h.prev_rate, 0),
       'direction', CASE
-        WHEN curr.rate > prev.rate + 0.05 THEN 'improving'
-        WHEN curr.rate < prev.rate - 0.05 THEN 'declining'
+        WHEN h.curr_rate > h.prev_rate + 0.05 THEN 'improving'
+        WHEN h.curr_rate < h.prev_rate - 0.05 THEN 'declining'
         ELSE 'stable'
       END,
       'volumeChange', CASE
-        WHEN prev.vol > 0 THEN ROUND(((curr.vol - prev.vol)::numeric / prev.vol::numeric) * 100)
+        WHEN h.prev_vol > 0 THEN ROUND(((h.curr_vol - h.prev_vol)::numeric / h.prev_vol::numeric) * 100)
         ELSE 0
+      END,
+      'volumeDirection', CASE
+        WHEN h.prev_vol > 0 AND ((h.curr_vol - h.prev_vol)::numeric / h.prev_vol::numeric) * 100 > 10 THEN 'declining'
+        WHEN h.prev_vol > 0 AND ((h.curr_vol - h.prev_vol)::numeric / h.prev_vol::numeric) * 100 < -10 THEN 'improving'
+        ELSE 'stable'
       END
     )
   ) INTO result
-  FROM
-    -- Monthly aggregation for trailing 12 complete months
-    LATERAL (
-      SELECT jsonb_agg(row_to_json(t)::jsonb ORDER BY t.period) AS items FROM (
-        SELECT
-          to_char(date_trunc('month', date_requested), 'YYYY-MM') AS period,
-          COUNT(*) AS "totalRequests",
-          COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL) AS "resolvedCount",
-          ROUND(
-            COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::numeric
-            / NULLIF(COUNT(*), 0)::numeric, 3
-          ) AS "resolutionRate",
-          ROUND(AVG(EXTRACT(EPOCH FROM (date_closed - date_requested)) / 86400)
-            FILTER (WHERE date_closed IS NOT NULL AND date_requested IS NOT NULL
-                    AND date_closed >= date_requested)::numeric, 1
-          ) AS "avgDaysToResolve"
-        FROM requests_311
-        WHERE LOWER(comm_plan_name) = LOWER(cleaned)
-          AND date_requested >= date_trunc('month', NOW()) - INTERVAL '12 months'
-          AND date_requested < date_trunc('month', NOW()) -- exclude current incomplete month
-        GROUP BY date_trunc('month', date_requested)
-        ORDER BY date_trunc('month', date_requested)
-      ) t
-    ) monthly,
-    -- Current 6-month window resolution rate
-    LATERAL (
-      SELECT
-        ROUND(COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::numeric
-          / NULLIF(COUNT(*), 0)::numeric, 3) AS rate,
-        COUNT(*) AS vol
-      FROM requests_311
-      WHERE LOWER(comm_plan_name) = LOWER(cleaned)
-        AND date_requested >= date_trunc('month', NOW()) - INTERVAL '6 months'
-        AND date_requested < date_trunc('month', NOW())
-    ) curr,
-    -- Previous 6-month window resolution rate
-    LATERAL (
-      SELECT
-        ROUND(COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::numeric
-          / NULLIF(COUNT(*), 0)::numeric, 3) AS rate,
-        COUNT(*) AS vol
-      FROM requests_311
-      WHERE LOWER(comm_plan_name) = LOWER(cleaned)
-        AND date_requested >= date_trunc('month', NOW()) - INTERVAL '12 months'
-        AND date_requested < date_trunc('month', NOW()) - INTERVAL '6 months'
-    ) prev;
+  FROM halves h;
 
   RETURN result;
 END;
