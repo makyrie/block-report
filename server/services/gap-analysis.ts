@@ -1,5 +1,6 @@
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
+import { normalizeCommunityName } from '../../src/utils/normalize.js';
 
 export interface AccessGapResult {
   accessGapScore: number;
@@ -34,13 +35,10 @@ async function fetchEngagementRates(): Promise<Map<string, number>> {
     select: { comm_plan_name: true },
   });
 
-  // Count requests per community (normalize names to uppercase).
-  // NOTE: server uses .toUpperCase().trim(); client uses lowercase + strip non-alphanum.
-  // The two never compare keys across the boundary — each side is self-consistent.
   const counts = new Map<string, number>();
   for (const r of requests) {
     if (!r.comm_plan_name) continue;
-    const key = r.comm_plan_name.toUpperCase().trim();
+    const key = normalizeCommunityName(r.comm_plan_name);
     counts.set(key, (counts.get(key) || 0) + 1);
   }
 
@@ -52,7 +50,7 @@ async function fetchEngagementRates(): Promise<Map<string, number>> {
   const populations = new Map<string, number>();
   for (const row of censusRows) {
     if (!row.community) continue;
-    const key = row.community.toUpperCase().trim();
+    const key = normalizeCommunityName(row.community);
     populations.set(key, (populations.get(key) || 0) + (Number(row.total_pop_5plus) || 0));
   }
 
@@ -97,7 +95,7 @@ async function fetchTransitScores(): Promise<Map<string, number>> {
     }
 
     const rawScore = stopCount * 0.4 + agencies.size * 10 * 0.6;
-    scores.set(name.toUpperCase(), rawScore);
+    scores.set(normalizeCommunityName(name), rawScore);
   }
 
   // Normalize to 0-100
@@ -119,7 +117,7 @@ async function fetchNonEnglishPct(): Promise<Map<string, number>> {
   const agg = new Map<string, { totalPop: number; englishOnly: number }>();
   for (const row of data) {
     if (!row.community) continue;
-    const key = row.community.toUpperCase().trim();
+    const key = normalizeCommunityName(row.community);
     const existing = agg.get(key) || { totalPop: 0, englishOnly: 0 };
     existing.totalPop += Number(row.total_pop_5plus) || 0;
     existing.englishOnly += Number(row.english_only) || 0;
@@ -292,7 +290,7 @@ export async function getAccessGapScores(): Promise<Map<string, AccessGapResult>
 
 export async function getAccessGapScore(community: string): Promise<AccessGapResult | null> {
   const scores = await getAccessGapScores();
-  return scores.get(community.toUpperCase().trim()) ?? null;
+  return scores.get(normalizeCommunityName(community)) ?? null;
 }
 
 export async function getTopUnderserved(limit = 10): Promise<
