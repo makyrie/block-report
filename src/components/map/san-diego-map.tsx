@@ -267,6 +267,7 @@ function PinnedMarker({
 // Child component — handles map click events with debounce
 function MapClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
   useMapEvents({
     click(e) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -396,7 +397,7 @@ function SanDiegoMap({
       {/* Choropleth layer — renders below markers */}
       {showChoropleth && neighborhoodBoundaries && (
         <GeoJSON
-          key={`choropleth-${accessGapScores?.size ?? 0}`}
+          key="choropleth"
           data={neighborhoodBoundaries}
           style={(feature) => {
             const name = normalizeCommunityName(feature?.properties?.cpname || '');
