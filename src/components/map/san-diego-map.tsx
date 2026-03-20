@@ -7,6 +7,7 @@ import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
 import { norm } from '../../utils/normalize';
+import { scoreToColor } from '../../utils/score-to-color';
 
 // ── Popup content components ─────────────────────────────────────────────────
 
@@ -221,16 +222,6 @@ interface SanDiegoMapProps {
   onCommunitySelect?: (community: string) => void;
 }
 
-// Color utility — green (low) → yellow → orange → red (high access gap)
-function scoreToColor(score: number | null): string {
-  if (score === null) return '#d1d5db'; // gray-300 for missing data
-  if (score < 20) return '#22c55e';  // green-500
-  if (score < 40) return '#a3e635';  // lime-400
-  if (score < 60) return '#facc15';  // yellow-400
-  if (score < 80) return '#f97316';  // orange-500
-  return '#ef4444';                   // red-500
-}
-
 
 function findCommunityFeature(features: Feature[], community: string): Feature | null {
   const target = norm(community);
@@ -337,7 +328,7 @@ function SanDiegoMap({
         <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 cursor-pointer"
              onClick={onToggleChoropleth}>
           <label className="flex items-center gap-2 cursor-pointer text-sm">
-            <input type="checkbox" checked={showChoropleth} readOnly className="accent-amber-600" />
+            <input type="checkbox" checked={showChoropleth} onChange={onToggleChoropleth} className="accent-amber-600" />
             Access Gap Layer
           </label>
         </div>
@@ -417,10 +408,9 @@ function SanDiegoMap({
           onEachFeature={(feature, layer) => {
             const name = feature.properties?.cpname || 'Unknown';
             const score = accessGapScores?.get(norm(name));
-            layer.bindTooltip(
-              `${name}: ${score !== undefined ? score + '/100' : 'No data'}`,
-              { sticky: true }
-            );
+            const el = document.createElement('span');
+            el.textContent = `${name}: ${score !== undefined ? score + '/100' : 'No data'}`;
+            layer.bindTooltip(el, { sticky: true });
             layer.on('click', (e) => {
               L.DomEvent.stopPropagation(e as L.LeafletEvent);
               onCommunitySelect?.(name);
