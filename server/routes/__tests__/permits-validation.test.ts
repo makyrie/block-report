@@ -2,40 +2,39 @@ import { describe, it, expect } from 'vitest';
 import { sanitizeCommunity } from '../../utils/validation.js';
 
 describe('permits community parameter validation', () => {
-  it('accepts undefined community (returns all permits)', () => {
-    const result = sanitizeCommunity(undefined);
-    expect(result.valid).toBe(true);
+  it('returns undefined for undefined input (no filter)', () => {
+    expect(sanitizeCommunity(undefined)).toBeUndefined();
   });
 
   it('accepts a valid community name', () => {
-    const result = sanitizeCommunity('Mira Mesa');
-    expect(result.valid).toBe(true);
-    expect(result.valid && result.cleaned).toBe('Mira Mesa');
+    expect(sanitizeCommunity('Mira Mesa')).toBe('Mira Mesa');
   });
 
-  it('strips SQL wildcard characters', () => {
-    const result = sanitizeCommunity('Mira%Mesa_');
-    expect(result.valid).toBe(true);
-    expect(result.valid && result.cleaned).toBe('MiraMesa');
+  it('allows hyphens, periods, and apostrophes', () => {
+    expect(sanitizeCommunity("Mid-City")).toBe('Mid-City');
+    expect(sanitizeCommunity("O'Farrell")).toBe("O'Farrell");
+    expect(sanitizeCommunity("St. Luke's")).toBe("St. Luke's");
   });
 
-  it('rejects empty string', () => {
-    const result = sanitizeCommunity('');
-    expect(result.valid).toBe(false);
+  it('strips disallowed characters (SQL wildcards, quotes, semicolons)', () => {
+    expect(sanitizeCommunity('Mira%Mesa_')).toBe('MiraMesa');
+    expect(sanitizeCommunity('Mira;Mesa')).toBe('MiraMesa');
+    expect(sanitizeCommunity('Mira"Mesa')).toBe('MiraMesa');
   });
 
-  it('rejects string that becomes empty after stripping wildcards', () => {
-    const result = sanitizeCommunity('%%%___');
-    expect(result.valid).toBe(false);
+  it('returns null for empty string', () => {
+    expect(sanitizeCommunity('')).toBeNull();
   });
 
-  it('rejects community names over 100 characters', () => {
-    const result = sanitizeCommunity('A'.repeat(101));
-    expect(result.valid).toBe(false);
+  it('returns null for string that becomes empty after stripping', () => {
+    expect(sanitizeCommunity('%%%___')).toBeNull();
+  });
+
+  it('returns null for community names over 100 characters', () => {
+    expect(sanitizeCommunity('A'.repeat(101))).toBeNull();
   });
 
   it('accepts community name at exactly 100 characters', () => {
-    const result = sanitizeCommunity('A'.repeat(100));
-    expect(result.valid).toBe(true);
+    expect(sanitizeCommunity('A'.repeat(100))).toBe('A'.repeat(100));
   });
 });

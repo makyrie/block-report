@@ -28,9 +28,9 @@ export function getTransitStops(): Promise<TransitStop[]> {
   return fetchJSON(`${BASE}/locations/transit-stops`);
 }
 
-export function getPermits(community?: string): Promise<Permit[]> {
+export function getPermits(community?: string, init?: RequestInit): Promise<Permit[]> {
   const params = community ? `?community=${encodeURIComponent(community)}` : '';
-  return fetchJSON(`${BASE}/locations/permits${params}`);
+  return fetchJSON(`${BASE}/locations/permits${params}`, init);
 }
 
 export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {

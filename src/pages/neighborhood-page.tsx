@@ -69,7 +69,11 @@ export default function NeighborhoodPage() {
       setPermits([]);
       return;
     }
-    getPermits(selectedCommunity).then(setPermits).catch(console.error);
+    const controller = new AbortController();
+    getPermits(selectedCommunity, { signal: controller.signal })
+      .then(setPermits)
+      .catch((err) => { if (err.name !== 'AbortError') console.error(err); });
+    return () => controller.abort();
   }, [selectedCommunity]);
 
   // Fetch 311 metrics and demographics when community changes

@@ -3,6 +3,8 @@ import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import { sanitizeCommunity } from '../utils/validation.js';
 
+const PERMIT_GOOD_NEWS_WINDOW_DAYS = 180;
+
 const router = Router();
 
 router.get('/', async (req, res) => {
@@ -12,12 +14,11 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  const result = sanitizeCommunity(community);
-  if (!result.valid) {
-    res.status(400).json({ error: result.error });
+  const cleaned = sanitizeCommunity(community);
+  if (cleaned === null) {
+    res.status(400).json({ error: 'Invalid community name' });
     return;
   }
-  const cleaned = result.cleaned!;
 
   interface CommunityMetrics {
     total_requests: number;
@@ -42,7 +43,7 @@ router.get('/', async (req, res) => {
       prisma.permit.count({
         where: {
           community: cleaned,
-          date_issued: { gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) },
+          date_issued: { gte: new Date(Date.now() - PERMIT_GOOD_NEWS_WINDOW_DAYS * 24 * 60 * 60 * 1000) },
         },
       }).catch((err: Error) => {
         logger.error('Failed to fetch permit good news', { error: err.message });
@@ -52,7 +53,7 @@ router.get('/', async (req, res) => {
     metrics = metricsResult[0].get_community_metrics;
     recentPermits = permitCount;
   } catch (err) {
-    logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community });
+    logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community: cleaned });
     res.status(500).json({ error: 'Internal server error' });
     return;
   }

@@ -322,16 +322,18 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
   console.log(`  ✓ ${mapped} tracts mapped to communities`);
 }
 
+const PERMIT_SEED_WINDOW_MONTHS = 12;
+
 async function seedPermits() {
-  console.log('Seeding permits (last 12 months)...');
+  console.log(`Seeding permits (last ${PERMIT_SEED_WINDOW_MONTHS} months)...`);
   const cutoffDate = new Date();
-  cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+  cutoffDate.setMonth(cutoffDate.getMonth() - PERMIT_SEED_WINDOW_MONTHS);
 
   const rows = await fetchCsv(
     'https://seshat.datasd.org/dsd_permits/dsd_permits_all_pts_datasd.csv'
   );
 
-  // Filter, map, deduplicate, and insert in a single pass to reduce memory
+  // Filter, map, deduplicate, and batch-insert (note: CSV is already fully in memory from fetchCsv)
   const seen = new Set<string>();
   let batch: ReturnType<typeof mapPermitRow>[] = [];
   const batchSize = 1000;

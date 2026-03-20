@@ -47,16 +47,16 @@ router.get('/transit-stops', async (_req, res) => {
 
 router.get('/permits', async (req, res) => {
   try {
-    const result = sanitizeCommunity(req.query.community as string | undefined);
-    if (!result.valid) {
-      res.status(400).json({ error: result.error });
+    const cleaned = sanitizeCommunity(req.query.community as string | undefined);
+    if (cleaned === null) {
+      res.status(400).json({ error: 'Invalid community name' });
       return;
     }
 
     const where: Prisma.PermitWhereInput = {
       lat: { not: null },
       lng: { not: null },
-      ...(result.cleaned ? { community: result.cleaned } : {}),
+      ...(cleaned ? { community: { equals: cleaned, mode: 'insensitive' } } : {}),
     };
 
     const data = await prisma.permit.findMany({

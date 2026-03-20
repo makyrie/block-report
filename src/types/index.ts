@@ -58,7 +58,9 @@ export interface Permit {
   status: string | null;
   street_address: string | null;
   community: string | null;
+  /** Non-nullable: backend filters out permits without coordinates */
   lat: number;
+  /** Non-nullable: backend filters out permits without coordinates */
   lng: number;
 }
 

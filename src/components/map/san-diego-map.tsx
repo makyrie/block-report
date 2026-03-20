@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
@@ -336,6 +336,9 @@ function SanDiegoMap({
   blockLoading = false,
   blockRadius = 0.25,
 }: SanDiegoMapProps) {
+  const [selectedPermit, setSelectedPermit] = useState<Permit | null>(null);
+  const permitPopupRef = useRef<L.Popup | null>(null);
+
   const handleMarkerClick = useCallback(
     (anchor: CommunityAnchor) => () => {
       onAnchorClick(anchor);
@@ -430,21 +433,7 @@ function SanDiegoMap({
         />
       )}
 
-      {/* Permit markers — amber circles */}
-      {permits.map((permit) => (
-        <CircleMarker
-          key={`permit-${permit.id}`}
-          center={[permit.lat, permit.lng]}
-          radius={5}
-          pathOptions={{ color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.8, weight: 1 }}
-        >
-          <Popup>
-            <PermitPopupContent permit={permit} />
-          </Popup>
-        </CircleMarker>
-      ))}
-
-      {/* Transit stops — violet circles */}
+      {/* Transit stops — violet circles (rendered first so permits appear on top) */}
       {transitStops.map((stop) => (
         <CircleMarker
           key={stop.id}
@@ -457,6 +446,26 @@ function SanDiegoMap({
           </Popup>
         </CircleMarker>
       ))}
+
+      {/* Permit markers — amber circles with shared popup */}
+      {permits.map((permit) => (
+        <CircleMarker
+          key={`permit-${permit.id}`}
+          center={[permit.lat, permit.lng]}
+          radius={5}
+          pathOptions={{ color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.8, weight: 1 }}
+          eventHandlers={{ click: () => setSelectedPermit(permit) }}
+        />
+      ))}
+      {selectedPermit && (
+        <Popup
+          ref={permitPopupRef}
+          position={[selectedPermit.lat, selectedPermit.lng]}
+          eventHandlers={{ remove: () => setSelectedPermit(null) }}
+        >
+          <PermitPopupContent permit={selectedPermit} />
+        </Popup>
+      )}
 
       {/* Library markers — blue */}
       {libraries.map((lib) => (
