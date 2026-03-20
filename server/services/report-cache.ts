@@ -9,7 +9,7 @@ const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function cacheKey(community: string, language: string): string {
-  return `${community.toLowerCase().replace(/\s+/g, '-')}_${language.toLowerCase().replace(/\s+/g, '-')}.json`;
+  return `${community.toLowerCase().replace(/[^a-z0-9]+/g, '-')}_${language.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`;
 }
 
 export async function getCachedReport(community: string, language: string): Promise<CommunityReport | null> {
