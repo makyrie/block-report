@@ -3,7 +3,7 @@
 -- To apply: run this SQL directly against your Neon database.
 
 -- Composite index for efficient time-series queries by community
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_311_comm_plan_date
+CREATE INDEX IF NOT EXISTS idx_311_comm_plan_date
 ON requests_311 (LOWER(comm_plan_name), date_requested);
 
 CREATE OR REPLACE FUNCTION get_community_trends(community_name TEXT)
@@ -53,6 +53,9 @@ BEGIN
       'currentResolutionRate', COALESCE(h.curr_rate, 0),
       'previousResolutionRate', COALESCE(h.prev_rate, 0),
       'direction', CASE
+        WHEN h.curr_rate IS NULL AND h.prev_rate IS NULL THEN 'stable'
+        WHEN h.prev_rate IS NULL THEN 'improving'
+        WHEN h.curr_rate IS NULL THEN 'declining'
         WHEN h.curr_rate > h.prev_rate + 0.05 THEN 'improving'
         WHEN h.curr_rate < h.prev_rate - 0.05 THEN 'declining'
         ELSE 'stable'
@@ -62,8 +65,10 @@ BEGIN
         ELSE 0
       END,
       'volumeDirection', CASE
-        WHEN h.prev_vol > 0 AND ((h.curr_vol - h.prev_vol)::numeric / h.prev_vol::numeric) * 100 > 10 THEN 'declining'
-        WHEN h.prev_vol > 0 AND ((h.curr_vol - h.prev_vol)::numeric / h.prev_vol::numeric) * 100 < -10 THEN 'improving'
+        WHEN h.prev_vol IS NULL OR h.prev_vol = 0 THEN
+          CASE WHEN COALESCE(h.curr_vol, 0) > 0 THEN 'declining' ELSE 'stable' END
+        WHEN ((h.curr_vol - h.prev_vol)::numeric / h.prev_vol::numeric) * 100 > 10 THEN 'declining'
+        WHEN ((h.curr_vol - h.prev_vol)::numeric / h.prev_vol::numeric) * 100 < -10 THEN 'improving'
         ELSE 'stable'
       END
     )
