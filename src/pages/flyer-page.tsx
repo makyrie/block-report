@@ -5,6 +5,7 @@ import { FlyerLayout } from '../components/flyer/flyer-layout';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
+import { buildNeighborhoodProfile } from '../utils/build-profile';
 import { get311, get311Trends, getDemographics, getPreGeneratedReport, generateReport } from '../api/client';
 import type { CommunityReport, CommunityTrends, NeighborhoodProfile } from '../types';
 
@@ -61,15 +62,12 @@ export default function FlyerPage() {
         return;
       }
 
-      const profile: NeighborhoodProfile = {
+      const profile = buildNeighborhoodProfile({
         communityName: community,
-        anchor: { id: '', name: community, type: 'library', lat: 0, lng: 0, address: '', community },
         metrics,
-        transit: { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-        demographics: { topLanguages },
-        accessGap: null,
-        trends: trends ?? undefined,
-      };
+        topLanguages,
+        trends,
+      });
 
       try {
         const result = await generateReport(profile, reportLang);

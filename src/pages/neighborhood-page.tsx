@@ -10,6 +10,7 @@ import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
+import { buildNeighborhoodProfile } from '../utils/build-profile';
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -150,25 +151,15 @@ export default function NeighborhoodPage() {
 
       generatingRef.current = true;
 
-      const anchor = selectedAnchor ?? {
-        id: '',
-        name: selectedCommunity,
-        type: 'library' as const,
-        lat: 0,
-        lng: 0,
-        address: '',
-        community: selectedCommunity,
-      };
-
-      const profile: NeighborhoodProfile = {
+      const profile = buildNeighborhoodProfile({
         communityName: selectedCommunity,
-        anchor,
+        anchor: selectedAnchor,
         metrics,
-        transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-        demographics: { topLanguages },
-        trends: trends ?? undefined,
-        accessGap: accessGap ?? null,
-      };
+        transitScore,
+        topLanguages,
+        trends,
+        accessGap,
+      });
 
       try {
         const result = await generateReport(profile, reportLang);
@@ -183,7 +174,7 @@ export default function NeighborhoodPage() {
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCommunity, reportLang, metrics]);
+  }, [selectedCommunity, reportLang, metrics, trends]);
 
   const handleCommunityChange = useCallback(
     (community: string) => {
@@ -234,25 +225,15 @@ export default function NeighborhoodPage() {
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
-    const anchor = selectedAnchor ?? {
-      id: '',
-      name: selectedCommunity,
-      type: 'library' as const,
-      lat: 0,
-      lng: 0,
-      address: '',
-      community: selectedCommunity,
-    };
-
-    const profile: NeighborhoodProfile = {
+    const profile = buildNeighborhoodProfile({
       communityName: selectedCommunity,
-      anchor,
+      anchor: selectedAnchor,
       metrics,
-      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-      demographics: { topLanguages },
-      trends: trends ?? undefined,
-      accessGap: accessGap ?? null,
-    };
+      transitScore,
+      topLanguages,
+      trends,
+      accessGap,
+    });
 
     setReportLoading(true);
     setReportError(null);
