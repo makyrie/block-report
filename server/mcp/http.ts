@@ -88,7 +88,7 @@ function validateSessionId(req: express.Request, res: express.Response): string 
 }
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', activeSessions: transports.size });
+  res.json({ status: 'ok' });
 });
 
 app.post('/mcp', async (req, res) => {
