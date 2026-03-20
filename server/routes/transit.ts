@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getTransitScores, getTransitScore, getCityAverage as computeCityAverage } from '../services/transit.js';
+import { getTransitScore } from '../services/transit.js';
 import { parseAndValidateCommunity } from './validate-community.js';
 import { logger } from '../logger.js';
 
@@ -13,15 +13,7 @@ router.get('/', async (req, res) => {
     const result = await getTransitScore(normalized);
 
     if (!result) {
-      const scores = await getTransitScores();
-      res.json({
-        stopCount: 0,
-        agencyCount: 0,
-        agencies: [],
-        transitScore: 0,
-        cityAverage: computeCityAverage(scores),
-        travelTimeToCityHall: null,
-      });
+      res.status(404).json({ error: `No transit data available for "${normalized}".` });
       return;
     }
 

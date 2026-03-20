@@ -180,8 +180,8 @@ function computeCityAverage(scores: Map<string, TransitScore>): number {
   return Math.round(values.reduce((sum, s) => sum + s.transitScore, 0) / values.length);
 }
 
-export function getCityAverage(scores: Map<string, TransitScore>): number {
-  return computeCityAverage(scores);
+export function getCachedCityAverage(): number {
+  return cityAverageCache;
 }
 
 export function formatTravelTime(minutes: number | null): string | null {
