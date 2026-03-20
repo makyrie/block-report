@@ -16,11 +16,6 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-/** fetchJSON variant that accepts an AbortSignal for cancellation. */
-export function fetchJSONWithSignal<T>(url: string, signal?: AbortSignal): Promise<T> {
-  return fetchJSON(url, signal ? { signal } : undefined);
-}
-
 export function getLibraries(): Promise<CommunityAnchor[]> {
   return fetchJSON(`${BASE}/locations/libraries`);
 }
@@ -53,12 +48,6 @@ export function getAccessGap(community: string, signal?: AbortSignal): Promise<N
   return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
-export function getAccessGapRanking(limit = 10): Promise<{
-  ranking: { community: string; accessGapScore: number; signals: NonNullable<NeighborhoodProfile['accessGap']>['signals'] }[];
-}> {
-  return fetchJSON(`${BASE}/access-gap/ranking?limit=${limit}`);
-}
-
 export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: AbortSignal): Promise<BlockMetrics> {
   return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`, signal ? { signal } : undefined);
 }
@@ -83,11 +72,4 @@ export function get311Trends(community: string, signal?: AbortSignal): Promise<C
   return fetchJSON(`${BASE}/311/trends?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
-export function getBlockReport(
-  lat: number,
-  lng: number,
-  radius = 0.25,
-  language = 'en',
-): Promise<CommunityReport & { preGenerated?: boolean; anchorName?: string; anchorType?: string }> {
-  return fetchJSON(`${BASE}/report?lat=${lat}&lng=${lng}&radius=${radius}&language=${language}`);
-}
+
