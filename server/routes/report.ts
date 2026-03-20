@@ -93,6 +93,13 @@ router.get('/', async (req: Request, res: Response) => {
         return;
       }
 
+      // Validate language code — only allow known short codes for block lookups
+      const validLangCodes = new Set(Object.values(LANGUAGE_CODES));
+      if (!validLangCodes.has(language)) {
+        res.status(400).json({ error: 'Unsupported language code' });
+        return;
+      }
+
       const files = await fs.readdir(BLOCK_REPORTS_DIR).catch(() => [] as string[]);
       const langSuffix = `_${language}.json`;
       const COORD_TOLERANCE = 0.0002; // ~0.01 miles in degrees
@@ -136,6 +143,18 @@ router.get('/', async (req: Request, res: Response) => {
 
     if (!community) {
       res.status(400).json({ error: 'Missing required query parameter: community' });
+      return;
+    }
+
+    // Validate community against allowlist
+    if (!COMMUNITIES_LOWER.has(community.toLowerCase())) {
+      res.status(400).json({ error: 'Unknown community name' });
+      return;
+    }
+
+    // Validate language against known languages
+    if (!VALID_LANGUAGES.has(language)) {
+      res.status(400).json({ error: 'Unsupported language' });
       return;
     }
 
