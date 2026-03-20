@@ -85,7 +85,8 @@ const fileStrategy: CacheStrategy = {
   },
 
   async countRecent() {
-    return 0; // No rate limiting needed locally
+    logger.warn('Rate limiting is not enforced in local file-based mode');
+    return 0;
   },
 
   async purgeStale() {
