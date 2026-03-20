@@ -124,6 +124,39 @@ export async function saveCachedReport(community: string, language: string, repo
   }
 }
 
+// ---------------------------------------------------------------------------
+// Block report cache — reuses the same strategy with a "block:" key prefix
+// ---------------------------------------------------------------------------
+
+function blockCacheKey(anchorId: string): string {
+  return `block:${normalizeKey(anchorId)}`;
+}
+
+export async function getCachedBlockReport(anchorId: string, language: string): Promise<CommunityReport | null> {
+  try {
+    return await strategy.get(blockCacheKey(anchorId), language);
+  } catch (err) {
+    logger.error('Failed to read block report cache', {
+      error: err instanceof Error ? err.message : String(err),
+      anchorId,
+      language,
+    });
+    return null;
+  }
+}
+
+export async function saveCachedBlockReport(anchorId: string, language: string, report: CommunityReport): Promise<void> {
+  try {
+    await strategy.set(blockCacheKey(anchorId), language, report);
+  } catch (err) {
+    logger.error('Failed to write block report cache', {
+      error: err instanceof Error ? err.message : String(err),
+      anchorId,
+      language,
+    });
+  }
+}
+
 /**
  * DB-backed rate limit check for report generation.
  * Counts reports created in the last windowMs. Works across serverless instances.

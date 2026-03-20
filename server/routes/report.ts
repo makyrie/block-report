@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport, isGenerationRateLimited, normalizeKey } from '../services/report-cache.js';
+import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited, normalizeKey } from '../services/report-cache.js';
 import { isVercel } from '../env.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
@@ -269,8 +269,17 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         });
         return;
       } catch {
-        // No cached version — generate on-demand
+        // No cached version — check DB/strategy cache next
       }
+    }
+
+    // Check DB/file cache for previously generated block reports
+    const anchorCacheId = anchor.id || anchor.name;
+    const cached = await getCachedBlockReport(anchorCacheId, language);
+    if (cached) {
+      logger.info('Serving cached block report', { anchor: anchor.name, language });
+      res.json(cached);
+      return;
     }
 
     // DB-backed rate limit check (works across serverless instances)
@@ -285,6 +294,14 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     });
 
     const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
+
+    // Cache the generated block report for future requests
+    try {
+      await saveCachedBlockReport(anchorCacheId, language, report);
+    } catch (err) {
+      logger.error('Failed to cache block report', { error: err instanceof Error ? err.message : String(err) });
+    }
+
     res.json(report);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error generating block report';
