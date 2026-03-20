@@ -42,8 +42,13 @@ export async function getNeighborhoodProfile(normalized: string): Promise<Neighb
       logger.warn(`Profile sub-service "${name}" failed for ${normalized}`, { error: (err as Error).message });
       return fallback;
     });
-  const timeout = <T>(p: Promise<T>, fallback: T) =>
-    Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), PROFILE_TIMEOUT))]);
+  const timeout = <T>(p: Promise<T>, fallback: T): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout>;
+    return Promise.race([
+      p.then((v) => { clearTimeout(timer); return v; }),
+      new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), PROFILE_TIMEOUT); }),
+    ]);
+  };
 
   const [metrics, transit, demographics, accessGap, recCenters, libraryCount] = await Promise.all([
     timeout(warnOnError('metrics', getProcessedCommunityMetrics(normalized), null), null),
