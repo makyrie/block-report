@@ -285,6 +285,37 @@ router.post('/pdf', async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate optional metrics structure
+    if (metrics != null) {
+      if (
+        typeof metrics.totalRequests311 !== 'number' ||
+        typeof metrics.resolutionRate !== 'number' ||
+        typeof metrics.avgDaysToResolve !== 'number' ||
+        !Array.isArray(metrics.topIssues) ||
+        !metrics.topIssues.every((i: unknown) =>
+          i && typeof i === 'object' && typeof (i as Record<string, unknown>).category === 'string' && typeof (i as Record<string, unknown>).count === 'number'
+        ) ||
+        !Array.isArray(metrics.goodNews) ||
+        !metrics.goodNews.every((g: unknown) => typeof g === 'string')
+      ) {
+        res.status(400).json({ error: 'Invalid metrics structure' });
+        return;
+      }
+    }
+
+    // Validate optional topLanguages structure
+    if (topLanguages != null) {
+      if (
+        !Array.isArray(topLanguages) ||
+        !topLanguages.every((l: unknown) =>
+          l && typeof l === 'object' && typeof (l as Record<string, unknown>).language === 'string' && typeof (l as Record<string, unknown>).percentage === 'number'
+        )
+      ) {
+        res.status(400).json({ error: 'Invalid topLanguages structure' });
+        return;
+      }
+    }
+
     if (!process.env.APP_URL) {
       res.status(500).json({ error: 'APP_URL environment variable is not configured' });
       return;
@@ -295,6 +326,7 @@ router.post('/pdf', async (req: Request, res: Response) => {
     const langCode = LANGUAGE_CODES[report.language] || 'en';
     const filename = `block-report-${sanitizeFilename(report.neighborhoodName)}-${langCode}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', pdf.length);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdf);
   } catch (error) {
