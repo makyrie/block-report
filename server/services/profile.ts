@@ -2,7 +2,7 @@ import { getProcessedCommunityMetrics } from './metrics.js';
 import { getTransitScore } from './transit.js';
 import { getDemographicsByCommunity } from './demographics.js';
 import { getAccessGapScore } from './gap-analysis.js';
-import { getRecCenters, getLibraryCount } from './locations.js';
+import { getRecCenters, getLibraryCountByCommunity } from './locations.js';
 import { logger } from '../logger.js';
 
 const PROFILE_TIMEOUT = 30_000;
@@ -56,7 +56,7 @@ export async function getNeighborhoodProfile(normalized: string): Promise<Neighb
     timeout(warnOnError('demographics', getDemographicsByCommunity(normalized), []), []),
     timeout(warnOnError('accessGap', getAccessGapScore(normalized), null), null),
     timeout(warnOnError('recCenters', getRecCenters(normalized), []), []),
-    timeout(warnOnError('libraryCount', getLibraryCount(), 0), 0),
+    timeout(warnOnError('libraryCount', getLibraryCountByCommunity(normalized), 0), 0),
   ]);
 
   return {

@@ -1,5 +1,6 @@
 import { prisma } from './db.js';
-import { normalizeCommunityName } from './communities.js';
+import { normalizeCommunityName, getNeighborhoodsGeoJSON } from './communities.js';
+import { pointInFeature } from './geo.js';
 
 export async function getLibraries() {
   return prisma.library.findMany();
@@ -7,6 +8,24 @@ export async function getLibraries() {
 
 export async function getLibraryCount(): Promise<number> {
   return prisma.library.count();
+}
+
+export async function getLibraryCountByCommunity(communityName: string): Promise<number> {
+  const key = normalizeCommunityName(communityName);
+  const geojson = await getNeighborhoodsGeoJSON();
+  const feature = geojson.features.find((f) => {
+    const name: string = f.properties?.cpname || f.properties?.name || '';
+    return name.toUpperCase() === key;
+  });
+  if (!feature) return 0;
+
+  const libraries = await prisma.library.findMany({
+    select: { lat: true, lng: true },
+  });
+
+  return libraries.filter((lib) =>
+    lib.lat != null && lib.lng != null && pointInFeature(lib.lat, lib.lng, feature.geometry),
+  ).length;
 }
 
 export async function getRecCenters(communityName?: string) {
