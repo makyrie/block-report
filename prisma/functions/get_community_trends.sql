@@ -10,6 +10,7 @@ CREATE OR REPLACE FUNCTION get_community_trends(community_name TEXT)
 RETURNS JSONB AS $$
 DECLARE
   result JSONB;
+  current_month TIMESTAMPTZ := date_trunc('month', NOW());
 BEGIN
 
   WITH monthly_data AS (
@@ -24,22 +25,22 @@ BEGIN
       ) AS "resolutionRate"
     FROM requests_311
     WHERE LOWER(comm_plan_name) = LOWER(community_name)
-      AND date_requested >= date_trunc('month', NOW()) - INTERVAL '12 months'
-      AND date_requested < date_trunc('month', NOW())
+      AND date_requested >= current_month - INTERVAL '12 months'
+      AND date_requested < current_month
     GROUP BY date_trunc('month', date_requested)
   ),
   halves AS (
     SELECT
       ROUND(
-        SUM("resolvedCount") FILTER (WHERE month >= date_trunc('month', NOW()) - INTERVAL '6 months')::numeric
-        / NULLIF(SUM("totalRequests") FILTER (WHERE month >= date_trunc('month', NOW()) - INTERVAL '6 months'), 0)::numeric
+        SUM("resolvedCount") FILTER (WHERE month >= current_month - INTERVAL '6 months')::numeric
+        / NULLIF(SUM("totalRequests") FILTER (WHERE month >= current_month - INTERVAL '6 months'), 0)::numeric
       , 3) AS curr_rate,
-      COALESCE(SUM("totalRequests") FILTER (WHERE month >= date_trunc('month', NOW()) - INTERVAL '6 months'), 0) AS curr_vol,
+      COALESCE(SUM("totalRequests") FILTER (WHERE month >= current_month - INTERVAL '6 months'), 0) AS curr_vol,
       ROUND(
-        SUM("resolvedCount") FILTER (WHERE month < date_trunc('month', NOW()) - INTERVAL '6 months')::numeric
-        / NULLIF(SUM("totalRequests") FILTER (WHERE month < date_trunc('month', NOW()) - INTERVAL '6 months'), 0)::numeric
+        SUM("resolvedCount") FILTER (WHERE month < current_month - INTERVAL '6 months')::numeric
+        / NULLIF(SUM("totalRequests") FILTER (WHERE month < current_month - INTERVAL '6 months'), 0)::numeric
       , 3) AS prev_rate,
-      COALESCE(SUM("totalRequests") FILTER (WHERE month < date_trunc('month', NOW()) - INTERVAL '6 months'), 0) AS prev_vol
+      COALESCE(SUM("totalRequests") FILTER (WHERE month < current_month - INTERVAL '6 months'), 0) AS prev_vol
     FROM monthly_data
   )
   SELECT jsonb_build_object(

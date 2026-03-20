@@ -1,4 +1,4 @@
-export { COMMUNITIES } from '../../types/communities';
+import { COMMUNITIES } from '../../types/communities';
 
 interface NeighborhoodSelectorProps {
   value: string;

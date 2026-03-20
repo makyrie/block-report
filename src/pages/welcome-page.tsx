@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { COMMUNITIES } from '../components/ui/neighborhood-selector';
+import { COMMUNITIES } from '../types/communities';
 import { toSlug } from '../utils/slug';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
