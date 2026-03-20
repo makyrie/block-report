@@ -8,6 +8,7 @@
  * IMPORTANT: Visual changes to FlyerLayout must be mirrored here.
  */
 
+import { existsSync } from 'fs';
 import puppeteer from 'puppeteer-core';
 import QRCode from 'qrcode';
 import type { CommunityReport, NeighborhoodProfile } from '../../src/types/index.js';
@@ -139,7 +140,6 @@ async function findLocalChromium(): Promise<string> {
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   ];
 
-  const { existsSync } = await import('fs');
   for (const p of candidates) {
     if (existsSync(p)) return p;
   }
@@ -353,7 +353,7 @@ async function buildFlyerHtml(options: PdfOptions): Promise<string> {
 
     /* ── TOP ISSUES ── */
     .issues-bars { display: flex; flex-direction: column; gap: 12px; }
-    .issue-row { }
+
     .issue-header {
       display: flex;
       justify-content: space-between;
@@ -381,7 +381,7 @@ async function buildFlyerHtml(options: PdfOptions): Promise<string> {
     }
     .bullet, .arrow { font-weight: 700; flex-shrink: 0; }
     .check-mark { font-weight: 700; flex-shrink: 0; font-size: 15px; line-height: 1; }
-    .arrow { }
+
 
     /* ── SECTION TITLES ── */
     .section-title {

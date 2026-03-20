@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { generatePdf } from '../services/pdf.js';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
+import type { CommunityReport, NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -252,7 +252,7 @@ router.post('/generate-block', async (req: Request, res: Response) => {
 router.post('/pdf', async (req: Request, res: Response) => {
   try {
     const { report, metrics, topLanguages, neighborhoodSlug } = req.body as {
-      report: import('../../src/types/index.js').CommunityReport;
+      report: CommunityReport;
       metrics?: NeighborhoodProfile['metrics'];
       topLanguages?: { language: string; percentage: number }[];
       neighborhoodSlug: string;
