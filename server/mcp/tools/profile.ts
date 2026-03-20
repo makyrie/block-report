@@ -4,8 +4,9 @@ import { getProcessedCommunityMetrics } from '../../services/metrics.js';
 import { getTransitScore } from '../../services/transit.js';
 import { getDemographicsByCommunity } from '../../services/demographics.js';
 import { getAccessGapScore } from '../../services/gap-analysis.js';
-import { getRecCenters, getLibraries } from '../../services/locations.js';
+import { getRecCenters, getLibraryCount } from '../../services/locations.js';
 import { withCommunityValidation } from './helpers.js';
+import { logger } from '../../logger.js';
 
 export function registerProfileTools(server: McpServer) {
   server.tool(
@@ -16,16 +17,21 @@ export function registerProfileTools(server: McpServer) {
     },
     withCommunityValidation('get_neighborhood_profile', async (normalized) => {
       const TIMEOUT = 30_000;
+      const warnOnError = <T>(name: string, p: Promise<T>, fallback: T): Promise<T> =>
+        p.catch((err) => {
+          logger.warn(`Profile sub-service "${name}" failed for ${normalized}`, { error: (err as Error).message });
+          return fallback;
+        });
       const timeout = <T>(p: Promise<T>, fallback: T) =>
         Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), TIMEOUT))]);
 
-      const [metrics, transit, demographics, accessGap, recCenters, libraries] = await Promise.all([
-        timeout(getProcessedCommunityMetrics(normalized).catch(() => null), null),
-        timeout(getTransitScore(normalized).catch(() => null), null),
-        timeout(getDemographicsByCommunity(normalized).catch(() => []), []),
-        timeout(getAccessGapScore(normalized).catch(() => null), null),
-        timeout(getRecCenters(normalized).catch(() => []), []),
-        timeout(getLibraries().catch(() => []), []),
+      const [metrics, transit, demographics, accessGap, recCenters, libraryCount] = await Promise.all([
+        timeout(warnOnError('metrics', getProcessedCommunityMetrics(normalized), null), null),
+        timeout(warnOnError('transit', getTransitScore(normalized), null), null),
+        timeout(warnOnError('demographics', getDemographicsByCommunity(normalized), []), []),
+        timeout(warnOnError('accessGap', getAccessGapScore(normalized), null), null),
+        timeout(warnOnError('recCenters', getRecCenters(normalized), []), []),
+        timeout(warnOnError('libraryCount', getLibraryCount(), 0), 0),
       ]);
 
       const profile = {
@@ -58,7 +64,7 @@ export function registerProfileTools(server: McpServer) {
             lat: r.lat,
             lng: r.lng,
           })),
-          libraryCount: libraries.length,
+          libraryCount: libraryCount,
         },
       };
 

@@ -4,6 +4,10 @@ export async function getLibraries() {
   return prisma.library.findMany();
 }
 
+export async function getLibraryCount(): Promise<number> {
+  return prisma.library.count();
+}
+
 export async function getRecCenters(communityName?: string) {
   if (!communityName) {
     return prisma.recCenter.findMany();
