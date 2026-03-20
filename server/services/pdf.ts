@@ -19,6 +19,7 @@ import puppeteer from 'puppeteer-core';
 import QRCode from 'qrcode';
 import type { CommunityReport, NeighborhoodProfile } from '../../src/types/index.js';
 import { logger } from '../logger.js';
+import { truncateSentences } from '../../src/utils/text.js';
 
 // ─── Google Fonts CSS cache ───
 // Fetched once and inlined into the HTML to avoid CDN latency on each PDF request.
@@ -39,7 +40,8 @@ async function getGoogleFontsCss(): Promise<string> {
     });
     const contentType = res.headers.get('content-type') || '';
     if (res.ok && contentType.includes('text/css')) {
-      cachedFontCss = await res.text();
+      // Strip any HTML tags to prevent injection via compromised CDN
+      cachedFontCss = (await res.text()).replace(/<[^>]*>/g, '');
       fontCssCachedAt = Date.now();
       return cachedFontCss;
     }
@@ -61,6 +63,7 @@ async function getChromium() {
 // Concurrency control — limit to 1 Chromium instance (~200-300MB each).
 // Vercel functions have 1024MB; a single instance is the safe limit.
 const MAX_CONCURRENT_PDF = 1;
+const MAX_QUEUE_DEPTH = 3;
 let activePdfJobs = 0;
 const pdfQueue: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
 
@@ -68,6 +71,9 @@ async function acquirePdfSlot(): Promise<void> {
   if (activePdfJobs < MAX_CONCURRENT_PDF) {
     activePdfJobs++;
     return;
+  }
+  if (pdfQueue.length >= MAX_QUEUE_DEPTH) {
+    throw new Error('PDF generation queue full — try again later');
   }
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -116,8 +122,13 @@ export async function generatePdf(options: PdfOptions): Promise<Buffer> {
   }
 }
 
-async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
-  const html = await buildFlyerHtml(options);
+// ─── Browser singleton — reuse across warm function invocations ───
+let browserInstance: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+
+async function getBrowser(): Promise<Awaited<ReturnType<typeof puppeteer.launch>>> {
+  if (browserInstance && browserInstance.connected) {
+    return browserInstance;
+  }
 
   const isVercel = !!process.env.VERCEL;
   let executablePath: string;
@@ -128,7 +139,6 @@ async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
     executablePath = await chromium.executablePath();
     args = chromium.args;
   } else {
-    // Local development — find system Chromium/Chrome
     executablePath = await findLocalChromium();
     args = [
       '--no-sandbox',
@@ -138,15 +148,25 @@ async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
     ];
   }
 
-  const browser = await puppeteer.launch({
+  browserInstance = await puppeteer.launch({
     args,
     executablePath,
     headless: true,
   });
 
-  try {
-    const page = await browser.newPage();
+  browserInstance.on('disconnected', () => {
+    browserInstance = null;
+  });
 
+  return browserInstance;
+}
+
+async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
+  const html = await buildFlyerHtml(options);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+
+  try {
     // Block all external requests — the HTML is self-contained except for fonts
     await page.setRequestInterception(true);
     page.on('request', (req) => {
@@ -166,7 +186,7 @@ async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
     });
     return Buffer.from(pdf);
   } finally {
-    await browser.close();
+    await page.close();
   }
 }
 
@@ -206,12 +226,6 @@ const ICON_MAP_PIN = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none
 const ICON_GLOBE = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
 
 // ─── Helpers ───
-
-function truncateSentences(text: string, max: number): string {
-  const sentences = text.match(/[^.!?]+[.!?]+/g);
-  if (!sentences || sentences.length <= max) return text;
-  return sentences.slice(0, max).join('').trim();
-}
 
 function escapeHtml(value: unknown): string {
   const str = typeof value === 'string' ? value : String(value ?? '');

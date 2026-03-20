@@ -11,6 +11,7 @@ import {
   MapPinIcon,
   GlobeIcon,
 } from './flyer-icons';
+import { truncateSentences } from '../../utils/text';
 
 interface FlyerLayoutProps {
   report: CommunityReport;
@@ -19,13 +20,6 @@ interface FlyerLayoutProps {
   topLanguages?: { language: string; percentage: number }[];
   /** When true, the flyer is visible on screen (used in preview). Default: hidden (print-only). */
   inline?: boolean;
-}
-
-/** Truncate text to roughly N sentences. */
-function truncateSentences(text: string, max: number): string {
-  const sentences = text.match(/[^.!?]+[.!?]+/g);
-  if (!sentences || sentences.length <= max) return text;
-  return sentences.slice(0, max).join('').trim();
 }
 
 export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, inline = false }: FlyerLayoutProps) {

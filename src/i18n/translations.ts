@@ -9,15 +9,17 @@ export const SUPPORTED_LANGUAGES = [
 
 export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]['code'];
 
-// Map from demographics label to language code
-export const DEMOGRAPHICS_TO_LANG: Record<string, LanguageCode> = {
-  Spanish: 'es',
-  Vietnamese: 'vi',
-  Tagalog: 'tl',
-  Chinese: 'zh',
-  Arabic: 'ar',
-  Korean: 'en', // no Korean UI translation, fall back to English
-};
+// Derive from the canonical LANGUAGE_CODES map, with overrides for
+// languages that lack a UI translation (fall back to English).
+import { LANGUAGE_CODES } from '../constants/languages';
+
+const SUPPORTED_CODES = new Set(SUPPORTED_LANGUAGES.map((l) => l.code));
+
+export const DEMOGRAPHICS_TO_LANG: Record<string, LanguageCode> = Object.fromEntries(
+  Object.entries(LANGUAGE_CODES)
+    .filter(([label]) => label !== 'English' && label !== 'Other')
+    .map(([label, code]) => [label, SUPPORTED_CODES.has(code as LanguageCode) ? code as LanguageCode : 'en']),
+);
 
 const translations: Record<LanguageCode, Record<string, string>> = {
   en: {

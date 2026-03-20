@@ -8,23 +8,11 @@ import { generatePdf } from '../services/pdf.js';
 import { logger } from '../logger.js';
 import type { CommunityReport, NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
+import { LANGUAGE_CODES } from '../../src/constants/languages.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
 const BLOCK_REPORTS_DIR = path.join(REPORTS_DIR, 'blocks');
-
-const LANGUAGE_CODES: Record<string, string> = {
-  English: 'en',
-  Spanish: 'es',
-  Chinese: 'zh',
-  Vietnamese: 'vi',
-  Tagalog: 'tl',
-  Korean: 'ko',
-  Arabic: 'ar',
-  'French/Haitian/Cajun': 'fr',
-  'German/West Germanic': 'de',
-  'Russian/Polish/Slavic': 'ru',
-};
 
 function sanitizeFilename(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -288,6 +276,23 @@ router.post('/pdf', async (req: Request, res: Response) => {
       return;
     }
 
+    // Field length limits — defense-in-depth against oversized HTML rendering
+    const MAX_TEXT_LENGTH = 5000;
+    const MAX_ARRAY_ITEMS = 10;
+    if (
+      report.summary.length > MAX_TEXT_LENGTH ||
+      report.neighborhoodName.length > 200 ||
+      report.goodNews.length > MAX_ARRAY_ITEMS ||
+      report.topIssues.length > MAX_ARRAY_ITEMS ||
+      report.howToParticipate.length > MAX_ARRAY_ITEMS ||
+      report.goodNews.some((s: string) => s.length > MAX_TEXT_LENGTH) ||
+      report.topIssues.some((s: string) => s.length > MAX_TEXT_LENGTH) ||
+      report.howToParticipate.some((s: string) => s.length > MAX_TEXT_LENGTH)
+    ) {
+      res.status(400).json({ error: 'Report fields exceed maximum length' });
+      return;
+    }
+
     // Validate optional metrics structure
     if (metrics != null) {
       if (
@@ -335,7 +340,11 @@ router.post('/pdf', async (req: Request, res: Response) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logger.error('PDF generation error', { error: message, stack: error instanceof Error ? error.stack : undefined });
-    res.status(500).json({ error: 'Internal server error' });
+    if (message.includes('queue full')) {
+      res.status(503).json({ error: 'Server busy — try again shortly' });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 });
 
