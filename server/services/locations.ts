@@ -1,12 +1,6 @@
 import { prisma } from './db.js';
 
-export async function getLibraries(communityName?: string) {
-  if (!communityName) {
-    return prisma.library.findMany();
-  }
-
-  // Libraries don't have a community field, so we return all for now
-  // A spatial filter could be added later using point-in-polygon
+export async function getLibraries() {
   return prisma.library.findMany();
 }
 
