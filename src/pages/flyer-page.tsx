@@ -86,7 +86,7 @@ export default function FlyerPage() {
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [community, reportLang, metrics]);
+  }, [community, reportLang, metrics, trends]);
 
   function handlePrint() {
     window.print();

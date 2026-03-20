@@ -174,7 +174,7 @@ export default function NeighborhoodPage() {
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCommunity, reportLang, metrics]);
+  }, [selectedCommunity, reportLang, metrics, trends]);
 
   const handleCommunityChange = useCallback(
     (community: string) => {
