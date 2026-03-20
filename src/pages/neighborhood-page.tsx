@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
@@ -148,28 +148,41 @@ export default function NeighborhoodPage() {
     [navigate],
   );
 
+  const blockAbortRef = useRef<AbortController | null>(null);
+
   const handleMapClick = useCallback(async (lat: number, lng: number) => {
+    blockAbortRef.current?.abort();
+    const controller = new AbortController();
+    blockAbortRef.current = controller;
+
     setPinnedLocation({ lat, lng });
     setBlockData(null);
     setBlockLoading(true);
     try {
-      const data = await getBlockData(lat, lng, blockRadius);
-      setBlockData(data);
+      const data = await getBlockData(lat, lng, blockRadius, controller.signal);
+      if (!controller.signal.aborted) setBlockData(data);
     } catch (err) {
-      console.error('Failed to fetch block data', err);
+      if (!controller.signal.aborted) console.error('Failed to fetch block data', err);
     } finally {
-      setBlockLoading(false);
+      if (!controller.signal.aborted) setBlockLoading(false);
     }
   }, [blockRadius]);
 
   // Re-fetch block data when radius changes
   useEffect(() => {
     if (!pinnedLocation) return;
+
+    blockAbortRef.current?.abort();
+    const controller = new AbortController();
+    blockAbortRef.current = controller;
+
     setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
-      .then(setBlockData)
-      .catch((err) => console.error('Failed to fetch block data', err))
-      .finally(() => setBlockLoading(false));
+    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
+      .then((data) => { if (!controller.signal.aborted) setBlockData(data); })
+      .catch((err) => { if (!controller.signal.aborted) console.error('Failed to fetch block data', err); })
+      .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
+
+    return () => { controller.abort(); };
   }, [blockRadius, pinnedLocation]);
 
   return (
