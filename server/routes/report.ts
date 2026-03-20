@@ -1,130 +1,32 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited, normalizeKey } from '../services/report-cache.js';
-import { isVercel } from '../env.js';
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
-const BLOCK_REPORTS_DIR = path.join(REPORTS_DIR, 'blocks');
-
-const LANGUAGE_CODES: Record<string, string> = {
-  English: 'en',
-  Spanish: 'es',
-  Chinese: 'zh',
-  Vietnamese: 'vi',
-  Tagalog: 'tl',
-  Korean: 'ko',
-  Arabic: 'ar',
-  'French/Haitian/Cajun': 'fr',
-  'German/West Germanic': 'de',
-  'Russian/Polish/Slavic': 'ru',
-};
-
-// Use normalizeKey from report-cache.ts as the single source of truth for key/filename normalization
-const sanitizeFilename = normalizeKey;
-
-interface StoredReport {
-  communityName: string;
-  language: string;
-  languageCode: string;
-  generatedAt: string;
-  dataAsOf: string;
-  report: {
-    neighborhoodName: string;
-    language: string;
-    generatedAt: string;
-    summary: string;
-    goodNews: string[];
-    topIssues: string[];
-    howToParticipate: string[];
-    contactInfo: {
-      councilDistrict: string;
-      phone311: string;
-      anchorLocation: string;
-    };
-  };
-}
-
-async function getPreGeneratedReport(
-  communityName: string,
-  language: string,
-): Promise<StoredReport | null> {
-  if (isVercel) return null; // No persistent filesystem on serverless
-
-  const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
-  const filename = `${sanitizeFilename(communityName)}_${langCode}.json`;
-  const filePath = path.join(REPORTS_DIR, filename);
-
-  try {
-    const content = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(content) as StoredReport;
-  } catch {
-    return null;
-  }
-}
+import type { NeighborhoodProfile } from '../../src/types/index.js';
+import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited } from '../services/report-cache.js';
 
 const router = Router();
 
-// GET /api/report?community={name}&language={lang} — pre-generated community report
-// GET /api/report?lat=X&lng=Y&radius=Z&language=L — pre-generated block-level report
+// GET /api/report?community={name}&language={lang} — cached community report
+// GET /api/report?lat=X&lng=Y&radius=Z&language=L — cached block-level report (by anchor ID)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Block-level lookup by coordinates
+    // Block-level lookup by coordinates — delegate to strategy-based cache
     if (req.query.lat && req.query.lng) {
-      const lat = parseFloat(req.query.lat as string);
-      const lng = parseFloat(req.query.lng as string);
-      const radius = parseFloat(req.query.radius as string) || 0.25;
+      const anchorId = req.query.anchorId as string;
       const language = (req.query.language as string) || 'en';
 
-      if (isNaN(lat) || isNaN(lng)) {
-        res.status(400).json({ error: 'lat and lng must be valid numbers' });
+      if (!anchorId) {
+        res.status(400).json({ error: 'Missing required query parameter: anchorId' });
         return;
       }
 
-      if (isVercel) {
-        res.status(404).json({ error: 'No pre-generated block report found for this location' });
-        return;
+      const cached = await getCachedBlockReport(anchorId, language);
+      if (cached) {
+        res.json(cached);
+      } else {
+        res.status(404).json({ error: 'No cached block report found for this location' });
       }
-
-      const files = await fs.readdir(BLOCK_REPORTS_DIR).catch(() => [] as string[]);
-      const langSuffix = `_${language}.json`;
-      const COORD_TOLERANCE = 0.0002; // ~0.01 miles in degrees
-
-      for (const file of files) {
-        if (!file.endsWith(langSuffix)) continue;
-
-        try {
-          const content = await fs.readFile(path.join(BLOCK_REPORTS_DIR, file), 'utf-8');
-          const stored = JSON.parse(content) as StoredBlockReport;
-
-          if (
-            Math.abs(stored.lat - lat) < COORD_TOLERANCE &&
-            Math.abs(stored.lng - lng) < COORD_TOLERANCE &&
-            stored.radiusMiles === radius
-          ) {
-            logger.info('Serving pre-generated block report', {
-              anchor: stored.anchorName,
-              language,
-            });
-            res.json({
-              ...stored.report,
-              preGenerated: true,
-              anchorName: stored.anchorName,
-              anchorType: stored.anchorType,
-            });
-            return;
-          }
-        } catch {
-          // Skip malformed files
-        }
-      }
-
-      res.status(404).json({ error: 'No pre-generated block report found for this location' });
       return;
     }
 
@@ -141,7 +43,7 @@ router.get('/', async (req: Request, res: Response) => {
     if (cached) {
       res.json(cached);
     } else {
-      res.status(404).json({ error: 'No pre-generated report available' });
+      res.status(404).json({ error: 'No cached report available' });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -159,22 +61,6 @@ router.post('/generate', async (req: Request, res: Response) => {
 
     if (!profile || !language) {
       res.status(400).json({ error: 'Missing required fields: profile, language' });
-      return;
-    }
-
-    // Check for a pre-generated report first (file-based, local only)
-    const preGenerated = await getPreGeneratedReport(profile.communityName, language);
-    if (preGenerated) {
-      logger.info('Serving pre-generated report', {
-        community: profile.communityName,
-        language,
-        generatedAt: preGenerated.generatedAt,
-      });
-      res.json({
-        ...preGenerated.report,
-        preGenerated: true,
-        dataAsOf: preGenerated.dataAsOf,
-      });
       return;
     }
 
@@ -249,31 +135,6 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     if (typeof language !== 'string' || language.length > 50) {
       res.status(400).json({ error: 'language must be a string of 50 characters or fewer' });
       return;
-    }
-
-    // Check for a pre-generated block report first (skip on serverless — no persistent filesystem)
-    if (!isVercel) {
-      const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
-      const filename = `${sanitizeFilename(anchor.id || anchor.name)}_${langCode}.json`;
-      const filePath = path.join(BLOCK_REPORTS_DIR, filename);
-
-      try {
-        const content = await fs.readFile(filePath, 'utf-8');
-        const stored = JSON.parse(content) as StoredBlockReport;
-        logger.info('Serving pre-generated block report', {
-          anchor: stored.anchorName,
-          language,
-        });
-        res.json({
-          ...stored.report,
-          preGenerated: true,
-          anchorName: stored.anchorName,
-          anchorType: stored.anchorType,
-        });
-        return;
-      } catch {
-        // No cached version — check DB/strategy cache next
-      }
     }
 
     // Run cache lookup and rate limit check in parallel to save a DB round trip
