@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { Prisma } from '@prisma/client';
 import { logger } from '../logger.js';
+import { sanitizeCommunity } from '../utils/validation.js';
 
 const router = Router();
 
@@ -46,24 +47,31 @@ router.get('/transit-stops', async (_req, res) => {
 
 router.get('/permits', async (req, res) => {
   try {
-    const community = req.query.community as string | undefined;
-
-    // Validate community parameter (consistent with /api/311 endpoint)
-    if (community !== undefined) {
-      const cleaned = community.replace(/[%_]/g, '');
-      if (cleaned.length === 0 || cleaned.length > 100) {
-        res.status(400).json({ error: 'Invalid community name' });
-        return;
-      }
+    const result = sanitizeCommunity(req.query.community as string | undefined);
+    if (!result.valid) {
+      res.status(400).json({ error: result.error });
+      return;
     }
 
     const where: Prisma.PermitWhereInput = {
       lat: { not: null },
       lng: { not: null },
-      ...(community ? { community: community.replace(/[%_]/g, '') } : {}),
+      ...(result.cleaned ? { community: result.cleaned } : {}),
     };
 
     const data = await prisma.permit.findMany({
+      select: {
+        id: true,
+        permit_number: true,
+        permit_type: true,
+        description: true,
+        date_issued: true,
+        status: true,
+        street_address: true,
+        community: true,
+        lat: true,
+        lng: true,
+      },
       where,
       orderBy: { date_issued: 'desc' },
       take: 5000,

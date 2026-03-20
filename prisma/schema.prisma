@@ -94,7 +94,6 @@ model Permit {
   lat             Float?
   lng             Float?
 
-  @@index([community], name: "idx_permit_community")
   @@index([date_issued], name: "idx_permit_date")
   @@index([community, date_issued], name: "idx_permit_community_date")
   @@map("permits")

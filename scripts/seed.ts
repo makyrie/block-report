@@ -331,16 +331,40 @@ async function seedPermits() {
     'https://seshat.datasd.org/dsd_permits/dsd_permits_all_pts_datasd.csv'
   );
 
-  const filtered = rows.filter((r) => {
+  // Filter, map, deduplicate, and insert in a single pass to reduce memory
+  const seen = new Set<string>();
+  let batch: ReturnType<typeof mapPermitRow>[] = [];
+  const batchSize = 1000;
+  let inserted = 0;
+
+  for (const r of rows) {
     const dateStr = r.date_issued || r.approval_date || '';
-    if (!dateStr || new Date(dateStr) < cutoffDate) return false;
+    if (!dateStr || new Date(dateStr) < cutoffDate) continue;
     const status = (r.status || '').toLowerCase();
-    return !['denied', 'withdrawn', 'cancelled', 'void'].includes(status);
-  });
+    if (['denied', 'withdrawn', 'cancelled', 'void'].includes(status)) continue;
 
-  console.log(`  Filtered to ${filtered.length} recent permits`);
+    const mapped = mapPermitRow(r);
+    if (!mapped.permit_number || seen.has(mapped.permit_number)) continue;
+    seen.add(mapped.permit_number);
 
-  const mapped = filtered.map((r) => ({
+    batch.push(mapped);
+    if (batch.length >= batchSize) {
+      const result = await prisma.permit.createMany({ data: batch });
+      inserted += result.count;
+      batch = [];
+    }
+  }
+
+  if (batch.length > 0) {
+    const result = await prisma.permit.createMany({ data: batch });
+    inserted += result.count;
+  }
+
+  console.log(`  ✓ ${inserted} permits`);
+}
+
+function mapPermitRow(r: Record<string, string>) {
+  return {
     permit_number: r.permit_number || r.approval_id || r.project_id || '',
     permit_type: r.permit_type || r.approval_type || null,
     description: r.project_title || r.description || null,
@@ -350,24 +374,7 @@ async function seedPermits() {
     community: r.comm_plan_name ? toTitleCase(r.comm_plan_name.trim()) : (r.community_plan ? toTitleCase(r.community_plan.trim()) : null),
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
-  }));
-
-  // Deduplicate by permit_number (CSV may have dupes)
-  const seen = new Set<string>();
-  const unique = mapped.filter((p) => {
-    if (!p.permit_number || seen.has(p.permit_number)) return false;
-    seen.add(p.permit_number);
-    return true;
-  });
-
-  const batchSize = 1000;
-  let inserted = 0;
-  for (let i = 0; i < unique.length; i += batchSize) {
-    const batch = unique.slice(i, i + batchSize);
-    const result = await prisma.permit.createMany({ data: batch });
-    inserted += result.count;
-  }
-  console.log(`  ✓ ${inserted} permits`);
+  };
 }
 
 // --- Main ---
@@ -376,9 +383,7 @@ async function main() {
   console.log('Starting seed...\n');
 
   console.log('Truncating tables...');
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language, permits'
-  );
+  await prisma.$executeRaw`TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language, permits`;
   console.log('  ✓ Tables truncated\n');
 
   await seedLibraries();

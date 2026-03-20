@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
+import { sanitizeCommunity } from '../utils/validation.js';
 
 const router = Router();
 
@@ -11,12 +12,12 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  // Strip SQL wildcards and enforce length
-  const cleaned = community.replace(/[%_]/g, '');
-  if (cleaned.length > 100 || cleaned.length === 0) {
-    res.status(400).json({ error: 'Invalid community name' });
+  const result = sanitizeCommunity(community);
+  if (!result.valid) {
+    res.status(400).json({ error: result.error });
     return;
   }
+  const cleaned = result.cleaned!;
 
   interface CommunityMetrics {
     total_requests: number;
@@ -32,11 +33,24 @@ router.get('/', async (req, res) => {
   }
 
   let metrics: CommunityMetrics;
+  let recentPermits = 0;
   try {
-    const result = await prisma.$queryRaw<{ get_community_metrics: CommunityMetrics }[]>`
-      SELECT get_community_metrics(${cleaned})
-    `;
-    metrics = result[0].get_community_metrics;
+    const [metricsResult, permitCount] = await Promise.all([
+      prisma.$queryRaw<{ get_community_metrics: CommunityMetrics }[]>`
+        SELECT get_community_metrics(${cleaned})
+      `,
+      prisma.permit.count({
+        where: {
+          community: cleaned,
+          date_issued: { gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) },
+        },
+      }).catch((err: Error) => {
+        logger.error('Failed to fetch permit good news', { error: err.message });
+        return 0;
+      }),
+    ]);
+    metrics = metricsResult[0].get_community_metrics;
+    recentPermits = permitCount;
   } catch (err) {
     logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community });
     res.status(500).json({ error: 'Internal server error' });
@@ -85,21 +99,10 @@ router.get('/', async (req, res) => {
   }
 
   // 5. Recent permit activity as investment signal
-  try {
-    const recentPermits = await prisma.permit.count({
-      where: {
-        community: cleaned,
-        date_issued: { gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) },
-      },
-    });
-    if (recentPermits > 0) {
-      goodNews.push(
-        `${recentPermits} building permits were issued in the last 6 months — a sign of active investment in the neighborhood.`
-      );
-    }
-  } catch (err) {
-    logger.error('Failed to fetch permit good news', { error: (err as Error).message });
-    // Non-fatal — don't block the response
+  if (recentPermits > 0) {
+    goodNews.push(
+      `${recentPermits} building permits were issued in the last 6 months — a sign of active investment in the neighborhood.`
+    );
   }
 
   res.json({
