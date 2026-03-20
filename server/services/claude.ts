@@ -89,8 +89,6 @@ export async function generateReport(
   if (profile.communityName.length > 100) {
     throw new Error('communityName must be 100 characters or fewer');
   }
-  // Strip newlines and control characters
-  profile.communityName = profile.communityName.replace(/[\x00-\x1f\x7f]/g, '');
 
   // Sanitize language to prevent prompt injection
   const safeLang = language.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, '');
