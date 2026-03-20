@@ -44,7 +44,7 @@ const dbStrategy: CacheStrategy = {
   async set(community, language, report) {
     await prisma.reportCache.upsert({
       where: { community_language: { community: normalizeKey(community), language: normalizeKey(language) } },
-      update: { report: report as unknown as Record<string, unknown> },
+      update: { report: report as unknown as Record<string, unknown>, createdAt: new Date() },
       create: { community: normalizeKey(community), language: normalizeKey(language), report: report as unknown as Record<string, unknown> },
     });
   },
