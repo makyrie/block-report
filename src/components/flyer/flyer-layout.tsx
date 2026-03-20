@@ -1,3 +1,7 @@
+/**
+ * SYNC WARNING: The PDF HTML template in server/services/pdf.ts mirrors this
+ * component. Any visual change here MUST be reflected there and vice-versa.
+ */
 import { QRCodeSVG } from 'qrcode.react';
 import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
 import {

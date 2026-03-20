@@ -5,13 +5,44 @@
  * (src/components/flyer/flyer-layout.tsx) with plain CSS — no Tailwind JIT needed.
  * Puppeteer renders the HTML and captures it as a letter-size PDF.
  *
- * IMPORTANT: Visual changes to FlyerLayout must be mirrored here.
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │ SYNC WARNING: This HTML template mirrors FlyerLayout               │
+ * │ (src/components/flyer/flyer-layout.tsx). Any visual change to      │
+ * │ the React component MUST be reflected here and vice-versa.         │
+ * │ Sections to keep in sync: banner, narrative, big numbers, top      │
+ * │ issues, good news, languages, get involved, footer.                │
+ * └─────────────────────────────────────────────────────────────────────┘
  */
 
 import { existsSync } from 'fs';
 import puppeteer from 'puppeteer-core';
 import QRCode from 'qrcode';
 import type { CommunityReport, NeighborhoodProfile } from '../../src/types/index.js';
+
+// ─── Google Fonts CSS cache ───
+// Fetched once and inlined into the HTML to avoid CDN latency on each PDF request.
+// The woff2 font files are still loaded by Puppeteer via request interception.
+const GOOGLE_FONTS_URL = 'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;900&family=Noto+Sans+SC:wght@400;700;900&family=Noto+Sans+Arabic:wght@400;700;900&family=Noto+Sans+Vietnamese:wght@400;700&display=swap';
+let cachedFontCss: string | null = null;
+
+async function getGoogleFontsCss(): Promise<string> {
+  if (cachedFontCss) return cachedFontCss;
+  try {
+    const res = await fetch(GOOGLE_FONTS_URL, {
+      headers: {
+        // Request woff2 format (Chromium user-agent gets the best format)
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    if (res.ok) {
+      cachedFontCss = await res.text();
+      return cachedFontCss;
+    }
+  } catch {
+    // Fall through to empty string — fonts will use system fallback
+  }
+  return '';
+}
 
 let chromiumModule: typeof import('@sparticuz/chromium') | null = null;
 
@@ -22,8 +53,9 @@ async function getChromium() {
   return chromiumModule.default;
 }
 
-// Concurrency control — limit simultaneous Chromium instances (~200-300MB each)
-const MAX_CONCURRENT_PDF = 2;
+// Concurrency control — limit to 1 Chromium instance (~200-300MB each).
+// Vercel functions have 1024MB; a single instance is the safe limit.
+const MAX_CONCURRENT_PDF = 1;
 let activePdfJobs = 0;
 const pdfQueue: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
 
@@ -107,7 +139,7 @@ async function generatePdfInternal(options: PdfOptions): Promise<Buffer> {
     await page.setRequestInterception(true);
     page.on('request', (req) => {
       const url = req.url();
-      if (url.startsWith('data:') || url.startsWith('about:') || url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
+      if (url.startsWith('data:') || url.startsWith('about:') || url.startsWith('https://fonts.googleapis.com/') || url.startsWith('https://fonts.gstatic.com/')) {
         req.continue();
       } else {
         req.abort();
@@ -182,6 +214,7 @@ function escapeHtml(str: string): string {
 
 async function buildFlyerHtml(options: PdfOptions): Promise<string> {
   const { report, metrics, topLanguages, neighborhoodSlug, baseUrl } = options;
+  const fontCss = await getGoogleFontsCss();
 
   const formattedDate = new Date(report.generatedAt).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -273,9 +306,10 @@ async function buildFlyerHtml(options: PdfOptions): Promise<string> {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;900&family=Noto+Sans+SC:wght@400;700;900&family=Noto+Sans+Arabic:wght@400;700;900&family=Noto+Sans+Vietnamese:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* Google Fonts — inlined to avoid CDN round-trip per PDF */
+    ${fontCss}
+  </style>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
