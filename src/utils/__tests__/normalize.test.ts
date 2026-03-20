@@ -1,24 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { norm } from '../normalize';
+import { normalizeCommunityName } from '../normalize';
 
-describe('norm', () => {
+describe('normalizeCommunityName', () => {
   it('lowercases and trims', () => {
-    expect(norm('  MIRA MESA  ')).toBe('mira mesa');
+    expect(normalizeCommunityName('  MIRA MESA  ')).toBe('mira mesa');
   });
 
   it('strips non-alphanumeric characters', () => {
-    expect(norm('Barrio-Logan!')).toBe('barrio logan');
+    expect(normalizeCommunityName('Barrio-Logan!')).toBe('barrio logan');
   });
 
   it('collapses multiple spaces', () => {
-    expect(norm('San   Ysidro')).toBe('san ysidro');
+    expect(normalizeCommunityName('San   Ysidro')).toBe('san ysidro');
   });
 
   it('returns empty string for empty input', () => {
-    expect(norm('')).toBe('');
+    expect(normalizeCommunityName('')).toBe('');
   });
 
   it('handles mixed case with special chars', () => {
-    expect(norm("Scripps Ranch / Miramar")).toBe('scripps ranch miramar');
+    expect(normalizeCommunityName("Scripps Ranch / Miramar")).toBe('scripps ranch miramar');
   });
 });

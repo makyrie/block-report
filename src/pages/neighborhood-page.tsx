@@ -10,7 +10,7 @@ import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
-import { norm } from '../utils/normalize';
+import { normalizeCommunityName } from '../utils/normalize';
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -68,7 +68,7 @@ export default function NeighborhoodPage() {
       .then(({ ranking }) => {
         const scoreMap = new Map<string, number>();
         for (const r of ranking) {
-          scoreMap.set(norm(r.community), r.accessGapScore);
+          scoreMap.set(normalizeCommunityName(r.community), r.accessGapScore);
         }
         setAccessGapScores(scoreMap);
       })

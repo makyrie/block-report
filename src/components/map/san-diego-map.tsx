@@ -6,7 +6,7 @@ import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
-import { norm } from '../../utils/normalize';
+import { normalizeCommunityName } from '../../utils/normalize';
 import { scoreToColor } from '../../utils/score-to-color';
 
 // ── Popup content components ─────────────────────────────────────────────────
@@ -224,11 +224,11 @@ interface SanDiegoMapProps {
 
 
 function findCommunityFeature(features: Feature[], community: string): Feature | null {
-  const target = norm(community);
+  const target = normalizeCommunityName(community);
   return (
-    features.find((f) => norm(f.properties?.cpname ?? '') === target) ??
-    features.find((f) => norm(f.properties?.cpname ?? '').includes(target)) ??
-    features.find((f) => target.includes(norm(f.properties?.cpname ?? ''))) ??
+    features.find((f) => normalizeCommunityName(f.properties?.cpname ?? '') === target) ??
+    features.find((f) => normalizeCommunityName(f.properties?.cpname ?? '').includes(target)) ??
+    features.find((f) => target.includes(normalizeCommunityName(f.properties?.cpname ?? ''))) ??
     null
   );
 }
@@ -397,7 +397,7 @@ function SanDiegoMap({
           key={`choropleth-${accessGapScores?.size ?? 0}`}
           data={neighborhoodBoundaries}
           style={(feature) => {
-            const name = norm(feature?.properties?.cpname || '');
+            const name = normalizeCommunityName(feature?.properties?.cpname || '');
             const score = accessGapScores?.get(name) ?? null;
             return {
               fillColor: scoreToColor(score),
@@ -409,7 +409,7 @@ function SanDiegoMap({
           }}
           onEachFeature={(feature, layer) => {
             const name = feature.properties?.cpname || 'Unknown';
-            const score = accessGapScores?.get(norm(name));
+            const score = accessGapScores?.get(normalizeCommunityName(name));
             const el = document.createElement('span');
             el.textContent = `${name}: ${score !== undefined ? score + '/100' : 'No data'}`;
             layer.bindTooltip(el, { sticky: true });
