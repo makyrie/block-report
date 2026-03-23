@@ -6,6 +6,7 @@ import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
 import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
 import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
+import { DEFAULT_TRANSIT } from '../types';
 import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
@@ -178,7 +179,7 @@ export default function NeighborhoodPage() {
         communityName: selectedCommunity,
         anchor,
         metrics,
-        transit: transitScoreRef.current ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
+        transit: transitScoreRef.current ?? DEFAULT_TRANSIT,
         demographics: { topLanguages: topLanguagesRef.current },
         accessGap: accessGapRef.current ?? null,
       };
@@ -277,7 +278,7 @@ export default function NeighborhoodPage() {
       communityName: selectedCommunity,
       anchor,
       metrics,
-      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
+      transit: transitScore ?? DEFAULT_TRANSIT,
       demographics: { topLanguages },
       accessGap: accessGap ?? null,
     };

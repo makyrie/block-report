@@ -95,6 +95,17 @@ export interface CitywideCommunity {
   totalCommunities: number;
 }
 
+export const DEFAULT_TRANSIT: NeighborhoodProfile['transit'] = {
+  nearbyStopCount: 0,
+  nearestStopDistance: 0,
+  stopCount: 0,
+  agencyCount: 0,
+  agencies: [],
+  transitScore: 0,
+  cityAverage: 0,
+  travelTimeToCityHall: null,
+};
+
 export interface StoredBlockReport {
   anchorName: string;
   anchorType: 'library' | 'rec_center';
