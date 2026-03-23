@@ -41,6 +41,36 @@ describe('pointInFeature', () => {
     expect(pointInFeature(5, 5, geometry)).toBe(true);
     expect(pointInFeature(15, 15, geometry)).toBe(false);
   });
+
+  it('excludes points inside polygon holes', () => {
+    const geometry: Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        // outer: (0,0) to (20,20)
+        [[0, 0], [20, 0], [20, 20], [0, 20], [0, 0]],
+        // hole: (5,5) to (15,15)
+        [[5, 5], [15, 5], [15, 15], [5, 15], [5, 5]],
+      ],
+    };
+    // Inside hole → should return false
+    expect(pointInFeature(10, 10, geometry)).toBe(false);
+    // Inside outer but outside hole → should return true
+    expect(pointInFeature(2, 2, geometry)).toBe(true);
+  });
+
+  it('excludes points inside MultiPolygon holes', () => {
+    const geometry: MultiPolygon = {
+      type: 'MultiPolygon',
+      coordinates: [
+        [
+          [[0, 0], [20, 0], [20, 20], [0, 20], [0, 0]],
+          [[5, 5], [15, 5], [15, 15], [5, 15], [5, 5]],
+        ],
+      ],
+    };
+    expect(pointInFeature(10, 10, geometry)).toBe(false);
+    expect(pointInFeature(2, 2, geometry)).toBe(true);
+  });
 });
 
 describe('computeBBox', () => {
