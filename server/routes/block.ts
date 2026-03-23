@@ -36,6 +36,7 @@ router.get('/', async (req, res) => {
 
   let data;
   try {
+    const BLOCK_QUERY_LIMIT = 5000;
     data = await prisma.request311.findMany({
       select: {
         service_name: true,
@@ -49,7 +50,11 @@ router.get('/', async (req, res) => {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
         lng: { gte: lng - lngDelta, lte: lng + lngDelta },
       },
+      take: BLOCK_QUERY_LIMIT,
     });
+    if (data.length === BLOCK_QUERY_LIMIT) {
+      logger.warn('Block query hit safety cap', { lat, lng, radius, limit: BLOCK_QUERY_LIMIT });
+    }
   } catch (err) {
     logger.error('Failed to fetch block data', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });

@@ -30,9 +30,15 @@ interface CensusRow {
 }
 
 async function fetchCensusData(): Promise<CensusRow[]> {
-  return prisma.censusLanguage.findMany({
+  const CENSUS_QUERY_LIMIT = 10_000;
+  const rows = await prisma.censusLanguage.findMany({
     select: { community: true, total_pop_5plus: true, english_only: true },
+    take: CENSUS_QUERY_LIMIT,
   });
+  if (rows.length === CENSUS_QUERY_LIMIT) {
+    logger.warn('Census query hit safety cap', { limit: CENSUS_QUERY_LIMIT });
+  }
+  return rows;
 }
 
 async function fetchEngagementRates(censusRows: CensusRow[]): Promise<Map<string, number>> {

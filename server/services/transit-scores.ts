@@ -5,6 +5,7 @@ import { logger } from '../logger.js';
 import { fetchBoundaries } from './boundaries.js';
 import { pointInFeature, computeBBox, pointInBBox, haversineDistanceMiles, computeCentroid } from '../utils/geo.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
+import { communityKey } from '../utils/community.js';
 
 const CITY_HALL = { lat: 32.7157, lng: -117.1611 };
 const WALKING_SPEED_MPH = 3;
@@ -66,9 +67,14 @@ export interface TransitScore {
 async function computeAllScores(): Promise<Map<string, TransitScore>> {
   logger.info('Computing transit scores for all communities...');
 
+  const TRANSIT_QUERY_LIMIT = 50_000;
   const stops = await prisma.transitStop.findMany({
     select: { lat: true, lng: true, stop_agncy: true },
+    take: TRANSIT_QUERY_LIMIT,
   });
+  if (stops.length === TRANSIT_QUERY_LIMIT) {
+    logger.warn('Transit stops query hit safety cap', { limit: TRANSIT_QUERY_LIMIT });
+  }
 
   const geojson = await fetchBoundaries();
 
@@ -142,7 +148,7 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
       travelTimeToCityHall = Math.round(walkToStop + transitTime + walkFromStop);
     }
 
-    scores.set(communityName.toUpperCase(), {
+    scores.set(communityKey(communityName), {
       stopCount,
       agencyCount,
       agencies: Array.from(agencies),
