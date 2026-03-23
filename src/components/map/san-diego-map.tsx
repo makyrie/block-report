@@ -7,15 +7,7 @@ import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
 import { norm } from '../../utils/community';
-
-function isSafeUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, 'https://placeholder.invalid');
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
+import { isSafeUrl } from '../../utils/url';
 
 // ── Popup content components ─────────────────────────────────────────────────
 

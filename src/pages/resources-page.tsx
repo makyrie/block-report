@@ -2,15 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { getLibraries, getRecCenters } from '../api/client';
 import { useLanguage } from '../i18n/context';
 import type { CommunityAnchor } from '../types';
-
-function isSafeUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, 'https://placeholder.invalid');
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
+import { isSafeUrl } from '../utils/url';
 
 function ResourceCard({ resource }: { resource: CommunityAnchor }) {
   return (
