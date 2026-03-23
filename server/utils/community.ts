@@ -1,12 +1,17 @@
 // Shared community name normalization and validation for server routes
 
 /**
- * Canonical key for community lookups. All server-side maps use UPPERCASE keys.
- * Frontend uses its own norm() (lowercase) for display matching — that's fine
- * because the two domains don't share lookup maps directly.
+ * Canonical key for ALL server-side community lookups: transit scores,
+ * gap analysis maps, and report cache keys.
+ *
+ * Lowercase, strip non-alphanumeric to hyphens, trim leading/trailing hyphens.
+ * Examples: "Mira Mesa" → "mira-mesa", "Mid-City: City Heights" → "mid-city-city-heights"
+ *
+ * This is the single normalization function for the server. The frontend
+ * uses its own norm() (in types/community.ts) for display-side matching.
  */
 export function communityKey(name: string): string {
-  return name.toUpperCase().trim();
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 /**

@@ -5,18 +5,11 @@ import type { CommunityReport } from '../../types/index.js';
 import { isVercel } from '../env.js';
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
+import { communityKey } from '../utils/community.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-/**
- * Shared key normalization — single source of truth for cache key generation.
- * Exported so route handlers can reuse it instead of duplicating the logic.
- */
-export function normalizeKey(value: string): string {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
 
 // ---------------------------------------------------------------------------
 // Cache strategy abstraction — eliminates isVercel branching in every function
@@ -33,7 +26,7 @@ interface CacheStrategy {
 const dbStrategy: CacheStrategy = {
   async get(community, language) {
     const row = await prisma.reportCache.findUnique({
-      where: { community_language: { community: normalizeKey(community), language: normalizeKey(language) } },
+      where: { community_language: { community: communityKey(community), language: communityKey(language) } },
     });
     if (!row) return null;
     const age = Date.now() - row.createdAt.getTime();
@@ -43,9 +36,9 @@ const dbStrategy: CacheStrategy = {
 
   async set(community, language, report) {
     await prisma.reportCache.upsert({
-      where: { community_language: { community: normalizeKey(community), language: normalizeKey(language) } },
+      where: { community_language: { community: communityKey(community), language: communityKey(language) } },
       update: { report: report as unknown as Record<string, unknown>, createdAt: new Date() },
-      create: { community: normalizeKey(community), language: normalizeKey(language), report: report as unknown as Record<string, unknown> },
+      create: { community: communityKey(community), language: communityKey(language), report: report as unknown as Record<string, unknown> },
     });
   },
 
@@ -64,7 +57,7 @@ const dbStrategy: CacheStrategy = {
 /** File-based cache for local development */
 const fileStrategy: CacheStrategy = {
   async get(community, language) {
-    const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
+    const filePath = join(CACHE_DIR, `${communityKey(community)}_${communityKey(language)}.json`);
     try {
       // Enforce TTL on file cache — don't serve stale files indefinitely
       const fileStat = await stat(filePath);
@@ -80,7 +73,7 @@ const fileStrategy: CacheStrategy = {
 
   async set(community, language, report) {
     await mkdir(CACHE_DIR, { recursive: true });
-    const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
+    const filePath = join(CACHE_DIR, `${communityKey(community)}_${communityKey(language)}.json`);
     await writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
   },
 
@@ -130,7 +123,7 @@ export async function saveCachedReport(community: string, language: string, repo
 // ---------------------------------------------------------------------------
 
 function blockCacheKey(anchorId: string): string {
-  return `block:${normalizeKey(anchorId)}`;
+  return `block:${communityKey(anchorId)}`;
 }
 
 export async function getCachedBlockReport(anchorId: string, language: string): Promise<CommunityReport | null> {
