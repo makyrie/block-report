@@ -18,12 +18,13 @@ export function useMapData(): MapData {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
-    getLibraries().then((data) => { if (!cancelled) setLibraries(data); }).catch((err) => { if (!cancelled) { console.error(err); setDataError('Failed to load map data'); } });
-    getRecCenters().then((data) => { if (!cancelled) setRecCenters(data); }).catch((err) => { if (!cancelled) { console.error(err); setDataError('Failed to load map data'); } });
+    getLibraries(controller.signal).then((data) => { if (!cancelled) setLibraries(data); }).catch((err) => { if (!cancelled && err?.name !== 'AbortError') { console.error(err); setDataError('Failed to load map data'); } });
+    getRecCenters(controller.signal).then((data) => { if (!cancelled) setRecCenters(data); }).catch((err) => { if (!cancelled && err?.name !== 'AbortError') { console.error(err); setDataError('Failed to load map data'); } });
     getNeighborhoodBoundaries().then((data) => { if (!cancelled) setNeighborhoodBoundaries(data); }).catch((err) => { if (!cancelled) { console.error(err); setDataError('Failed to load map data'); } });
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, []);
 
   return { libraries, recCenters, neighborhoodBoundaries, dataError };

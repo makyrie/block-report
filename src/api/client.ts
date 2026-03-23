@@ -16,12 +16,12 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function getLibraries(): Promise<CommunityAnchor[]> {
-  return fetchJSON(`${BASE}/locations/libraries`);
+export function getLibraries(signal?: AbortSignal): Promise<CommunityAnchor[]> {
+  return fetchJSON(`${BASE}/locations/libraries`, signal ? { signal } : undefined);
 }
 
-export function getRecCenters(): Promise<CommunityAnchor[]> {
-  return fetchJSON(`${BASE}/locations/rec-centers`);
+export function getRecCenters(signal?: AbortSignal): Promise<CommunityAnchor[]> {
+  return fetchJSON(`${BASE}/locations/rec-centers`, signal ? { signal } : undefined);
 }
 
 let boundaryPromise: Promise<FeatureCollection> | null = null;
@@ -65,8 +65,8 @@ export function getCitywideGaps(signal?: AbortSignal): Promise<{
   return fetchJSON(`${BASE}/access-gap/ranking?limit=0`, signal ? { signal } : undefined);
 }
 
-export function getBlockData(lat: number, lng: number, radius = 0.25): Promise<BlockMetrics> {
-  return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`);
+export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: AbortSignal): Promise<BlockMetrics> {
+  return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`, signal ? { signal } : undefined);
 }
 
 export async function getPreGeneratedReport(community: string, language: string): Promise<CommunityReport | null> {

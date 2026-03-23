@@ -20,11 +20,14 @@ export function useBlockData(): BlockDataState {
 
   useEffect(() => {
     if (!pinnedLocation) return;
+    let cancelled = false;
+    const controller = new AbortController();
     setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
-      .then(setBlockData)
-      .catch((err) => console.error('Failed to fetch block data', err))
-      .finally(() => setBlockLoading(false));
+    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
+      .then((data) => { if (!cancelled) setBlockData(data); })
+      .catch((err) => { if (!cancelled && err?.name !== 'AbortError') console.error('Failed to fetch block data', err); })
+      .finally(() => { if (!cancelled) setBlockLoading(false); });
+    return () => { cancelled = true; controller.abort(); };
   }, [blockRadius, pinnedLocation]);
 
   return { pinnedLocation, setPinnedLocation, blockData, setBlockData, blockLoading, blockRadius, setBlockRadius };
