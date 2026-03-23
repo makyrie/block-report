@@ -1,4 +1,7 @@
-// Shared geo utilities — single source of truth for point-in-polygon logic
+// Shared geo utilities for server-side point-in-polygon tests.
+// NOTE: A parallel client-side implementation exists in src/utils/point-in-polygon.ts
+// using the same ray-casting algorithm but with (x=lng, y=lat) parameter order.
+// Changes to this algorithm should be mirrored there (and vice versa).
 
 import type { Polygon, MultiPolygon } from 'geojson';
 
