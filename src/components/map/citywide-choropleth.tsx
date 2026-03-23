@@ -115,8 +115,27 @@ export default function CitywideChoropleth({
     }
   }, [hoveredCommunity, style]);
 
-  // Use a stable key based on ranking data to avoid remounting on hover
-  const geoJsonKey = useMemo(() => lang + '|' + ranking.map((r) => r.community).join(','), [ranking, lang]);
+  // Update tooltips imperatively when language changes (avoids full layer remount)
+  useEffect(() => {
+    if (!geoJsonRef.current) return;
+    geoJsonRef.current.eachLayer((layer: L.Layer) => {
+      const feature = (layer as L.Layer & { feature?: Feature }).feature;
+      if (!feature) return;
+      const entry = getScore(feature);
+      const displayName = feature.properties?.cpname ?? 'Unknown';
+      const safeName = escapeHtml(displayName);
+      const tooltipContent = entry
+        ? `<strong>${safeName}</strong><br/>Score: ${entry.accessGapScore}/100${entry.topFactors.filter((f) => VALID_FACTORS.has(f)).length > 0 ? '<br/>' + entry.topFactors.filter((f) => VALID_FACTORS.has(f)).map(escapeHtml).join(', ') : ''}`
+        : `<strong>${safeName}</strong><br/>${escapeHtml(t('citywide.noScore'))}`;
+      const tooltip = (layer as L.Layer & { getTooltip?: () => L.Tooltip | undefined }).getTooltip?.();
+      if (tooltip) {
+        tooltip.setContent(tooltipContent);
+      }
+    });
+  }, [lang, t, getScore]);
+
+  // Use a stable key based on ranking data only — lang changes update tooltips imperatively
+  const geoJsonKey = useMemo(() => ranking.map((r) => r.community).join(','), [ranking]);
 
   return (
     <div className="relative h-full w-full" role="region" aria-label={t('citywide.title')}>
