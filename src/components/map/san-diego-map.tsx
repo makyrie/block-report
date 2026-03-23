@@ -8,6 +8,15 @@ import type { Feature, FeatureCollection } from 'geojson';
 import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
 import { norm } from '../../utils/community';
 
+/** Only allow http/https URLs — neutralizes javascript: and data: protocols */
+function safeHref(url: string): string | undefined {
+  try {
+    const parsed = new URL(url, 'https://placeholder.invalid');
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return url;
+  } catch { /* malformed URL */ }
+  return undefined;
+}
+
 // ── Popup content components ─────────────────────────────────────────────────
 
 type TypeConfig = {
@@ -60,10 +69,10 @@ function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
           </a>
         </p>
       )}
-      {anchor.website && (
+      {anchor.website && safeHref(anchor.website) && (
         <p className="text-xs mt-0.5">
           <a
-            href={anchor.website}
+            href={safeHref(anchor.website)}
             target="_blank"
             rel="noreferrer"
             className="text-blue-600 hover:underline"
