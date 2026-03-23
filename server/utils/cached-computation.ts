@@ -3,9 +3,12 @@
 
 import { isVercel } from '../env.js';
 
-// On serverless (Vercel), instances are ephemeral — long TTLs waste memory
-// since the cache rarely survives long enough to benefit from 24h retention.
-const SERVERLESS_MAX_TTL = 5 * 60 * 1000; // 5 minutes
+// On serverless (Vercel), instances are ephemeral — but warm instances can
+// serve many requests within a burst. A 15-minute TTL avoids recomputing
+// transit/gap-analysis scores on every request while not wasting memory
+// if the instance lingers. HTTP Cache-Control headers provide the CDN-level
+// caching (1h) that's the primary defense against recomputation.
+const SERVERLESS_MAX_TTL = 15 * 60 * 1000; // 15 minutes
 
 export interface CachedComputation<T> {
   get(): Promise<T>;
