@@ -107,11 +107,15 @@ app.use('/api/block', blockRouter);
 // Protected by CRON_SECRET to prevent abuse
 app.get('/api/cron/purge-cache', async (req, res) => {
   const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
   const authHeader = req.headers.authorization ?? '';
   const expected = `Bearer ${cronSecret}`;
   const headersMatch = authHeader.length === expected.length &&
     timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
-  if (!cronSecret || !headersMatch) {
+  if (!headersMatch) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
