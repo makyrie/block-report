@@ -75,6 +75,8 @@ export default function NeighborhoodPage() {
       return;
     }
 
+    let cancelled = false;
+
     setMetricsLoading(true);
     setMetrics(null);
     setTopLanguages([]);
@@ -82,26 +84,28 @@ export default function NeighborhoodPage() {
     setAccessGap(null);
 
     get311(selectedCommunity)
-      .then(setMetrics)
+      .then((data) => { if (!cancelled) setMetrics(data); })
       .catch(console.error)
-      .finally(() => setMetricsLoading(false));
+      .finally(() => { if (!cancelled) setMetricsLoading(false); });
 
     getTransitScore(selectedCommunity)
-      .then(setTransitScore)
+      .then((data) => { if (!cancelled) setTransitScore(data); })
       .catch(() => { /* transit score may not be available */ });
 
     getAccessGap(selectedCommunity)
-      .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
+      .then((data) => { if (!cancelled && data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
     // Try to fetch demographics for language suggestion
     getDemographics(selectedCommunity)
       .then((data) => {
-        if (data?.topLanguages) setTopLanguages(data.topLanguages);
+        if (!cancelled && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
       .catch(() => {
         // Demographics may not be available for all communities
       });
+
+    return () => { cancelled = true; };
   }, [selectedCommunity]);
 
   // Clear report when community or language changes
