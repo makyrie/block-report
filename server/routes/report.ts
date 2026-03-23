@@ -33,24 +33,43 @@ function pickProfileFields(raw: Record<string, unknown>): NeighborhoodProfile {
       resolvedCount: Number(metrics.resolvedCount) || 0,
       resolutionRate: Number(metrics.resolutionRate) || 0,
       avgDaysToResolve: Number(metrics.avgDaysToResolve) || 0,
-      topIssues: Array.isArray(metrics.topIssues) ? (metrics.topIssues as { category: string; count: number }[]).slice(0, 20) : [],
-      recentlyResolved: Array.isArray(metrics.recentlyResolved) ? (metrics.recentlyResolved as { category: string; date: string }[]).slice(0, 20) : [],
+      topIssues: Array.isArray(metrics.topIssues)
+        ? (metrics.topIssues as Record<string, unknown>[]).slice(0, 20).map(i => ({
+            category: String(i?.category ?? ''),
+            count: Number(i?.count) || 0,
+          }))
+        : [],
+      recentlyResolved: Array.isArray(metrics.recentlyResolved)
+        ? (metrics.recentlyResolved as Record<string, unknown>[]).slice(0, 20).map(i => ({
+            category: String(i?.category ?? ''),
+            date: String(i?.date ?? ''),
+          }))
+        : [],
       population: Number(metrics.population) || 0,
       requestsPer1000Residents: metrics.requestsPer1000Residents != null ? Number(metrics.requestsPer1000Residents) : null,
-      goodNews: Array.isArray(metrics.goodNews) ? (metrics.goodNews as string[]).slice(0, 10) : [],
+      goodNews: Array.isArray(metrics.goodNews)
+        ? (metrics.goodNews as unknown[]).slice(0, 10).map(s => String(s ?? ''))
+        : [],
     },
     transit: {
       nearbyStopCount: Number(transit.nearbyStopCount) || 0,
       nearestStopDistance: Number(transit.nearestStopDistance) || 0,
       stopCount: Number(transit.stopCount) || 0,
       agencyCount: Number(transit.agencyCount) || 0,
-      agencies: Array.isArray(transit.agencies) ? (transit.agencies as string[]).slice(0, 20) : [],
+      agencies: Array.isArray(transit.agencies)
+        ? (transit.agencies as unknown[]).slice(0, 20).map(s => String(s ?? ''))
+        : [],
       transitScore: Number(transit.transitScore) || 0,
       cityAverage: Number(transit.cityAverage) || 0,
       travelTimeToCityHall: transit.travelTimeToCityHall != null ? Number(transit.travelTimeToCityHall) : null,
     },
     demographics: {
-      topLanguages: Array.isArray(demographics.topLanguages) ? (demographics.topLanguages as { language: string; percentage: number }[]).slice(0, 20) : [],
+      topLanguages: Array.isArray(demographics.topLanguages)
+        ? (demographics.topLanguages as Record<string, unknown>[]).slice(0, 20).map(i => ({
+            language: String(i?.language ?? ''),
+            percentage: Number(i?.percentage) || 0,
+          }))
+        : [],
     },
     accessGap: accessGap ? (() => {
       const ag = accessGap as Record<string, unknown>;
@@ -81,8 +100,18 @@ function pickBlockMetricsFields(raw: Record<string, unknown>): BlockMetrics {
     resolvedCount: Number(raw.resolvedCount) || 0,
     resolutionRate: Number(raw.resolutionRate) || 0,
     avgDaysToResolve: raw.avgDaysToResolve != null ? Number(raw.avgDaysToResolve) : null,
-    topIssues: Array.isArray(raw.topIssues) ? (raw.topIssues as { category: string; count: number }[]).slice(0, 20) : [],
-    recentlyResolved: Array.isArray(raw.recentlyResolved) ? (raw.recentlyResolved as { category: string; date: string }[]).slice(0, 20) : [],
+    topIssues: Array.isArray(raw.topIssues)
+      ? (raw.topIssues as Record<string, unknown>[]).slice(0, 20).map(i => ({
+          category: String(i?.category ?? ''),
+          count: Number(i?.count) || 0,
+        }))
+      : [],
+    recentlyResolved: Array.isArray(raw.recentlyResolved)
+      ? (raw.recentlyResolved as Record<string, unknown>[]).slice(0, 20).map(i => ({
+          category: String(i?.category ?? ''),
+          date: String(i?.date ?? ''),
+        }))
+      : [],
     radiusMiles: Number(raw.radiusMiles) || 0,
   };
 }
@@ -90,7 +119,12 @@ function pickBlockMetricsFields(raw: Record<string, unknown>): BlockMetrics {
 /** Pick only known demographics fields */
 function pickDemographicsFields(raw: Record<string, unknown>): { topLanguages: { language: string; percentage: number }[] } {
   return {
-    topLanguages: Array.isArray(raw.topLanguages) ? (raw.topLanguages as { language: string; percentage: number }[]).slice(0, 20) : [],
+    topLanguages: Array.isArray(raw.topLanguages)
+      ? (raw.topLanguages as Record<string, unknown>[]).slice(0, 20).map(i => ({
+          language: String(i?.language ?? ''),
+          percentage: Number(i?.percentage) || 0,
+        }))
+      : [],
   };
 }
 
