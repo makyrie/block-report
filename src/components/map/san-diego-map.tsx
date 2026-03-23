@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
@@ -78,14 +78,6 @@ function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
   );
 }
 
-function TransitPopupContent({ name }: { name: string }) {
-  return (
-    <div className="min-w-[160px] max-w-[240px]">
-      <TypeBadge type="transit" />
-      <p className="font-semibold text-gray-900 text-sm leading-snug">{name}</p>
-    </div>
-  );
-}
 
 function BlockPopupContent({
   loading,
@@ -327,6 +319,26 @@ function SanDiegoMap({
     ? findCommunityFeature(neighborhoodBoundaries.features, selectedCommunity)
     : null;
 
+  // Convert transit stops to a single GeoJSON layer for performance
+  // (~5800 stops rendered as one canvas layer instead of individual React components)
+  const transitGeoJSON = useMemo<FeatureCollection>(() => ({
+    type: 'FeatureCollection',
+    features: transitStops.map((stop) => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [stop.lng, stop.lat] },
+      properties: { name: stop.name },
+    })),
+  }), [transitStops]);
+
+  const transitPointToLayer = useCallback((_feature: Feature, latlng: L.LatLng) => {
+    return L.circleMarker(latlng, { radius: 4, color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.8, weight: 1 });
+  }, []);
+
+  const transitOnEachFeature = useCallback((feature: Feature, layer: L.Layer) => {
+    const name = feature.properties?.name ?? 'Transit Stop';
+    layer.bindPopup(`<div class="min-w-[160px] max-w-[240px]"><div class="flex items-center gap-1.5 mb-2"><span aria-hidden="true" class="w-2.5 h-2.5 rounded-full shrink-0 bg-violet-600"></span><span class="text-xs font-semibold uppercase tracking-wide text-violet-700">Transit Stop</span></div><p class="font-semibold text-gray-900 text-sm leading-snug">${name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p></div>`);
+  }, []);
+
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
     {/* Screen reader announcement for filter changes */}
@@ -433,19 +445,15 @@ function SanDiegoMap({
         />
       )}
 
-      {/* Transit stops — violet circles */}
-      {transitStops.map((stop) => (
-        <CircleMarker
-          key={stop.id}
-          center={[stop.lat, stop.lng]}
-          radius={4}
-          pathOptions={{ color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.8, weight: 1 }}
-        >
-          <Popup>
-            <TransitPopupContent name={stop.name} />
-          </Popup>
-        </CircleMarker>
-      ))}
+      {/* Transit stops — single GeoJSON canvas layer for performance */}
+      {transitStops.length > 0 && (
+        <GeoJSON
+          key="transit-stops"
+          data={transitGeoJSON}
+          pointToLayer={transitPointToLayer}
+          onEachFeature={transitOnEachFeature}
+        />
+      )}
 
       {/* Library markers — blue (shown when filter is 'all' or 'library') */}
       {(activeFilter === 'all' || activeFilter === 'library') &&
