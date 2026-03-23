@@ -54,9 +54,11 @@ export function useReportGeneration({
 
   const generatingRef = useRef(false);
   const hasReportRef = useRef(false);
+  const communityRef = useRef(selectedCommunity);
 
   // Clear report when community or language changes
   useEffect(() => {
+    communityRef.current = selectedCommunity;
     setReport(null);
     setReportError(null);
   }, [selectedCommunity, reportLang]);
@@ -117,18 +119,22 @@ export function useReportGeneration({
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
+    const requestedCommunity = selectedCommunity;
     const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
 
     setReportLoading(true);
     setReportError(null);
     try {
       const result = await apiGenerateReport(profile, language);
+      // Discard result if community changed while waiting
+      if (communityRef.current !== requestedCommunity) return;
       setReport(result);
     } catch (err) {
+      if (communityRef.current !== requestedCommunity) return;
       const message = err instanceof Error ? err.message : 'Failed to generate report';
       setReportError(message);
     } finally {
-      setReportLoading(false);
+      if (communityRef.current === requestedCommunity) setReportLoading(false);
     }
   }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
 
