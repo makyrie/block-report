@@ -11,6 +11,7 @@ const router = Router();
 // On serverless (Vercel), each invocation may have its own process — the DB-backed
 // cache check (getCachedReport) is the primary deduplication; this Map is a best-effort
 // optimization to avoid duplicate Claude API calls within a single warm instance.
+const MAX_INFLIGHT = 10; // Safety bound — reject new generations if too many are in flight
 const inFlightGenerations = new Map<string, Promise<CommunityReport>>();
 const RETRY_AFTER_SECONDS = Math.ceil(GENERATION_RATE_WINDOW_MS / 1000);
 
@@ -35,9 +36,13 @@ function coalesceGeneration(
   key: string,
   generate: () => Promise<CommunityReport>,
   saveToCache: (report: CommunityReport) => Promise<void>,
-): Promise<CommunityReport> {
+): Promise<CommunityReport> | null {
   let promise = inFlightGenerations.get(key);
   if (!promise) {
+    // Bound the map size to prevent memory exhaustion under load
+    if (inFlightGenerations.size >= MAX_INFLIGHT) {
+      return null; // Caller should return 429
+    }
     promise = generate().then(async (report) => {
       await saveToCache(report).catch((err) => {
         logger.error('Failed to cache report, continuing with generated result', {
@@ -54,6 +59,23 @@ function coalesceGeneration(
     );
   }
   return promise;
+}
+
+// Simple per-IP rate limiting for report generation — supplements DB-backed global limit.
+// On serverless this resets per cold start, but still mitigates rapid-fire abuse from a single IP.
+const PER_IP_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const PER_IP_MAX = 5; // max reports per IP per window
+const ipGenerationCounts = new Map<string, { count: number; resetAt: number }>();
+
+function isIpRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = ipGenerationCounts.get(ip);
+  if (!entry || now >= entry.resetAt) {
+    ipGenerationCounts.set(ip, { count: 1, resetAt: now + PER_IP_WINDOW_MS });
+    return false;
+  }
+  entry.count++;
+  return entry.count > PER_IP_MAX;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,15 +162,26 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
+    // Per-IP rate limit — supplements global DB-backed limit
+    const clientIp = req.ip || 'unknown';
+    if (isIpRateLimited(clientIp)) {
+      logger.warn('Per-IP rate limit exceeded for report generation', { ip: clientIp });
+      res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many report requests from this address, please try again later' });
+      return;
+    }
 
     const generationKey = `community:${profile.communityName}:${language}`;
     logger.info('Generating report', { community: profile.communityName, language });
-    const report = await coalesceGeneration(
+    const report = coalesceGeneration(
       generationKey,
       () => generateReport(profile, language),
       (r) => saveCachedReport(profile.communityName, language, r),
     );
-    res.json(report);
+    if (!report) {
+      res.set('Retry-After', '30').status(429).json({ error: 'Too many concurrent generations, please try again shortly' });
+      return;
+    }
+    res.json(await report);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Report generation error', {
@@ -237,15 +270,26 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
+    // Per-IP rate limit — supplements global DB-backed limit
+    const clientIp = req.ip || 'unknown';
+    if (isIpRateLimited(clientIp)) {
+      logger.warn('Per-IP rate limit exceeded for block report generation', { ip: clientIp });
+      res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many report requests from this address, please try again later' });
+      return;
+    }
 
     const blockGenKey = `block:${anchorCacheId}:${language}`;
     logger.info('Generating block report', { anchor: anchor.name, language });
-    const report = await coalesceGeneration(
+    const report = coalesceGeneration(
       blockGenKey,
       () => generateBlockReport(anchor, blockMetrics, language, demographics),
       (r) => saveCachedBlockReport(anchorCacheId, language, r),
     );
-    res.json(report);
+    if (!report) {
+      res.set('Retry-After', '30').status(429).json({ error: 'Too many concurrent generations, please try again shortly' });
+      return;
+    }
+    res.json(await report);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Block report generation error', {
