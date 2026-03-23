@@ -5,6 +5,29 @@ import { logger } from '../logger.js';
 
 const router = Router();
 
+const SUPPORTED_LANGUAGES = ['English', 'Spanish', 'Vietnamese', 'Tagalog', 'Chinese', 'Arabic'];
+const MAX_ARRAY_ITEMS = 10;
+const MAX_STRING_LEN = 2000;
+
+/** Truncate string fields and cap array lengths to prevent abuse */
+function capReport(report: Record<string, unknown>): Record<string, unknown> {
+  const capped: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(report)) {
+    if (typeof val === 'string') {
+      capped[key] = val.slice(0, MAX_STRING_LEN);
+    } else if (Array.isArray(val)) {
+      capped[key] = val.slice(0, MAX_ARRAY_ITEMS).map((item) =>
+        typeof item === 'string' ? item.slice(0, MAX_STRING_LEN) : item,
+      );
+    } else if (val && typeof val === 'object') {
+      capped[key] = capReport(val as Record<string, unknown>);
+    } else {
+      capped[key] = val;
+    }
+  }
+  return capped;
+}
+
 /**
  * POST /api/brief/pdf
  *
@@ -29,6 +52,13 @@ router.post('/pdf', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'report must contain neighborhoodName and language strings' });
       return;
     }
+    if (!SUPPORTED_LANGUAGES.includes(report.language)) {
+      res.status(400).json({ error: `Unsupported language. Must be one of: ${SUPPORTED_LANGUAGES.join(', ')}` });
+      return;
+    }
+
+    // Cap array/string sizes to prevent memory abuse
+    const cappedReport = capReport(report) as typeof report;
 
     // ── Sanitize: strip control characters from user-provided strings ──
     const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
@@ -40,15 +70,15 @@ router.post('/pdf', async (req: Request, res: Response) => {
       || 'https://blockreport.org';
 
     const pdfBuffer = await generateFlyerPdf({
-      report,
+      report: cappedReport,
       neighborhoodSlug: sanitizedSlug,
       metrics: metrics ?? null,
-      topLanguages: topLanguages ?? [],
+      topLanguages: (topLanguages ?? []).slice(0, MAX_ARRAY_ITEMS),
       baseUrl,
     });
 
     // Build filename: restrict to safe characters for Content-Disposition header
-    const langCode = report.language?.toLowerCase().slice(0, 10) || 'en';
+    const langCode = cappedReport.language?.toLowerCase().slice(0, 10) || 'en';
     const filename = `${sanitizedSlug}-${langCode}`.replace(/[^a-z0-9.-]/g, '-') + '.pdf';
 
     res.set({
