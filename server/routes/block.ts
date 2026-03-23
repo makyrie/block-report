@@ -35,10 +35,13 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  // Check cache
+  // Check cache (re-insert on hit to maintain LRU order)
   const key = cacheKey(lat, lng, radius);
   const cached = blockCache.get(key);
   if (cached && cached.expires > Date.now()) {
+    // Move to end of Map iteration order (most-recently-used)
+    blockCache.delete(key);
+    blockCache.set(key, cached);
     res.json(cached.data);
     return;
   }
@@ -54,10 +57,10 @@ router.get('/', async (req, res) => {
 
   const result = computeBlockMetrics(data, lat, lng, radius);
 
-  // Store in cache, evicting oldest entries if over limit
+  // Store in cache, evicting least-recently-used entry if over limit
   if (blockCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = blockCache.keys().next().value;
-    if (firstKey !== undefined) blockCache.delete(firstKey);
+    const lruKey = blockCache.keys().next().value;
+    if (lruKey !== undefined) blockCache.delete(lruKey);
   }
   blockCache.set(key, { data: result, expires: Date.now() + CACHE_TTL });
 
