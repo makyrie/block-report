@@ -30,9 +30,13 @@ router.get('/', async (req, res) => {
     const result = await prisma.$queryRaw<{ get_community_metrics: CommunityMetrics }[]>`
       SELECT get_community_metrics(${cleaned})
     `;
+    if (!result[0]) {
+      res.status(404).json({ error: 'No metrics found for this community' });
+      return;
+    }
     metrics = result[0].get_community_metrics;
   } catch (err) {
-    logger.error('Failed to fetch 311 metrics', { error: err instanceof Error ? err.message : String(err), community });
+    logger.error('Failed to fetch 311 metrics', { error: err instanceof Error ? err.message : String(err), community: cleaned });
     res.status(500).json({ error: 'Internal server error' });
     return;
   }
