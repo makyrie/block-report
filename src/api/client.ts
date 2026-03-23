@@ -95,7 +95,7 @@ export async function downloadPdf(
   metrics?: NeighborhoodProfile['metrics'] | null,
   topLanguages?: { language: string; percentage: number }[],
 ): Promise<Blob> {
-  const res = await fetch(`${BASE}/brief/pdf`, {
+  const res = await fetch(`${BASE}/report/pdf`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ report, neighborhoodSlug, metrics, topLanguages }),

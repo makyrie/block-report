@@ -81,7 +81,6 @@ const reportLimiter = rateLimit({
   message: { error: 'Too many report generation requests, please try again later' },
 });
 app.use('/api/report', reportLimiter);
-app.use('/api/brief', reportLimiter);
 app.use('/api', apiLimiter);
 
 app.use((req, res, next) => {
@@ -101,10 +100,10 @@ app.use('/api/locations', locationsRouter);
 app.use('/api/311', metricsRouter);
 app.use('/api/demographics', demographicsRouter);
 app.use('/api/report', reportRouter);
+app.use('/api/report', pdfRouter);
 app.use('/api/transit', transitRouter);
 app.use('/api/access-gap', gapAnalysisRouter);
 app.use('/api/block', blockRouter);
-app.use('/api/brief', pdfRouter);
 
 // Cron-triggered cache purge — call via Vercel Cron or manual GET
 // Protected by CRON_SECRET to prevent abuse

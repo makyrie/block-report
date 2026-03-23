@@ -29,7 +29,7 @@ function capReport(report: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
- * POST /api/brief/pdf
+ * POST /api/report/pdf
  *
  * Generate a PDF of the community brief flyer.
  * Expects JSON body with: report, neighborhoodSlug, metrics (optional), topLanguages (optional).
