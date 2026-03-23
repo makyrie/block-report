@@ -80,7 +80,6 @@ function disposeBrowser() {
 }
 process.on('SIGTERM', disposeBrowser);
 process.on('SIGINT', disposeBrowser);
-process.on('beforeExit', disposeBrowser);
 
 export interface PdfRequest {
   report: CommunityReport;

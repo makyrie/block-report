@@ -111,11 +111,3 @@ export async function downloadPdf(
   return res.blob();
 }
 
-export function getBlockReport(
-  lat: number,
-  lng: number,
-  radius = 0.25,
-  language = 'en',
-): Promise<CommunityReport & { preGenerated?: boolean; anchorName?: string; anchorType?: string }> {
-  return fetchJSON(`${BASE}/report?lat=${lat}&lng=${lng}&radius=${radius}&language=${language}`);
-}
