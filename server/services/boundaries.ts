@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { FeatureCollection, Feature, Polygon, MultiPolygon } from 'geojson';
 import { logger } from '../logger.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
+import { isVercel } from '../env.js';
 
 const BOUNDARY_URL = 'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson';
 const CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -33,6 +34,7 @@ export function validateBoundaryCollection(data: unknown): data is BoundaryColle
 }
 
 async function readDiskCache(): Promise<BoundaryCollection | null> {
+  if (isVercel) return null; // Vercel filesystem is read-only; skip disk cache
   try {
     const raw = await readFile(DISK_CACHE_FILE, 'utf-8');
     const parsed: unknown = JSON.parse(raw);
@@ -49,6 +51,7 @@ async function readDiskCache(): Promise<BoundaryCollection | null> {
 }
 
 async function writeDiskCache(data: BoundaryCollection): Promise<void> {
+  if (isVercel) return; // Vercel filesystem is read-only
   try {
     await mkdir(DISK_CACHE_DIR, { recursive: true });
     const tmpFile = DISK_CACHE_FILE + '.tmp';
@@ -79,10 +82,22 @@ async function computeBoundaries(): Promise<BoundaryCollection> {
       throw new Error(`Boundary response too large: ${contentLength} bytes`);
     }
 
-    const text = await res.text();
-    if (text.length > MAX_RESPONSE_BYTES) {
-      throw new Error(`Boundary response body too large: ${text.length} bytes`);
+    // Stream body with incremental size check to avoid buffering oversized payloads
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('No response body');
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_RESPONSE_BYTES) {
+        reader.cancel();
+        throw new Error(`Boundary response body too large: exceeded ${MAX_RESPONSE_BYTES} bytes`);
+      }
+      chunks.push(value);
     }
+    const text = new TextDecoder().decode(Buffer.concat(chunks));
 
     const data: unknown = JSON.parse(text);
     if (!validateBoundaryCollection(data)) {
