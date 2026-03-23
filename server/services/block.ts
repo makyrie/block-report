@@ -1,4 +1,38 @@
 import { haversineDistanceMiles } from '../utils/geo.js';
+import { prisma } from './db.js';
+import { logger } from '../logger.js';
+
+// 1 degree of latitude ~ 69 miles; longitude varies by latitude
+const MILES_PER_LAT_DEG = 69;
+// At San Diego (~32.7°N): 1 deg longitude ~ 58.8 miles
+const MILES_PER_LNG_DEG = 58.8;
+
+const BLOCK_QUERY_LIMIT = 5000;
+
+/** Fetch raw 311 requests within a bounding box around the given coordinates */
+export async function fetchBlockRequests(lat: number, lng: number, radius: number): Promise<RawRequest[]> {
+  const latDelta = radius / MILES_PER_LAT_DEG;
+  const lngDelta = radius / MILES_PER_LNG_DEG;
+  const data = await prisma.request311.findMany({
+    select: {
+      service_name: true,
+      status: true,
+      date_requested: true,
+      date_closed: true,
+      lat: true,
+      lng: true,
+    },
+    where: {
+      lat: { gte: lat - latDelta, lte: lat + latDelta },
+      lng: { gte: lng - lngDelta, lte: lng + lngDelta },
+    },
+    take: BLOCK_QUERY_LIMIT,
+  });
+  if (data.length === BLOCK_QUERY_LIMIT) {
+    logger.warn('Block query hit safety cap', { lat, lng, radius, limit: BLOCK_QUERY_LIMIT });
+  }
+  return data;
+}
 
 interface RawRequest {
   service_name: string | null;

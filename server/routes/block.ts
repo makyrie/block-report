@@ -1,14 +1,8 @@
 import { Router } from 'express';
-import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
-import { computeBlockMetrics, type BlockResult } from '../services/block.js';
+import { computeBlockMetrics, fetchBlockRequests, type BlockResult } from '../services/block.js';
 
 const router = Router();
-
-// 1 degree of latitude ~ 69 miles; longitude varies by latitude
-const MILES_PER_LAT_DEG = 69;
-// At San Diego (~32.7°N): 1 deg longitude ~ 58.8 miles
-const MILES_PER_LNG_DEG = 58.8;
 
 // In-memory cache for block results — coordinates are rounded to 4 decimal places
 // (~11m precision) so nearby requests share cache entries.
@@ -49,30 +43,9 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  const latDelta = radius / MILES_PER_LAT_DEG;
-  const lngDelta = radius / MILES_PER_LNG_DEG;
-
   let data;
   try {
-    const BLOCK_QUERY_LIMIT = 5000;
-    data = await prisma.request311.findMany({
-      select: {
-        service_name: true,
-        status: true,
-        date_requested: true,
-        date_closed: true,
-        lat: true,
-        lng: true,
-      },
-      where: {
-        lat: { gte: lat - latDelta, lte: lat + latDelta },
-        lng: { gte: lng - lngDelta, lte: lng + lngDelta },
-      },
-      take: BLOCK_QUERY_LIMIT,
-    });
-    if (data.length === BLOCK_QUERY_LIMIT) {
-      logger.warn('Block query hit safety cap', { lat, lng, radius, limit: BLOCK_QUERY_LIMIT });
-    }
+    data = await fetchBlockRequests(lat, lng, radius);
   } catch (err) {
     logger.error('Failed to fetch block data', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
