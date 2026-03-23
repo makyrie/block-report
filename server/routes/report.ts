@@ -10,6 +10,9 @@ const router = Router();
 const SUPPORTED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
 
 // Per-IP rate limiting for report generation endpoints
+// WARNING: This in-memory map resets on every serverless cold start (same limitation
+// as the global express-rate-limit in app.ts). It provides best-effort protection
+// in long-running processes but is not durable across Vercel function invocations.
 const PER_IP_LIMIT = 5;
 const PER_IP_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const ipGenerationCounts = new Map<string, { count: number; resetAt: number }>();
@@ -18,6 +21,8 @@ function isIpRateLimited(ip: string): boolean {
   const now = Date.now();
   const entry = ipGenerationCounts.get(ip);
   if (!entry || now >= entry.resetAt) {
+    // Lazy cleanup: remove expired entry before replacing it
+    if (entry) ipGenerationCounts.delete(ip);
     ipGenerationCounts.set(ip, { count: 1, resetAt: now + PER_IP_WINDOW_MS });
     return false;
   }
@@ -81,6 +86,14 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'profile must be an object with a communityName string' });
       return;
     }
+
+    // Strip unexpected keys to prevent prompt bloat via arbitrary fields
+    const ALLOWED_PROFILE_KEYS = new Set(['communityName', 'anchor', 'metrics', 'transit', 'demographics', 'accessGap']);
+    for (const key of Object.keys(profile)) {
+      if (!ALLOWED_PROFILE_KEYS.has(key)) {
+        delete (profile as Record<string, unknown>)[key];
+      }
+    }
     if (typeof language !== 'string' || !SUPPORTED_LANGUAGES.has(language)) {
       res.status(400).json({ error: `Unsupported language. Supported: ${[...SUPPORTED_LANGUAGES].join(', ')}` });
       return;
@@ -108,7 +121,18 @@ router.post('/generate', async (req: Request, res: Response) => {
       community: profile.communityName,
       language,
     });
-    const report = await generateReport(profile, language);
+
+    // Abort the Claude API call if the client disconnects
+    const abortController = new AbortController();
+    const onClose = () => abortController.abort();
+    req.on('close', onClose);
+
+    let report;
+    try {
+      report = await generateReport(profile, language, abortController.signal);
+    } finally {
+      req.removeListener('close', onClose);
+    }
 
     // Fire-and-forget: always return the report even if caching fails
     saveCachedReport(profile.communityName, language, report).catch((err) => {
@@ -189,8 +213,14 @@ router.post('/generate-block', async (req: Request, res: Response) => {
 
     const clientIp = req.ip ?? 'unknown';
 
-    // Run cache lookup and rate limit checks in parallel
+    // Derive cache key — both fields are optional, so guard against undefined
     const anchorCacheId = anchor.id || anchor.name;
+    if (!anchorCacheId) {
+      res.status(400).json({ error: 'anchor.id or anchor.name is required' });
+      return;
+    }
+
+    // Run cache lookup and rate limit checks in parallel
     const [cached, globalRateLimited] = await Promise.all([
       getCachedBlockReport(anchorCacheId, language),
       isGenerationRateLimited(),
@@ -210,7 +240,17 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       language,
     });
 
-    const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
+    // Abort the Claude API call if the client disconnects
+    const abortController = new AbortController();
+    const onClose = () => abortController.abort();
+    req.on('close', onClose);
+
+    let report;
+    try {
+      report = await generateBlockReport(anchor, blockMetrics, language, demographics, abortController.signal);
+    } finally {
+      req.removeListener('close', onClose);
+    }
 
     // Fire-and-forget: always return the report even if caching fails
     saveCachedBlockReport(anchorCacheId, language, report).catch((err) => {

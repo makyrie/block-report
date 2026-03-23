@@ -44,10 +44,14 @@ export default function NeighborhoodPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  // Ref to avoid stale closure in the slug-sync effect below
+  const selectedCommunityRef = useRef(selectedCommunity);
+  selectedCommunityRef.current = selectedCommunity;
+
   // Sync URL -> state when slug changes (e.g. browser back/forward)
   useEffect(() => {
     const communityFromUrl = slug ? fromSlug(slug) : null;
-    if (communityFromUrl !== selectedCommunity) {
+    if (communityFromUrl !== selectedCommunityRef.current) {
       setSelectedCommunity(communityFromUrl);
       setSelectedAnchor(null);
     }
@@ -131,13 +135,13 @@ export default function NeighborhoodPage() {
     if (!selectedCommunity) return;
     if (generatingRef.current) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
     setReportLoading(true);
 
     (async () => {
       // Step 1: Try to load pre-generated report instantly
       const cached = await getPreGeneratedReport(selectedCommunity, reportLang);
-      if (cancelled) return;
+      if (controller.signal.aborted) return;
 
       if (cached) {
         setReport(cached);
@@ -180,20 +184,18 @@ export default function NeighborhoodPage() {
       };
 
       try {
-        const result = await generateReport(profile, reportLang);
-        if (!cancelled) setReport(result);
+        const result = await generateReport(profile, reportLang, controller.signal);
+        if (!controller.signal.aborted) setReport(result);
       } catch (err) {
-        if (!cancelled) setReportError(err instanceof Error ? err.message : 'Failed to generate report');
+        if (!controller.signal.aborted) setReportError(err instanceof Error ? err.message : 'Failed to generate report');
       } finally {
         generatingRef.current = false;
-        if (!cancelled) setReportLoading(false);
+        if (!controller.signal.aborted) setReportLoading(false);
       }
     })();
 
     return () => {
-      cancelled = true;
-      // Reset the lock so the next community can generate a report
-      generatingRef.current = false;
+      controller.abort();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunity, reportLang, metrics]);
@@ -249,8 +251,16 @@ export default function NeighborhoodPage() {
     return () => { controller.abort(); };
   }, [blockRadius, pinnedLocation]);
 
+  // Ref to track the in-flight manual report generation so we can abort on community switch
+  const manualGenerateControllerRef = useRef<AbortController | null>(null);
+
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
+
+    // Cancel any previous in-flight manual generation
+    manualGenerateControllerRef.current?.abort();
+    const controller = new AbortController();
+    manualGenerateControllerRef.current = controller;
 
     const anchor = selectedAnchor ?? {
       id: '',
@@ -274,13 +284,15 @@ export default function NeighborhoodPage() {
     setReportLoading(true);
     setReportError(null);
     try {
-      const result = await generateReport(profile, language);
-      setReport(result);
+      const result = await generateReport(profile, language, controller.signal);
+      if (!controller.signal.aborted) setReport(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate report';
-      setReportError(message);
+      if (!controller.signal.aborted) {
+        const message = err instanceof Error ? err.message : 'Failed to generate report';
+        setReportError(message);
+      }
     } finally {
-      setReportLoading(false);
+      if (!controller.signal.aborted) setReportLoading(false);
     }
   }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
 

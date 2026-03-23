@@ -78,6 +78,7 @@ function getClient(): Anthropic {
 export async function generateReport(
   profile: NeighborhoodProfile,
   language: string,
+  signal?: AbortSignal,
 ): Promise<CommunityReport> {
   // Validate communityName to prevent prompt injection
   if (
@@ -160,7 +161,7 @@ Keep the total report under 400 words. It should fit on one printed page.`;
       messages: [{ role: 'user', content: prompt }],
       tools: [reportTool],
       tool_choice: { type: 'tool', name: 'community_report' },
-    });
+    }, { signal });
 
     const toolBlock = message.content.find((block) => block.type === 'tool_use');
     if (!toolBlock || toolBlock.type !== 'tool_use') {
@@ -188,6 +189,7 @@ export async function generateBlockReport(
   blockMetrics: BlockMetrics,
   language: string,
   demographics?: { topLanguages: { language: string; percentage: number }[] },
+  signal?: AbortSignal,
 ): Promise<CommunityReport> {
   // Sanitize all user-supplied objects before embedding in prompt
   const safeAnchor = sanitizeStringFields(anchor, 200) as CommunityAnchor;
@@ -266,7 +268,7 @@ Keep the total report under 400 words. It should fit on one printed page.`;
       messages: [{ role: 'user', content: prompt }],
       tools: [reportTool],
       tool_choice: { type: 'tool', name: 'community_report' },
-    });
+    }, { signal });
 
     const toolBlock = message.content.find((block) => block.type === 'tool_use');
     if (!toolBlock || toolBlock.type !== 'tool_use') {
