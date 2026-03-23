@@ -15,13 +15,31 @@ const SUPPORTED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
 // in long-running processes but is not durable across Vercel function invocations.
 const PER_IP_LIMIT = 5;
 const PER_IP_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const MAX_IP_ENTRIES = 1000; // Cap map size to prevent unbounded memory growth
 const ipGenerationCounts = new Map<string, { count: number; resetAt: number }>();
 
 function isIpRateLimited(ip: string): boolean {
   const now = Date.now();
+
+  // Periodic cleanup: if map is too large, purge all expired entries
+  if (ipGenerationCounts.size >= MAX_IP_ENTRIES) {
+    for (const [key, val] of ipGenerationCounts) {
+      if (now >= val.resetAt) ipGenerationCounts.delete(key);
+    }
+    // If still too large after cleanup, drop oldest entries
+    if (ipGenerationCounts.size >= MAX_IP_ENTRIES) {
+      const toDelete = ipGenerationCounts.size - MAX_IP_ENTRIES + 100;
+      let deleted = 0;
+      for (const key of ipGenerationCounts.keys()) {
+        if (deleted >= toDelete) break;
+        ipGenerationCounts.delete(key);
+        deleted++;
+      }
+    }
+  }
+
   const entry = ipGenerationCounts.get(ip);
   if (!entry || now >= entry.resetAt) {
-    // Lazy cleanup: remove expired entry before replacing it
     if (entry) ipGenerationCounts.delete(ip);
     ipGenerationCounts.set(ip, { count: 1, resetAt: now + PER_IP_WINDOW_MS });
     return false;
