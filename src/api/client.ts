@@ -94,11 +94,13 @@ export async function downloadPdf(
   neighborhoodSlug: string,
   metrics?: NeighborhoodProfile['metrics'] | null,
   topLanguages?: { language: string; percentage: number }[],
+  signal?: AbortSignal,
 ): Promise<Blob> {
   const res = await fetch(`${BASE}/report/pdf`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ report, neighborhoodSlug, metrics, topLanguages }),
+    signal,
   });
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;

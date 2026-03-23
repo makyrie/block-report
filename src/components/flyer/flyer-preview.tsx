@@ -20,7 +20,7 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
   const [visible, setVisible] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [pdfState, setPdfState] = useState<'idle' | 'loading' | 'error'>('idle');
-  const mountedRef = useRef(true);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Fade-in animation on mount
   useEffect(() => {
@@ -28,19 +28,22 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
     return () => clearTimeout(timer);
   }, []);
 
-  // Track unmount to guard async state updates
+  // Abort in-flight PDF download on unmount
   useEffect(() => {
-    return () => { mountedRef.current = false; };
+    return () => { abortRef.current?.abort(); };
   }, []);
 
   const slug = toSlug(report.neighborhoodName);
 
   const handleDownloadPdf = async () => {
     if (pdfState === 'loading') return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setPdfState('loading');
     try {
-      const blob = await downloadPdf(report, slug, metrics, topLanguages);
-      if (!mountedRef.current) return;
+      const blob = await downloadPdf(report, slug, metrics, topLanguages, controller.signal);
+      if (controller.signal.aborted) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -51,8 +54,8 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       setPdfState('idle');
-    } catch {
-      if (mountedRef.current) setPdfState('error');
+    } catch (err) {
+      if (!controller.signal.aborted) setPdfState('error');
     }
   };
 

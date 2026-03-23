@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
@@ -74,6 +74,7 @@ export default function NeighborhoodPage() {
       return;
     }
 
+    let cancelled = false;
     setMetricsLoading(true);
     setMetrics(null);
     setTopLanguages([]);
@@ -81,30 +82,31 @@ export default function NeighborhoodPage() {
     setAccessGap(null);
 
     get311(selectedCommunity)
-      .then(setMetrics)
-      .catch(console.error)
-      .finally(() => setMetricsLoading(false));
+      .then((data) => { if (!cancelled) setMetrics(data); })
+      .catch((err) => { if (!cancelled) console.error(err); })
+      .finally(() => { if (!cancelled) setMetricsLoading(false); });
 
     getTransitScore(selectedCommunity)
-      .then(setTransitScore)
+      .then((data) => { if (!cancelled) setTransitScore(data); })
       .catch(() => { /* transit score may not be available */ });
 
     getAccessGap(selectedCommunity)
-      .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
+      .then((data) => { if (!cancelled && data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
     // Try to fetch demographics for language suggestion
     getDemographics(selectedCommunity)
       .then((data) => {
-        if (data?.topLanguages) setTopLanguages(data.topLanguages);
+        if (!cancelled && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
       .catch(() => {
         // Demographics may not be available for all communities
       });
+
+    return () => { cancelled = true; };
   }, [selectedCommunity]);
 
   // Clear report when community or language changes
-  const generatingRef = useRef(false);
   useEffect(() => {
     setReport(null);
     setReportError(null);
@@ -113,7 +115,6 @@ export default function NeighborhoodPage() {
   // Auto-fetch pre-generated report, falling back to on-demand generation
   useEffect(() => {
     if (!selectedCommunity) return;
-    if (generatingRef.current) return;
 
     let cancelled = false;
     setReportLoading(true);
@@ -142,8 +143,6 @@ export default function NeighborhoodPage() {
         return;
       }
 
-      generatingRef.current = true;
-
       const anchor = selectedAnchor ?? {
         id: '',
         name: selectedCommunity,
@@ -169,7 +168,6 @@ export default function NeighborhoodPage() {
       } catch (err) {
         if (!cancelled) setReportError(err instanceof Error ? err.message : 'Failed to generate report');
       } finally {
-        generatingRef.current = false;
         if (!cancelled) setReportLoading(false);
       }
     })();
@@ -230,7 +228,7 @@ export default function NeighborhoodPage() {
   }, [blockRadius, pinnedLocation]);
 
   const handleGenerateReport = useCallback(async (language: string) => {
-    if (!selectedCommunity || !metrics) return;
+    if (!selectedCommunity || !metrics || reportLoading) return;
 
     const anchor = selectedAnchor ?? {
       id: '',
@@ -262,7 +260,7 @@ export default function NeighborhoodPage() {
     } finally {
       setReportLoading(false);
     }
-  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
+  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap, reportLoading]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">
