@@ -113,8 +113,10 @@ app.get('/api/cron/purge-cache', async (req, res) => {
   }
   const authHeader = req.headers.authorization ?? '';
   const expected = `Bearer ${cronSecret}`;
-  const headersMatch = authHeader.length === expected.length &&
-    timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+  const authBuf = Buffer.from(authHeader);
+  const expectedBuf = Buffer.from(expected);
+  const headersMatch = authBuf.length === expectedBuf.length &&
+    timingSafeEqual(authBuf, expectedBuf);
   if (!headersMatch) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
