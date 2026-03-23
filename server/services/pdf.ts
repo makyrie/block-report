@@ -212,7 +212,7 @@ svg { display: inline-block; vertical-align: middle; }
  * Build a full HTML page with pre-compiled CSS for the flyer.
  * Loads only the Google Fonts family needed for the target language.
  */
-function buildHtmlPage(bodyHtml: string, language: string): string {
+export function buildHtmlPage(bodyHtml: string, language: string): string {
   const isRtl = language === 'Arabic';
   const dir = isRtl ? 'rtl' : 'ltr';
   const fontUrl = getFontUrl(language);
