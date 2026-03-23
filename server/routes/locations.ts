@@ -13,11 +13,25 @@ const cachedTransitStops = createCachedComputation(
   CACHE_TTL,
 );
 
+const cachedLibraries = createCachedComputation(
+  () => prisma.library.findMany({
+    select: { objectid: true, name: true, address: true, city: true, zip: true, phone: true, website: true, lat: true, lng: true },
+  }),
+  CACHE_TTL,
+);
+
+const cachedRecCenters = createCachedComputation(
+  () => prisma.recCenter.findMany({
+    select: { objectid: true, rec_bldg: true, park_name: true, address: true, zip: true, neighborhd: true, lat: true, lng: true },
+  }),
+  CACHE_TTL,
+);
+
 const router = Router();
 
 router.get('/libraries', async (_req, res) => {
   try {
-    const data = await prisma.library.findMany();
+    const data = await cachedLibraries.get();
     res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json(data);
   } catch (err) {
@@ -28,7 +42,7 @@ router.get('/libraries', async (_req, res) => {
 
 router.get('/rec-centers', async (_req, res) => {
   try {
-    const data = await prisma.recCenter.findMany();
+    const data = await cachedRecCenters.get();
     res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json(data);
   } catch (err) {
