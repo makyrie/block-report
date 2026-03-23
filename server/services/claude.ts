@@ -4,34 +4,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
+import { validateReportShape } from '../utils/report-validation.js';
+
+// Re-export for any existing consumers
+export { validateReportShape };
 
 const MAX_RECURSION_DEPTH = 10;
-
-/** Runtime validation for Claude tool_use response shape before type assertion */
-export function validateReportShape(input: unknown): asserts input is Omit<import('../../src/types/index.js').CommunityReport, 'generatedAt'> {
-  if (typeof input !== 'object' || input === null) {
-    throw new Error('Claude response is not an object');
-  }
-  const obj = input as Record<string, unknown>;
-  if (typeof obj.neighborhoodName !== 'string') {
-    throw new Error('Claude response missing neighborhoodName string');
-  }
-  if (typeof obj.summary !== 'string') {
-    throw new Error('Claude response missing summary string');
-  }
-  if (!Array.isArray(obj.goodNews)) {
-    throw new Error('Claude response missing goodNews array');
-  }
-  if (!Array.isArray(obj.topIssues)) {
-    throw new Error('Claude response missing topIssues array');
-  }
-  if (!Array.isArray(obj.howToParticipate)) {
-    throw new Error('Claude response missing howToParticipate array');
-  }
-  if (typeof obj.contactInfo !== 'object' || obj.contactInfo === null) {
-    throw new Error('Claude response missing contactInfo object');
-  }
-}
 
 /** Strip any string values longer than maxLen and remove control characters */
 export function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
