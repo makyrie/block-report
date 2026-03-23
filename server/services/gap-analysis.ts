@@ -110,10 +110,11 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
 
   const censusRows = await fetchCensusData();
 
-  const [engagementRates, transitScores] = await Promise.all([
-    fetchEngagementRates(censusRows),
-    getTransitScoreValues(),
-  ]);
+  // Serialize DB-heavy queries to avoid exhausting the max:2 connection pool.
+  // fetchEngagementRates and getTransitScoreValues each need a DB connection;
+  // running them in parallel would leave no connections for other requests.
+  const engagementRates = await fetchEngagementRates(censusRows);
+  const transitScores = await getTransitScoreValues();
   const nonEnglishPcts = computeNonEnglishPct(censusRows);
 
   // Collect all known communities
