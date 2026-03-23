@@ -132,4 +132,18 @@ app.get('/api/cron/purge-cache', async (req, res) => {
   }
 });
 
+// Global error handler — catches unhandled errors from any route and returns
+// a consistent JSON response instead of Express's default HTML error page.
+// The 4-parameter signature tells Express this is an error-handling middleware.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error('Unhandled error', {
+    error: err.message,
+    path: req.originalUrl,
+    method: req.method,
+    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+  });
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 export default app;
