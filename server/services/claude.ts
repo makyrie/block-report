@@ -13,7 +13,7 @@ function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
     throw new Error(`Object nesting too deep (max ${MAX_RECURSION_DEPTH} levels)`);
   }
   if (typeof obj === 'string') {
-    return obj.slice(0, maxLen).replace(/[\x00-\x1f\x7f]/g, '');
+    return obj.slice(0, maxLen).replace(/[\x00-\x1f\x7f]/g, '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   if (Array.isArray(obj)) {
     return obj.slice(0, 50).map(item => sanitizeStringFields(item, maxLen, depth + 1));

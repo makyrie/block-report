@@ -217,8 +217,13 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       }
     }
 
-    // Run cache lookup and rate limit check in parallel to save a DB round trip
     const anchorCacheId = anchor.id || anchor.name;
+    if (!anchorCacheId) {
+      res.status(400).json({ error: 'anchor must have a non-empty id or name' });
+      return;
+    }
+
+    // Run cache lookup and rate limit check in parallel to save a DB round trip
     const [cached, rateLimited] = await Promise.all([
       getCachedBlockReport(anchorCacheId, language),
       isGenerationRateLimited(),
