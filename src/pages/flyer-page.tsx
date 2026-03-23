@@ -7,6 +7,7 @@ import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
 import { get311, getDemographics, getPreGeneratedReport, generateReport } from '../api/client';
 import type { CommunityReport, NeighborhoodProfile } from '../types';
+import { DEFAULT_TRANSIT } from '../utils/defaults';
 
 export default function FlyerPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -62,7 +63,7 @@ export default function FlyerPage() {
         communityName: community,
         anchor: { id: '', name: community, type: 'library', lat: 0, lng: 0, address: '', community },
         metrics,
-        transit: { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
+        transit: DEFAULT_TRANSIT,
         demographics: { topLanguages },
         accessGap: null,
       };
