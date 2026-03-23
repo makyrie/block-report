@@ -1,12 +1,13 @@
 // Shared community name normalization and validation for server routes
 
 /**
- * Canonical key for community lookups. All server-side maps use UPPERCASE keys.
+ * Canonical key for community lookups. Strips non-alphanumeric characters and
+ * uppercases for consistent matching across data sources (311, transit, census).
  * Frontend uses its own norm() (lowercase) for display matching — that's fine
  * because the two domains don't share lookup maps directly.
  */
 export function communityKey(name: string): string {
-  return name.toUpperCase().trim();
+  return name.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
 }
 
 /**
