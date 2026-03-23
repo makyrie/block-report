@@ -26,32 +26,40 @@ export function useCommunityData(selectedCommunity: string | null): CommunityDat
       return;
     }
 
+    let cancelled = false;
+    const controller = new AbortController();
+
     setMetricsLoading(true);
     setMetrics(null);
     setTopLanguages([]);
     setTransitScore(null);
     setAccessGap(null);
 
-    get311(selectedCommunity)
-      .then(setMetrics)
-      .catch(console.error)
-      .finally(() => setMetricsLoading(false));
+    get311(selectedCommunity, controller.signal)
+      .then((data) => { if (!cancelled) setMetrics(data); })
+      .catch((err) => { if (!cancelled && err?.name !== 'AbortError') console.error(err); })
+      .finally(() => { if (!cancelled) setMetricsLoading(false); });
 
-    getTransitScore(selectedCommunity)
-      .then(setTransitScore)
+    getTransitScore(selectedCommunity, controller.signal)
+      .then((data) => { if (!cancelled) setTransitScore(data); })
       .catch(() => { /* transit score may not be available */ });
 
-    getAccessGap(selectedCommunity)
-      .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
+    getAccessGap(selectedCommunity, controller.signal)
+      .then((data) => { if (!cancelled && data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
-    getDemographics(selectedCommunity)
+    getDemographics(selectedCommunity, controller.signal)
       .then((data) => {
-        if (data?.topLanguages) setTopLanguages(data.topLanguages);
+        if (!cancelled && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
       .catch(() => {
         // Demographics may not be available for all communities
       });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [selectedCommunity]);
 
   return { metrics, metricsLoading, topLanguages, transitScore, accessGap };
