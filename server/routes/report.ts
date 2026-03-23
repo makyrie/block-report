@@ -3,9 +3,12 @@ import type { Request, Response } from 'express';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited } from '../services/report-cache.js';
+import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited, recordGenerationAttempt } from '../services/report-cache.js';
 
 const router = Router();
+
+/** Server-side language allowlist — prevents prompt injection via arbitrary language strings */
+const ALLOWED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
 
 // GET /api/report?community={name}&language={lang} — cached community report
 // GET /api/report?lat=X&lng=Y&radius=Z&language=L — cached block-level report (by anchor ID)
@@ -63,8 +66,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'profile must be an object with a communityName string' });
       return;
     }
-    if (typeof language !== 'string' || !language || language.length > 50) {
-      res.status(400).json({ error: 'language must be a non-empty string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !ALLOWED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
       return;
     }
 
@@ -82,6 +85,9 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
+
+    // Record attempt before calling Claude — counts toward rate limit even if generation fails
+    recordGenerationAttempt();
 
     // Fall back to on-demand generation
     logger.info('No pre-generated report found, generating on-demand', {
@@ -132,8 +138,18 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
       }
     }
-    if (typeof language !== 'string' || language.length > 50) {
-      res.status(400).json({ error: 'language must be a string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !ALLOWED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
+      return;
+    }
+
+    // Validate blockMetrics shape to prevent malformed input from reaching Claude
+    if (typeof blockMetrics !== 'object' || blockMetrics === null) {
+      res.status(400).json({ error: 'blockMetrics must be an object' });
+      return;
+    }
+    if (typeof blockMetrics.totalRequests !== 'number' || typeof blockMetrics.openCount !== 'number') {
+      res.status(400).json({ error: 'blockMetrics must contain numeric totalRequests and openCount fields' });
       return;
     }
 
@@ -152,6 +168,8 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
+
+    recordGenerationAttempt();
 
     logger.info('Generating block report on-demand', {
       anchor: anchor.name,

@@ -166,8 +166,34 @@ export async function saveCachedBlockReport(anchorId: string, language: string, 
 const GENERATION_RATE_LIMIT = 20; // max reports per window
 const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
+/**
+ * In-memory generation attempt tracker — counts attempts, not just successful cache writes.
+ * Closes the gap where failed Claude API calls don't increment the DB-backed count,
+ * preventing cost exposure from repeated failing requests.
+ */
+const attemptTimestamps: number[] = [];
+
+export function recordGenerationAttempt(): void {
+  const cutoff = Date.now() - GENERATION_RATE_WINDOW_MS;
+  // Evict expired entries
+  while (attemptTimestamps.length > 0 && attemptTimestamps[0] < cutoff) {
+    attemptTimestamps.shift();
+  }
+  attemptTimestamps.push(Date.now());
+}
+
 export async function isGenerationRateLimited(): Promise<boolean> {
   try {
+    // Check in-memory attempts first — catches failed generations that never wrote to DB
+    const cutoff = Date.now() - GENERATION_RATE_WINDOW_MS;
+    while (attemptTimestamps.length > 0 && attemptTimestamps[0] < cutoff) {
+      attemptTimestamps.shift();
+    }
+    if (attemptTimestamps.length >= GENERATION_RATE_LIMIT) {
+      return true;
+    }
+
+    // Also check DB — catches attempts from other serverless instances
     const count = await strategy.countRecent(GENERATION_RATE_WINDOW_MS);
     return count >= GENERATION_RATE_LIMIT;
   } catch (err) {
