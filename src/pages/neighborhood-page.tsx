@@ -84,7 +84,6 @@ export default function NeighborhoodPage() {
     selectedCommunity,
     reportLang,
     buildProfile,
-    metrics,
   );
 
   // --- Event handlers ---

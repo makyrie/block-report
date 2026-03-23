@@ -16,7 +16,6 @@ export function useReport(
   selectedCommunity: string | null,
   reportLang: string,
   buildProfile: () => NeighborhoodProfile | null,
-  _metrics?: NeighborhoodProfile['metrics'] | null,
 ): ReportState {
   const [report, setReport] = useState<CommunityReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
