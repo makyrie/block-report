@@ -19,8 +19,8 @@ router.get('/', async (req: Request, res: Response) => {
       const anchorId = req.query.anchorId as string;
       const language = (req.query.language as string) || 'en';
 
-      if (!anchorId) {
-        res.status(400).json({ error: 'Missing required query parameter: anchorId' });
+      if (!anchorId || anchorId.length > 200) {
+        res.status(400).json({ error: 'anchorId must be a non-empty string of 200 characters or fewer' });
         return;
       }
 
@@ -50,7 +50,7 @@ router.get('/', async (req: Request, res: Response) => {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error('Report lookup error', { error: message, stack: error instanceof Error ? error.stack : undefined });
+    logger.error('Report lookup error', { error: message, ...(process.env.NODE_ENV !== 'production' && { stack: error instanceof Error ? error.stack : undefined }) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -110,7 +110,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Report generation error', {
       error: message,
-      stack: error instanceof Error ? error.stack : undefined,
+      ...(process.env.NODE_ENV !== 'production' && { stack: error instanceof Error ? error.stack : undefined }),
     });
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -188,7 +188,7 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Block report generation error', {
       error: message,
-      stack: error instanceof Error ? error.stack : undefined,
+      ...(process.env.NODE_ENV !== 'production' && { stack: error instanceof Error ? error.stack : undefined }),
     });
     res.status(500).json({ error: 'Internal server error' });
   }

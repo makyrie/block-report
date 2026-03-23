@@ -43,7 +43,7 @@ export function PrintFlyerFab({ visible }: PrintFlyerFabProps) {
           hover:scale-105 hover:shadow-xl hover:shadow-orange-500/30
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2
           disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100
-          ${!hasInteracted ? 'motion-safe:animate-pulse' : ''}
+          ${!hasInteracted ? 'motion-safe:animate-[pulse_2s_ease-in-out_3]' : ''}
         `}
       >
         <PrinterIcon />
@@ -61,7 +61,7 @@ export function PrintFlyerFab({ visible }: PrintFlyerFabProps) {
           no-print md:hidden fixed bottom-[49px] inset-x-0 z-[900]
           border-t border-orange-200 bg-gradient-to-r from-amber-500 to-orange-500
           px-4 py-2.5
-          ${!hasInteracted ? 'motion-safe:animate-pulse' : ''}
+          ${!hasInteracted ? 'motion-safe:animate-[pulse_2s_ease-in-out_3]' : ''}
         `}
       >
         <button
