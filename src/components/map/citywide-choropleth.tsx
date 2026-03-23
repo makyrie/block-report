@@ -49,6 +49,7 @@ export default function CitywideChoropleth({
 }: CitywideChoroplethProps) {
   const { t, lang } = useLanguage();
   const geoJsonRef = useRef<L.GeoJSON | null>(null);
+  const prevHoveredRef = useRef<L.Layer | null>(null);
 
   // Build a lookup map: normalized community name → ranking data
   const scoreMap = useMemo(() => {
@@ -100,19 +101,36 @@ export default function CitywideChoropleth({
       layer.bindTooltip(tooltipContent, { sticky: true, direction: 'top' });
 
       layer.on({
-        mouseover: () => onHoverCommunity(displayName),
-        mouseout: () => onHoverCommunity(null),
+        mouseover: () => {
+          // Track hovered layer for targeted restyle (avoids restyling all ~100 polygons)
+          prevHoveredRef.current = layer;
+          onHoverCommunity(displayName);
+        },
+        mouseout: () => {
+          prevHoveredRef.current = null;
+          onHoverCommunity(null);
+        },
         click: () => onClickCommunity(displayName),
       });
     },
     [getScore, onHoverCommunity, onClickCommunity, t],
   );
 
-  // Update styles when hoveredCommunity changes without remounting GeoJSON
+  // Update only the hovered/unhovered layers instead of restyling all ~100 polygons
+  const prevHoveredLayerRef = useRef<L.Layer | null>(null);
   useEffect(() => {
-    if (geoJsonRef.current) {
-      geoJsonRef.current.setStyle(style);
+    if (!geoJsonRef.current) return;
+    // Reset the previously hovered layer to default style
+    const prev = prevHoveredLayerRef.current;
+    if (prev && 'feature' in prev && 'setStyle' in prev) {
+      (prev as L.Path).setStyle(style((prev as unknown as { feature: Feature }).feature));
     }
+    // Apply hover style to the newly hovered layer
+    const curr = prevHoveredRef.current;
+    if (curr && 'feature' in curr && 'setStyle' in curr) {
+      (curr as L.Path).setStyle(style((curr as unknown as { feature: Feature }).feature));
+    }
+    prevHoveredLayerRef.current = curr;
   }, [hoveredCommunity, style]);
 
   // Use a stable key based on ranking data to avoid remounting on hover

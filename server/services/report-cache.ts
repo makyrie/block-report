@@ -6,18 +6,11 @@ import type { CommunityReport } from '../../src/types/index.js';
 import { isVercel } from '../env.js';
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
+import { normalizeKey } from '../utils/community.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-/**
- * Shared key normalization — single source of truth for cache key generation.
- * Exported so route handlers can reuse it instead of duplicating the logic.
- */
-export function normalizeKey(value: string): string {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
 
 // ---------------------------------------------------------------------------
 // Cache strategy abstraction — eliminates isVercel branching in every function

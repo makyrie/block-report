@@ -52,6 +52,12 @@ router.get('/', async (req, res) => {
 
   // Single tract lookup
   if (tract) {
+    // Validate tract format: Census tracts are numeric strings up to 11 digits (state+county+tract)
+    if (!/^\d{1,11}$/.test(tract)) {
+      res.status(400).json({ error: 'Invalid tract format' });
+      return;
+    }
+
     try {
       const data = await prisma.censusLanguage.findUnique({ where: { tract } });
       if (!data) {

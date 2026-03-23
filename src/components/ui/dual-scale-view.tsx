@@ -1,6 +1,7 @@
 import type { BlockMetrics, NeighborhoodProfile } from '../../types';
 import { generateComparisons } from '../../utils/scale-comparisons';
 import type { ScaleComparison } from '../../utils/scale-comparisons';
+import { useLanguage } from '../../i18n/context';
 
 interface DualScaleViewProps {
   blockData: BlockMetrics;
@@ -31,6 +32,7 @@ const calloutDot: Record<ScaleComparison['type'], string> = {
 };
 
 export default function DualScaleView({ blockData, blockRadius, communityName, metrics }: DualScaleViewProps) {
+  const { t } = useLanguage();
   const comparisons = generateComparisons(blockData, metrics, communityName);
 
   return (
@@ -38,7 +40,7 @@ export default function DualScaleView({ blockData, blockRadius, communityName, m
       {/* Block-level header */}
       <div>
         <h2 id="dual-scale-heading" className="text-sm font-semibold text-orange-800">
-          Around Your Pin
+          {t('dualScale.heading')}
         </h2>
         <p className="text-xs text-orange-600">{blockRadius} mi radius</p>
       </div>
@@ -46,20 +48,20 @@ export default function DualScaleView({ blockData, blockRadius, communityName, m
       {/* Stat cards */}
       {blockData.totalRequests === 0 ? (
         <p className="text-sm text-gray-500 italic">
-          No reports found within {blockRadius} mi. Try a larger radius.
+          {t('dualScale.noReports', { radius: String(blockRadius) })}
         </p>
       ) : (
         <>
           <div className="flex gap-2" role="group" aria-label="Block-level statistics">
-            <StatCard value={blockData.openCount} label="Open" />
-            <StatCard value={blockData.resolvedCount} label="Resolved" />
-            <StatCard value={`${Math.round(blockData.resolutionRate * 100)}%`} label="Resolution" />
+            <StatCard value={blockData.openCount} label={t('dualScale.open')} />
+            <StatCard value={blockData.resolvedCount} label={t('dualScale.resolved')} />
+            <StatCard value={`${Math.round(blockData.resolutionRate * 100)}%`} label={t('dualScale.resolution')} />
           </div>
 
           {/* Top issues (compact) */}
           {blockData.topIssues.length > 0 && (
             <p className="text-xs text-gray-600">
-              <span className="font-medium text-gray-700">Top issues:</span>{' '}
+              <span className="font-medium text-gray-700">{t('dualScale.topIssues')}</span>{' '}
               {blockData.topIssues.slice(0, 3).map((issue, i) => (
                 <span key={issue.category}>
                   {issue.category} ({issue.count}){i < Math.min(blockData.topIssues.length, 3) - 1 ? ', ' : ''}
@@ -74,7 +76,7 @@ export default function DualScaleView({ blockData, blockRadius, communityName, m
       {comparisons.length > 0 && (
         <div className="space-y-2" role="region" aria-label="Block vs neighborhood comparisons">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            Comparisons
+            {t('dualScale.comparisons')}
           </h3>
           <ul className="space-y-1.5">
             {comparisons.map((comparison, i) => (
