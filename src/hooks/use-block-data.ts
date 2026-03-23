@@ -8,13 +8,13 @@ export function useBlockData(pinnedLocation: { lat: number; lng: number } | null
 
   useEffect(() => {
     if (!pinnedLocation) return;
-    let cancelled = false;
+    const controller = new AbortController();
     setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
-      .then((data) => { if (!cancelled) setBlockData(data); })
-      .catch((err) => { if (!cancelled) console.error('Failed to fetch block data', err); })
-      .finally(() => { if (!cancelled) setBlockLoading(false); });
-    return () => { cancelled = true; };
+    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
+      .then((data) => { if (!controller.signal.aborted) setBlockData(data); })
+      .catch((err) => { if (!controller.signal.aborted) console.error('Failed to fetch block data', err); })
+      .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
+    return () => { controller.abort(); };
   }, [blockRadius, pinnedLocation]);
 
   return { blockData, setBlockData, blockLoading };

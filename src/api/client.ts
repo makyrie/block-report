@@ -8,24 +8,30 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;
     try {
-      const body = await res.json();
-      if (body.error) message = body.error;
+      const ct = res.headers.get('content-type') ?? '';
+      if (ct.includes('application/json')) {
+        const body = await res.json();
+        if (body.error) message = body.error;
+      } else {
+        const text = await res.text();
+        if (text) message = text.slice(0, 200);
+      }
     } catch { /* use default message */ }
     throw new Error(message);
   }
   return res.json() as Promise<T>;
 }
 
-export function getLibraries(): Promise<CommunityAnchor[]> {
-  return fetchJSON(`${BASE}/locations/libraries`);
+export function getLibraries(signal?: AbortSignal): Promise<CommunityAnchor[]> {
+  return fetchJSON(`${BASE}/locations/libraries`, signal ? { signal } : undefined);
 }
 
-export function getRecCenters(): Promise<CommunityAnchor[]> {
-  return fetchJSON(`${BASE}/locations/rec-centers`);
+export function getRecCenters(signal?: AbortSignal): Promise<CommunityAnchor[]> {
+  return fetchJSON(`${BASE}/locations/rec-centers`, signal ? { signal } : undefined);
 }
 
-export function getTransitStops(): Promise<TransitStop[]> {
-  return fetchJSON(`${BASE}/locations/transit-stops`);
+export function getTransitStops(signal?: AbortSignal): Promise<TransitStop[]> {
+  return fetchJSON(`${BASE}/locations/transit-stops`, signal ? { signal } : undefined);
 }
 
 let boundaryPromise: Promise<FeatureCollection> | null = null;
@@ -46,20 +52,20 @@ export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
   return boundaryPromise;
 }
 
-export function getTransitScore(community: string): Promise<NeighborhoodProfile['transit']> {
-  return fetchJSON(`${BASE}/transit?community=${encodeURIComponent(community)}`);
+export function getTransitScore(community: string, signal?: AbortSignal): Promise<NeighborhoodProfile['transit']> {
+  return fetchJSON(`${BASE}/transit?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
-export function get311(community: string): Promise<NeighborhoodProfile['metrics']> {
-  return fetchJSON(`${BASE}/311?community=${encodeURIComponent(community)}`);
+export function get311(community: string, signal?: AbortSignal): Promise<NeighborhoodProfile['metrics']> {
+  return fetchJSON(`${BASE}/311?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
-export function getDemographics(tractOrCommunity: string): Promise<NeighborhoodProfile['demographics']> {
-  return fetchJSON(`${BASE}/demographics?community=${encodeURIComponent(tractOrCommunity)}`);
+export function getDemographics(tractOrCommunity: string, signal?: AbortSignal): Promise<NeighborhoodProfile['demographics']> {
+  return fetchJSON(`${BASE}/demographics?community=${encodeURIComponent(tractOrCommunity)}`, signal ? { signal } : undefined);
 }
 
-export function getAccessGap(community: string): Promise<NonNullable<NeighborhoodProfile['accessGap']>> {
-  return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`);
+export function getAccessGap(community: string, signal?: AbortSignal): Promise<NonNullable<NeighborhoodProfile['accessGap']>> {
+  return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
 export function getCitywideGaps(signal?: AbortSignal): Promise<{
@@ -69,8 +75,8 @@ export function getCitywideGaps(signal?: AbortSignal): Promise<{
   return fetchJSON(`${BASE}/access-gap/ranking?limit=0`, signal ? { signal } : undefined);
 }
 
-export function getBlockData(lat: number, lng: number, radius = 0.25): Promise<BlockMetrics> {
-  return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`);
+export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: AbortSignal): Promise<BlockMetrics> {
+  return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`, signal ? { signal } : undefined);
 }
 
 export async function getPreGeneratedReport(community: string, language: string): Promise<CommunityReport | null> {
@@ -81,11 +87,12 @@ export async function getPreGeneratedReport(community: string, language: string)
   }
 }
 
-export function generateReport(profile: NeighborhoodProfile, language: string): Promise<CommunityReport> {
+export function generateReport(profile: NeighborhoodProfile, language: string, signal?: AbortSignal): Promise<CommunityReport> {
   return fetchJSON(`${BASE}/report/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile, language }),
+    ...(signal && { signal }),
   });
 }
 

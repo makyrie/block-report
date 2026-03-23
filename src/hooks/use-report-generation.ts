@@ -71,12 +71,13 @@ export function useReportGeneration({
     // Gate on metrics being available to avoid redundant API calls (#009)
     if (!metrics) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
+    const { signal } = controller;
     setReportLoading(true);
 
     (async () => {
       const cached = await getPreGeneratedReport(selectedCommunity, reportLang);
-      if (cancelled) return;
+      if (signal.aborted) return;
 
       if (cached) {
         setReport(cached);
@@ -94,18 +95,18 @@ export function useReportGeneration({
       const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
 
       try {
-        const result = await apiGenerateReport(profile, reportLang);
-        if (!cancelled) setReport(result);
+        const result = await apiGenerateReport(profile, reportLang, signal);
+        if (!signal.aborted) setReport(result);
       } catch (err) {
-        if (!cancelled) setReportError(err instanceof Error ? err.message : 'Failed to generate report');
+        if (!signal.aborted) setReportError(err instanceof Error ? err.message : 'Failed to generate report');
       } finally {
         generatingRef.current = false;
-        if (!cancelled) setReportLoading(false);
+        if (!signal.aborted) setReportLoading(false);
       }
     })();
 
     return () => {
-      cancelled = true;
+      controller.abort();
       generatingRef.current = false;
     };
   // Intentionally omitting selectedAnchor, transitScore, topLanguages, accessGap —

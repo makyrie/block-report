@@ -27,20 +27,20 @@ export function useCommunityMetrics(selectedCommunity: string | null) {
     setTransitScore(null);
     setAccessGap(null);
 
-    get311(selectedCommunity)
+    get311(selectedCommunity, signal)
       .then((data) => { if (!signal.aborted) setMetrics(data); })
       .catch((err) => { if (!signal.aborted) console.error(err); })
       .finally(() => { if (!signal.aborted) setMetricsLoading(false); });
 
-    getTransitScore(selectedCommunity)
+    getTransitScore(selectedCommunity, signal)
       .then((data) => { if (!signal.aborted) setTransitScore(data); })
       .catch(() => { /* transit score may not be available */ });
 
-    getAccessGap(selectedCommunity)
+    getAccessGap(selectedCommunity, signal)
       .then((data) => { if (!signal.aborted && data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
-    getDemographics(selectedCommunity)
+    getDemographics(selectedCommunity, signal)
       .then((data) => {
         if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
