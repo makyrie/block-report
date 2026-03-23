@@ -48,6 +48,19 @@ function sanitizeBlockMetrics(metrics: BlockMetrics): BlockMetrics {
   if (typeof metrics.totalRequests !== 'number' || typeof metrics.radiusMiles !== 'number') {
     throw new Error('blockMetrics.totalRequests and radiusMiles must be numbers');
   }
+  // Validate remaining numeric fields to prevent type confusion
+  for (const key of ['openCount', 'resolvedCount', 'resolutionRate', 'avgDaysToResolve'] as const) {
+    if (key in metrics && metrics[key as keyof BlockMetrics] != null && typeof metrics[key as keyof BlockMetrics] !== 'number') {
+      throw new Error(`blockMetrics.${key} must be a number`);
+    }
+  }
+  // Validate topIssues and recentlyResolved arrays contain expected shapes
+  if (metrics.topIssues && !Array.isArray(metrics.topIssues)) {
+    throw new Error('blockMetrics.topIssues must be an array');
+  }
+  if (metrics.recentlyResolved && !Array.isArray(metrics.recentlyResolved)) {
+    throw new Error('blockMetrics.recentlyResolved must be an array');
+  }
   return sanitizeStringFields(metrics) as BlockMetrics;
 }
 
@@ -58,6 +71,18 @@ function sanitizeDemographics(demographics: { topLanguages: { language: string; 
   }
   if (!Array.isArray(demographics.topLanguages)) {
     throw new Error('demographics.topLanguages must be an array');
+  }
+  // Validate each language entry has expected types
+  for (const entry of demographics.topLanguages) {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('Each topLanguages entry must be an object');
+    }
+    if (typeof entry.language !== 'string') {
+      throw new Error('topLanguages[].language must be a string');
+    }
+    if (typeof entry.percentage !== 'number' || entry.percentage < 0 || entry.percentage > 100) {
+      throw new Error('topLanguages[].percentage must be a number between 0 and 100');
+    }
   }
   return sanitizeStringFields(demographics) as typeof demographics;
 }
