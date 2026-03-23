@@ -7,7 +7,9 @@ const router = Router();
 
 router.get('/libraries', async (_req, res) => {
   try {
-    const data = await prisma.library.findMany();
+    const data = await prisma.library.findMany({
+      select: { objectid: true, name: true, address: true, lat: true, lng: true, phone: true, website: true },
+    });
     res.json(data);
   } catch (err) {
     logger.error('Failed to fetch libraries', { error: err instanceof Error ? err.message : String(err) });
@@ -17,7 +19,9 @@ router.get('/libraries', async (_req, res) => {
 
 router.get('/rec-centers', async (_req, res) => {
   try {
-    const data = await prisma.recCenter.findMany();
+    const data = await prisma.recCenter.findMany({
+      select: { objectid: true, park_name: true, address: true, lat: true, lng: true, neighborhd: true },
+    });
     res.json(data);
   } catch (err) {
     logger.error('Failed to fetch rec centers', { error: err instanceof Error ? err.message : String(err) });
