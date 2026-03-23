@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../../i18n/context';
 
 interface PrintFlyerFabProps {
@@ -10,6 +10,13 @@ export function PrintFlyerFab({ visible }: PrintFlyerFabProps) {
   const [hasInteracted, setHasInteracted] = useState(false);
   const [printing, setPrinting] = useState(false);
 
+  const handleAfterPrint = useCallback(() => setPrinting(false), []);
+
+  useEffect(() => {
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
+  }, [handleAfterPrint]);
+
   if (!visible) return null;
 
   const handleClick = () => {
@@ -17,7 +24,6 @@ export function PrintFlyerFab({ visible }: PrintFlyerFabProps) {
     setHasInteracted(true);
     setPrinting(true);
     window.print();
-    setTimeout(() => setPrinting(false), 1000);
   };
 
   return (
