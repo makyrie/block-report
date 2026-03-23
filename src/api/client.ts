@@ -89,6 +89,28 @@ export function generateReport(profile: NeighborhoodProfile, language: string): 
   });
 }
 
+export async function downloadPdf(
+  report: CommunityReport,
+  neighborhoodSlug: string,
+  metrics?: NeighborhoodProfile['metrics'] | null,
+  topLanguages?: { language: string; percentage: number }[],
+): Promise<Blob> {
+  const res = await fetch(`${BASE}/brief/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report, neighborhoodSlug, metrics, topLanguages }),
+  });
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body.error) message = body.error;
+    } catch { /* use default message */ }
+    throw new Error(message);
+  }
+  return res.blob();
+}
+
 export function getBlockReport(
   lat: number,
   lng: number,
