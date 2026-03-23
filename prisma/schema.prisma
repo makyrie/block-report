@@ -79,6 +79,7 @@ model Request311 {
 
   @@index([comm_plan_name], name: "idx_311_comm_plan")
   @@index([date_requested], name: "idx_311_date")
+  @@index([lat, lng], name: "idx_311_lat_lng")
   @@map("requests_311")
 }
 
