@@ -1,47 +1,6 @@
-import type { FeatureCollection, Geometry, Position } from 'geojson';
-
-/**
- * Ray-casting point-in-polygon test.
- * Returns true if the point (x, y) lies inside the polygon ring.
- */
-function pointInRing(x: number, y: number, ring: Position[]): boolean {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-/**
- * Check if a point is inside a GeoJSON geometry (Polygon or MultiPolygon).
- */
-function pointInGeometry(lng: number, lat: number, geometry: Geometry): boolean {
-  if (geometry.type === 'Polygon') {
-    const [outer, ...holes] = geometry.coordinates;
-    if (!pointInRing(lng, lat, outer)) return false;
-    for (const hole of holes) {
-      if (pointInRing(lng, lat, hole)) return false;
-    }
-    return true;
-  }
-  if (geometry.type === 'MultiPolygon') {
-    for (const polygon of geometry.coordinates) {
-      const [outer, ...holes] = polygon;
-      if (pointInRing(lng, lat, outer)) {
-        let inHole = false;
-        for (const hole of holes) {
-          if (pointInRing(lng, lat, hole)) { inHole = true; break; }
-        }
-        if (!inHole) return true;
-      }
-    }
-  }
-  return false;
-}
+import type { FeatureCollection } from 'geojson';
+import { pointInFeature } from './geo';
+import type { PolygonLike } from './geo';
 
 /**
  * Given a lat/lng and the neighborhoods GeoJSON FeatureCollection,
@@ -55,8 +14,7 @@ export function findCommunityAtPoint(
   for (const feature of boundaries.features) {
     if (!feature.geometry) continue;
     if (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon') continue;
-    if (pointInGeometry(lng, lat, feature.geometry)) {
-      // Try common property names for community name
+    if (pointInFeature(lat, lng, feature.geometry as PolygonLike)) {
       const props = feature.properties;
       if (!props) continue;
       const name = props.cpname || props.community || props.name || props.NAME || props.COMMUNITY;
