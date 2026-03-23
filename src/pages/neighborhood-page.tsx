@@ -49,11 +49,13 @@ export default function NeighborhoodPage() {
 
   useEffect(() => {
     if (!pinnedLocation) return;
+    const controller = new AbortController();
     setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
+    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
       .then(setBlockData)
-      .catch((err) => console.error('Failed to fetch block data', err))
-      .finally(() => setBlockLoading(false));
+      .catch((err) => { if (!controller.signal.aborted) console.error('Failed to fetch block data', err); })
+      .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
+    return () => controller.abort();
   }, [blockRadius, pinnedLocation]);
 
   // --- Report ---
