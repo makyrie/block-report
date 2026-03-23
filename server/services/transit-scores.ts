@@ -6,6 +6,7 @@ import { logger } from '../logger.js';
 import { fetchBoundaries } from './boundaries.js';
 import { pointInFeature, computeBBox, pointInBBox, haversineDistanceMiles, computeCentroid } from '../utils/geo.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
+import { communityKey } from '../utils/community.js';
 
 const CITY_HALL = { lat: 32.7157, lng: -117.1611 };
 const WALKING_SPEED_MPH = 3;
@@ -143,7 +144,7 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
       travelTimeToCityHall = Math.round(walkToStop + transitTime + walkFromStop);
     }
 
-    scores.set(communityName.toUpperCase(), {
+    scores.set(communityKey(communityName), {
       stopCount,
       agencyCount,
       agencies: Array.from(agencies),
