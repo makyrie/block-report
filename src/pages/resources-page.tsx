@@ -58,13 +58,17 @@ export default function ResourcesPage() {
   const [filter, setFilter] = useState('');
 
   useEffect(() => {
-    Promise.all([getLibraries(), getRecCenters()])
+    const controller = new AbortController();
+    Promise.all([getLibraries(controller.signal), getRecCenters(controller.signal)])
       .then(([libs, recs]) => {
-        setLibraries(libs);
-        setRecCenters(recs);
+        if (!controller.signal.aborted) {
+          setLibraries(libs);
+          setRecCenters(recs);
+        }
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch((err) => { if (err?.name !== 'AbortError') console.error(err); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, []);
 
   const neighborhoods = useMemo(() => {

@@ -42,18 +42,18 @@ export function useCommunityData(selectedCommunity: string | null): CommunityDat
 
     getTransitScore(selectedCommunity, controller.signal)
       .then((data) => { if (!cancelled) setTransitScore(data); })
-      .catch(() => { /* transit score may not be available */ });
+      .catch((err) => { if (!cancelled && err?.name !== 'AbortError') console.error('Transit score fetch failed:', err); });
 
     getAccessGap(selectedCommunity, controller.signal)
       .then((data) => { if (!cancelled && data?.accessGapScore != null) setAccessGap(data); })
-      .catch(() => { /* access gap score may not be available */ });
+      .catch((err) => { if (!cancelled && err?.name !== 'AbortError') console.error('Access gap fetch failed:', err); });
 
     getDemographics(selectedCommunity, controller.signal)
       .then((data) => {
         if (!cancelled && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
-      .catch(() => {
-        // Demographics may not be available for all communities
+      .catch((err) => {
+        if (!cancelled && err?.name !== 'AbortError') console.error('Demographics fetch failed:', err);
       });
 
     return () => {

@@ -25,8 +25,6 @@ export interface NeighborhoodProfile {
     goodNews: string[];
   };
   transit: {
-    nearbyStopCount: number;
-    nearestStopDistance: number;
     stopCount: number;
     agencyCount: number;
     agencies: string[];

@@ -62,7 +62,7 @@ export function getCitywideGaps(signal?: AbortSignal): Promise<{
   ranking: CitywideCommunity[];
   summary: { total: number; withGaps: number };
 }> {
-  return fetchJSON(`${BASE}/access-gap/ranking?limit=0`, signal ? { signal } : undefined);
+  return fetchJSON(`${BASE}/access-gap/ranking?limit=all`, signal ? { signal } : undefined);
 }
 
 export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: AbortSignal): Promise<BlockMetrics> {

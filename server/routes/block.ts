@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
-import { haversineDistanceMiles } from '../utils/geo.js';
 
 const router = Router();
 
@@ -34,80 +33,85 @@ router.get('/', async (req, res) => {
   const latDelta = radius / MILES_PER_LAT_DEG;
   const lngDelta = radius / MILES_PER_LNG_DEG;
 
-  let data;
+  // Use Haversine formula in SQL to filter by exact distance and aggregate in the database.
+  // This avoids fetching thousands of rows into Node.js.
+  const R = 3958.8; // Earth radius in miles
+
   try {
-    data = await prisma.request311.findMany({
-      select: {
-        service_name: true,
-        status: true,
-        date_requested: true,
-        date_closed: true,
-        lat: true,
-        lng: true,
-      },
-      where: {
-        lat: { gte: lat - latDelta, lte: lat + latDelta },
-        lng: { gte: lng - lngDelta, lte: lng + lngDelta },
-      },
-      take: 5000,
+    // Aggregate counts and avg resolution time in SQL
+    const [stats] = await prisma.$queryRaw<Array<{
+      total: bigint;
+      open_count: bigint;
+      resolved_count: bigint;
+      avg_days_to_resolve: number | null;
+    }>>`
+      SELECT
+        COUNT(*)::bigint AS total,
+        COUNT(*) FILTER (WHERE status != 'Closed' AND date_closed IS NULL)::bigint AS open_count,
+        COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::bigint AS resolved_count,
+        ROUND(AVG(EXTRACT(EPOCH FROM (date_closed - date_requested)) / 86400)
+          FILTER (WHERE date_requested IS NOT NULL AND date_closed IS NOT NULL)::numeric, 1)
+          AS avg_days_to_resolve
+      FROM request311
+      WHERE lat BETWEEN ${lat - latDelta} AND ${lat + latDelta}
+        AND lng BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}
+        AND (${R} * 2 * ASIN(SQRT(
+            POWER(SIN(RADIANS(lat - ${lat}) / 2), 2) +
+            COS(RADIANS(${lat})) * COS(RADIANS(lat)) * POWER(SIN(RADIANS(lng - ${lng}) / 2), 2)
+          ))) <= ${radius}
+    `;
+
+    // Top issues — grouped in SQL, limited to top 6
+    const topIssues = await prisma.$queryRaw<Array<{ category: string; count: bigint }>>`
+      SELECT COALESCE(service_name, 'Unknown') AS category, COUNT(*)::bigint AS count
+      FROM request311
+      WHERE lat BETWEEN ${lat - latDelta} AND ${lat + latDelta}
+        AND lng BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}
+        AND (${R} * 2 * ASIN(SQRT(
+            POWER(SIN(RADIANS(lat - ${lat}) / 2), 2) +
+            COS(RADIANS(${lat})) * COS(RADIANS(lat)) * POWER(SIN(RADIANS(lng - ${lng}) / 2), 2)
+          ))) <= ${radius}
+      GROUP BY service_name
+      ORDER BY count DESC
+      LIMIT 6
+    `;
+
+    // Recently resolved — only fetch 5 rows
+    const recentlyResolved = await prisma.$queryRaw<Array<{ category: string; date: Date }>>`
+      SELECT COALESCE(service_name, 'Unknown') AS category, date_closed AS date
+      FROM request311
+      WHERE lat BETWEEN ${lat - latDelta} AND ${lat + latDelta}
+        AND lng BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}
+        AND (${R} * 2 * ASIN(SQRT(
+            POWER(SIN(RADIANS(lat - ${lat}) / 2), 2) +
+            COS(RADIANS(${lat})) * COS(RADIANS(lat)) * POWER(SIN(RADIANS(lng - ${lng}) / 2), 2)
+          ))) <= ${radius}
+        AND date_closed IS NOT NULL
+        AND (status = 'Closed' OR date_closed IS NOT NULL)
+      ORDER BY date_closed DESC
+      LIMIT 5
+    `;
+
+    const totalRequests = Number(stats.total);
+    const openCount = Number(stats.open_count);
+    const resolvedCount = Number(stats.resolved_count);
+    const resolutionRate = totalRequests > 0 ? resolvedCount / totalRequests : 0;
+
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+    res.json({
+      totalRequests,
+      openCount,
+      resolvedCount,
+      resolutionRate,
+      avgDaysToResolve: stats.avg_days_to_resolve != null ? Number(stats.avg_days_to_resolve) : null,
+      topIssues: topIssues.map((r) => ({ category: r.category, count: Number(r.count) })),
+      recentlyResolved: recentlyResolved.map((r) => ({ category: r.category, date: r.date.toISOString() })),
+      radiusMiles: radius,
     });
   } catch (err) {
     logger.error('Failed to fetch block data', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
-    return;
   }
-
-  // Refine with exact Haversine distance
-  const nearby = data.filter(
-    (r) => r.lat != null && r.lng != null &&
-      haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= radius,
-  );
-
-  const open = nearby.filter((r) => r.status !== 'Closed' && !r.date_closed);
-  const resolved = nearby.filter((r) => r.status === 'Closed' || r.date_closed);
-
-  // Resolution rate
-  const resolutionRate = nearby.length > 0 ? resolved.length / nearby.length : 0;
-
-  // Average days to resolve
-  let avgDaysToResolve: number | null = null;
-  const resolvedWithDates = resolved.filter((r) => r.date_requested && r.date_closed);
-  if (resolvedWithDates.length > 0) {
-    const totalDays = resolvedWithDates.reduce((sum, r) => {
-      const requested = r.date_requested!.getTime();
-      const closed = r.date_closed!.getTime();
-      return sum + (closed - requested) / (1000 * 60 * 60 * 24);
-    }, 0);
-    avgDaysToResolve = Math.round((totalDays / resolvedWithDates.length) * 10) / 10;
-  }
-
-  // Top issues (full list, sorted)
-  const issueCounts: Record<string, number> = {};
-  for (const r of nearby) {
-    const cat = r.service_name || 'Unknown';
-    issueCounts[cat] = (issueCounts[cat] || 0) + 1;
-  }
-  const topIssues = Object.entries(issueCounts)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 6)
-    .map(([category, count]) => ({ category, count }));
-
-  const recentlyResolved = resolved
-    .filter((r) => r.date_closed)
-    .sort((a, b) => b.date_closed!.getTime() - a.date_closed!.getTime())
-    .slice(0, 5)
-    .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
-
-  res.json({
-    totalRequests: nearby.length,
-    openCount: open.length,
-    resolvedCount: resolved.length,
-    resolutionRate,
-    avgDaysToResolve,
-    topIssues,
-    recentlyResolved,
-    radiusMiles: radius,
-  });
 });
 
 export default router;

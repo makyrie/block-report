@@ -17,7 +17,7 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
  * This ensures cache keys stay consistent with the server-side community lookup maps.
  */
 function normalizeKey(value: string): string {
-  return communityKey(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ const fileStrategy: CacheStrategy = {
     await mkdir(CACHE_DIR, { recursive: true });
     const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
     const tmpPath = filePath + '.tmp';
-    await writeFile(tmpPath, JSON.stringify(report, null, 2), 'utf-8');
+    await writeFile(tmpPath, JSON.stringify(report), 'utf-8');
     await rename(tmpPath, filePath);
   },
 
@@ -174,6 +174,11 @@ const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
  * In-memory generation attempt tracker — counts attempts, not just successful cache writes.
  * Closes the gap where failed Claude API calls don't increment the DB-backed count,
  * preventing cost exposure from repeated failing requests.
+ *
+ * Limitation: resets on serverless cold start. The DB-backed countRecent() check
+ * provides cross-instance protection for successful generations. For failed attempts,
+ * express-rate-limit (also in-memory) provides a first line of defense. Production
+ * deployments should use Vercel WAF or Upstash Redis for durable rate limiting.
  */
 const attemptTimestamps: number[] = [];
 
