@@ -137,6 +137,34 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate blockMetrics structure
+    if (typeof blockMetrics !== 'object' || blockMetrics === null) {
+      res.status(400).json({ error: 'blockMetrics must be an object' });
+      return;
+    }
+    for (const field of ['totalRequests', 'openCount', 'resolvedCount', 'resolutionRate', 'radiusMiles'] as const) {
+      if (typeof blockMetrics[field] !== 'number' || !isFinite(blockMetrics[field])) {
+        res.status(400).json({ error: `blockMetrics.${field} must be a finite number` });
+        return;
+      }
+    }
+    if (!Array.isArray(blockMetrics.topIssues) || !Array.isArray(blockMetrics.recentlyResolved)) {
+      res.status(400).json({ error: 'blockMetrics.topIssues and recentlyResolved must be arrays' });
+      return;
+    }
+
+    // Validate demographics if provided
+    if (demographics !== undefined && demographics !== null) {
+      if (typeof demographics !== 'object') {
+        res.status(400).json({ error: 'demographics must be an object or null' });
+        return;
+      }
+      if (demographics.topLanguages !== undefined && !Array.isArray(demographics.topLanguages)) {
+        res.status(400).json({ error: 'demographics.topLanguages must be an array' });
+        return;
+      }
+    }
+
     // Run cache lookup and rate limit check in parallel to save a DB round trip
     const anchorCacheId = anchor.id || anchor.name;
     const [cached, rateLimited] = await Promise.all([
