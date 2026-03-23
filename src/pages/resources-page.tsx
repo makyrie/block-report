@@ -3,6 +3,16 @@ import { getLibraries, getRecCenters } from '../api/client';
 import { useLanguage } from '../i18n/context';
 import type { CommunityAnchor } from '../types';
 
+/** Only allow http/https URLs to prevent javascript: XSS */
+function safeHref(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 function ResourceCard({ resource }: { resource: CommunityAnchor }) {
   return (
     <div className="p-4 bg-white border border-gray-200 rounded-lg">
@@ -17,10 +27,10 @@ function ResourceCard({ resource }: { resource: CommunityAnchor }) {
           </a>
         </p>
       )}
-      {resource.website && (
+      {resource.website && safeHref(resource.website) && (
         <p className="text-sm mt-1">
           <a
-            href={resource.website}
+            href={safeHref(resource.website)!}
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 hover:underline"

@@ -6,7 +6,17 @@ import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
-import { norm } from '../../utils/community';
+import { norm, escapeHtml } from '../../utils/community';
+
+/** Only allow http/https URLs to prevent javascript: XSS */
+function safeHref(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? url : null;
+  } catch {
+    return null;
+  }
+}
 
 // ── Popup content components ─────────────────────────────────────────────────
 
@@ -60,10 +70,10 @@ function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
           </a>
         </p>
       )}
-      {anchor.website && (
+      {anchor.website && safeHref(anchor.website) && (
         <p className="text-xs mt-0.5">
           <a
-            href={anchor.website}
+            href={safeHref(anchor.website)!}
             target="_blank"
             rel="noreferrer"
             className="text-blue-600 hover:underline"
@@ -73,15 +83,6 @@ function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
           </a>
         </p>
       )}
-    </div>
-  );
-}
-
-function TransitPopupContent({ name }: { name: string }) {
-  return (
-    <div className="min-w-[160px] max-w-[240px]">
-      <TypeBadge type="transit" />
-      <p className="font-semibold text-gray-900 text-sm leading-snug">{name}</p>
     </div>
   );
 }
@@ -246,7 +247,7 @@ function TransitStopsLayer({ stops }: { stops: TransitStop[] }) {
         weight: 1,
       });
       marker.bindPopup(
-        `<div class="min-w-[160px] max-w-[240px]"><div class="flex items-center gap-1.5 mb-2"><span class="w-2.5 h-2.5 rounded-full shrink-0 bg-violet-600" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7c3aed;"></span><span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6d28d9;">Transit Stop</span></div><p style="font-weight:600;color:#111827;font-size:14px;line-height:1.375;">${stop.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p></div>`,
+        `<div class="min-w-[160px] max-w-[240px]"><div class="flex items-center gap-1.5 mb-2"><span class="w-2.5 h-2.5 rounded-full shrink-0 bg-violet-600" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7c3aed;"></span><span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6d28d9;">Transit Stop</span></div><p style="font-weight:600;color:#111827;font-size:14px;line-height:1.375;">${escapeHtml(stop.name)}</p></div>`,
       );
       group.addLayer(marker);
     }
