@@ -89,7 +89,7 @@ Shared files (`src/types/index.ts`, `server/index.ts`, config files) require coo
 ```
 # .env.example
 ANTHROPIC_API_KEY=
-CENSUS_API_KEY=763fa6e6daf21d98f76cfc93e760fe4cb76aa316
+CENSUS_API_KEY=
 PORT=3001
 ```
 
