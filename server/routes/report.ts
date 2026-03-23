@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile } from '../../types/index.js';
+import type { CommunityReport, NeighborhoodProfile } from '../../types/index.js';
 import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited, GENERATION_RATE_WINDOW_MS } from '../services/report-cache.js';
 
 const router = Router();
@@ -11,12 +11,54 @@ const router = Router();
 // On serverless (Vercel), each invocation may have its own process — the DB-backed
 // cache check (getCachedReport) is the primary deduplication; this Map is a best-effort
 // optimization to avoid duplicate Claude API calls within a single warm instance.
-const inFlightGenerations = new Map<string, Promise<import('../../types/index.js').CommunityReport>>();
+const inFlightGenerations = new Map<string, Promise<CommunityReport>>();
 const RETRY_AFTER_SECONDS = Math.ceil(GENERATION_RATE_WINDOW_MS / 1000);
 
 const SUPPORTED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
 const MAX_PROFILE_SIZE = 10_000;
 const MAX_BLOCK_METRICS_SIZE = 5_000;
+
+// ---------------------------------------------------------------------------
+// Shared helpers — deduplicate validation, caching, and coalescing logic
+// ---------------------------------------------------------------------------
+
+function validateLanguage(language: unknown): string | null {
+  if (typeof language !== 'string' || !language || !SUPPORTED_LANGUAGES.has(language)) return null;
+  return language;
+}
+
+/**
+ * Coalesce concurrent generation requests and handle cache save.
+ * Returns the generated (or in-flight) report promise.
+ */
+function coalesceGeneration(
+  key: string,
+  generate: () => Promise<CommunityReport>,
+  saveToCache: (report: CommunityReport) => Promise<void>,
+): Promise<CommunityReport> {
+  let promise = inFlightGenerations.get(key);
+  if (!promise) {
+    promise = generate().then(async (report) => {
+      await saveToCache(report).catch((err) => {
+        logger.error('Failed to cache report, continuing with generated result', {
+          error: err instanceof Error ? err.message : String(err),
+          key,
+        });
+      });
+      return report;
+    });
+    inFlightGenerations.set(key, promise);
+    promise.then(
+      () => inFlightGenerations.delete(key),
+      () => inFlightGenerations.delete(key),
+    );
+  }
+  return promise;
+}
+
+// ---------------------------------------------------------------------------
+// Routes
+// ---------------------------------------------------------------------------
 
 // GET /api/report?community={name}&language={lang} — cached community report
 // GET /api/report?lat=X&lng=Y&radius=Z&language=L — cached block-level report (by anchor ID)
@@ -65,7 +107,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.post('/generate', async (req: Request, res: Response) => {
   try {
-    const { profile, language } = req.body as {
+    const { profile, language: rawLang } = req.body as {
       profile: NeighborhoodProfile;
       language: string;
     };
@@ -74,7 +116,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'profile must be an object with a communityName string' });
       return;
     }
-    if (typeof language !== 'string' || !language || !SUPPORTED_LANGUAGES.has(language)) {
+    const language = validateLanguage(rawLang);
+    if (!language) {
       res.status(400).json({ error: `language must be one of: ${Array.from(SUPPORTED_LANGUAGES).join(', ')}` });
       return;
     }
@@ -98,29 +141,13 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // Coalesce concurrent requests for the same community+language
     const generationKey = `community:${profile.communityName}:${language}`;
-    let reportPromise = inFlightGenerations.get(generationKey);
-    if (!reportPromise) {
-      logger.info('No pre-generated report found, generating on-demand', {
-        community: profile.communityName,
-        language,
-      });
-      reportPromise = generateReport(profile, language).then(async (report) => {
-        // Save to cache but don't let save failures propagate — the report is still valid
-        await saveCachedReport(profile.communityName, language, report).catch((err) => {
-          logger.error('Failed to cache report, continuing with generated result', {
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-        return report;
-      });
-      inFlightGenerations.set(generationKey, reportPromise);
-      // Always clean up the in-flight map, even if generation or cache save fails
-      reportPromise.then(() => inFlightGenerations.delete(generationKey), () => inFlightGenerations.delete(generationKey));
-    }
-
-    const report = await reportPromise;
+    logger.info('Generating report', { community: profile.communityName, language });
+    const report = await coalesceGeneration(
+      generationKey,
+      () => generateReport(profile, language),
+      (r) => saveCachedReport(profile.communityName, language, r),
+    );
     res.json(report);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -135,9 +162,9 @@ router.post('/generate', async (req: Request, res: Response) => {
 // POST /api/report/generate-block — Generate a block-level report for an anchor location
 router.post('/generate-block', async (req: Request, res: Response) => {
   try {
-    const { anchor: rawAnchor, blockMetrics, language, demographics } = req.body;
+    const { anchor: rawAnchor, blockMetrics, language: rawLang, demographics } = req.body;
 
-    if (!rawAnchor || !blockMetrics || !language) {
+    if (!rawAnchor || !blockMetrics || !rawLang) {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;
     }
@@ -162,17 +189,16 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
       }
     }
-    // Validate anchor.id format to prevent cache key collision/poisoning
     if (anchor.id && !ANCHOR_ID_RE.test(anchor.id)) {
       res.status(400).json({ error: 'anchor.id must contain only alphanumeric characters, hyphens, and underscores' });
       return;
     }
-    // Validate anchor.type against allowed enum values
     if (anchor.type && !VALID_ANCHOR_TYPES.has(anchor.type)) {
       res.status(400).json({ error: `anchor.type must be one of: ${Array.from(VALID_ANCHOR_TYPES).join(', ')}` });
       return;
     }
-    if (typeof language !== 'string' || !SUPPORTED_LANGUAGES.has(language)) {
+    const language = validateLanguage(rawLang);
+    if (!language) {
       res.status(400).json({ error: `language must be one of: ${Array.from(SUPPORTED_LANGUAGES).join(', ')}` });
       return;
     }
@@ -180,7 +206,6 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.status(400).json({ error: `blockMetrics payload too large (max ${MAX_BLOCK_METRICS_SIZE} bytes)` });
       return;
     }
-    // Validate demographics if provided
     if (demographics !== undefined && demographics !== null) {
       if (typeof demographics !== 'object' || !Array.isArray(demographics.topLanguages)) {
         res.status(400).json({ error: 'demographics must be an object with a topLanguages array' });
@@ -208,27 +233,13 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       return;
     }
 
-    // Coalesce concurrent requests for the same anchor+language
     const blockGenKey = `block:${anchorCacheId}:${language}`;
-    let blockPromise = inFlightGenerations.get(blockGenKey);
-    if (!blockPromise) {
-      logger.info('Generating block report on-demand', {
-        anchor: anchor.name,
-        language,
-      });
-      blockPromise = generateBlockReport(anchor, blockMetrics, language, demographics).then(async (report) => {
-        await saveCachedBlockReport(anchorCacheId, language, report).catch((err) => {
-          logger.error('Failed to cache block report, continuing with generated result', {
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-        return report;
-      });
-      inFlightGenerations.set(blockGenKey, blockPromise);
-      blockPromise.then(() => inFlightGenerations.delete(blockGenKey), () => inFlightGenerations.delete(blockGenKey));
-    }
-
-    const report = await blockPromise;
+    logger.info('Generating block report', { anchor: anchor.name, language });
+    const report = await coalesceGeneration(
+      blockGenKey,
+      () => generateBlockReport(anchor, blockMetrics, language, demographics),
+      (r) => saveCachedBlockReport(anchorCacheId, language, r),
+    );
     res.json(report);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
