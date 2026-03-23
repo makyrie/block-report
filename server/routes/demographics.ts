@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
+import { validateCommunityParam } from '../utils/community.js';
 
 const router = Router();
 
@@ -43,13 +44,12 @@ function computeTopLanguages(rows: Record<string, unknown>[]) {
 
 // Tract IDs are numeric (state+county+tract), e.g. "06073008346"
 const TRACT_RE = /^\d{6,11}$/;
-const MAX_COMMUNITY_LEN = 100;
 
 router.get('/', async (req, res) => {
   const tract = req.query.tract as string | undefined;
-  const community = req.query.community as string | undefined;
+  const rawCommunity = req.query.community as string | undefined;
 
-  if (!tract && !community) {
+  if (!tract && !rawCommunity) {
     res.status(400).json({ error: 'tract or community query parameter is required' });
     return;
   }
@@ -60,13 +60,11 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  // Validate community parameter
-  if (community) {
-    const cleaned = community.replace(/[%_]/g, '');
-    if (cleaned.length === 0 || cleaned.length > MAX_COMMUNITY_LEN) {
-      res.status(400).json({ error: 'Invalid community parameter' });
-      return;
-    }
+  // Validate community parameter using shared utility
+  const community = rawCommunity ? validateCommunityParam(rawCommunity) : null;
+  if (rawCommunity && !community) {
+    res.status(400).json({ error: 'Invalid community parameter' });
+    return;
   }
 
   // Single tract lookup
