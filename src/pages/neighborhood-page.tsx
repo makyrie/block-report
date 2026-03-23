@@ -13,6 +13,33 @@ import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
 import { findCommunityAtPoint } from '../utils/point-in-polygon';
 
+const DEFAULT_TRANSIT: NeighborhoodProfile['transit'] = {
+  nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0,
+  agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null,
+};
+
+function buildDefaultAnchor(community: string): CommunityAnchor {
+  return { id: '', name: community, type: 'library' as const, lat: 0, lng: 0, address: '', community };
+}
+
+function buildProfile(
+  community: string,
+  anchor: CommunityAnchor | null,
+  metrics: NeighborhoodProfile['metrics'],
+  transitScore: NeighborhoodProfile['transit'] | null,
+  topLanguages: { language: string; percentage: number }[],
+  accessGap: NeighborhoodProfile['accessGap'],
+): NeighborhoodProfile {
+  return {
+    communityName: community,
+    anchor: anchor ?? buildDefaultAnchor(community),
+    metrics,
+    transit: transitScore ?? DEFAULT_TRANSIT,
+    demographics: { topLanguages },
+    accessGap: accessGap ?? null,
+  };
+}
+
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -154,24 +181,7 @@ export default function NeighborhoodPage() {
 
       generatingRef.current = true;
 
-      const anchor = selectedAnchor ?? {
-        id: '',
-        name: selectedCommunity,
-        type: 'library' as const,
-        lat: 0,
-        lng: 0,
-        address: '',
-        community: selectedCommunity,
-      };
-
-      const profile: NeighborhoodProfile = {
-        communityName: selectedCommunity,
-        anchor,
-        metrics,
-        transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-        demographics: { topLanguages },
-        accessGap: accessGap ?? null,
-      };
+      const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
 
       try {
         const result = await generateReport(profile, reportLang);
@@ -188,6 +198,9 @@ export default function NeighborhoodPage() {
       cancelled = true;
       generatingRef.current = false;
     };
+  // Intentionally omitting selectedAnchor, transitScore, topLanguages, accessGap —
+  // report generation should only trigger on community/language/metrics changes.
+  // Secondary data is captured at call time but should not re-trigger generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunity, reportLang, metrics]);
 
@@ -245,24 +258,7 @@ export default function NeighborhoodPage() {
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
-    const anchor = selectedAnchor ?? {
-      id: '',
-      name: selectedCommunity,
-      type: 'library' as const,
-      lat: 0,
-      lng: 0,
-      address: '',
-      community: selectedCommunity,
-    };
-
-    const profile: NeighborhoodProfile = {
-      communityName: selectedCommunity,
-      anchor,
-      metrics,
-      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-      demographics: { topLanguages },
-      accessGap: accessGap ?? null,
-    };
+    const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
 
     setReportLoading(true);
     setReportError(null);
