@@ -54,6 +54,27 @@ async function getLauncher(): Promise<() => Promise<import('puppeteer-core').Bro
   return launchBrowser;
 }
 
+// Reuse browser across warm requests to avoid cold-start cost per PDF
+let _browser: import('puppeteer-core').Browser | null = null;
+
+async function getBrowser(): Promise<import('puppeteer-core').Browser> {
+  if (_browser && _browser.isConnected()) return _browser;
+  const launcher = await getLauncher();
+  _browser = await launcher();
+  return _browser;
+}
+
+// Clean up browser on process exit
+function disposeBrowser() {
+  if (_browser) {
+    _browser.close().catch(() => {});
+    _browser = null;
+  }
+}
+process.on('SIGTERM', disposeBrowser);
+process.on('SIGINT', disposeBrowser);
+process.on('beforeExit', disposeBrowser);
+
 export interface PdfRequest {
   report: CommunityReport;
   neighborhoodSlug: string;
@@ -129,21 +150,20 @@ const PDF_TIMEOUT_MS = 45_000; // 45s internal timeout (Vercel hard limit is 60s
  */
 export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
   const startTime = Date.now();
-  let browser: import('puppeteer-core').Browser | null = null;
+  let page: import('puppeteer-core').Page | null = null;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
     // Race the entire operation against an internal timeout
     const result = await Promise.race([
       (async () => {
-        const launcher = await getLauncher();
-        browser = await launcher();
-        logger.info('Chromium launched', { durationMs: Date.now() - startTime });
+        const browser = await getBrowser();
+        logger.info('Chromium ready', { durationMs: Date.now() - startTime });
 
         const bodyHtml = await renderFlyerHtml(data);
         const fullHtml = buildHtmlPage(bodyHtml, data.report.language);
 
-        const page = await browser.newPage();
+        page = await browser.newPage();
 
         // Restrict network requests to allowlisted domains (prevents SSRF)
         await page.setRequestInterception(true);
@@ -185,11 +205,11 @@ export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
     return result;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
-    if (browser) {
+    if (page) {
       try {
-        await (browser as import('puppeteer-core').Browser).close();
+        await (page as import('puppeteer-core').Page).close();
       } catch (err) {
-        logger.error('Failed to close browser', {
+        logger.error('Failed to close page', {
           error: err instanceof Error ? err.message : String(err),
         });
       }
