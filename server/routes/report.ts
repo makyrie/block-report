@@ -67,7 +67,7 @@ router.get('/', async (req: Request, res: Response) => {
     // Block-level lookup by coordinates — delegate to strategy-based cache
     if (req.query.lat && req.query.lng) {
       const anchorId = req.query.anchorId as string;
-      const language = (req.query.language as string) || 'en';
+      const language = validateLanguage(req.query.language) || 'en';
 
       if (!anchorId) {
         res.status(400).json({ error: 'Missing required query parameter: anchorId' });
@@ -85,7 +85,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Community-level lookup by name
     const community = req.query.community as string;
-    const language = req.query.language as string || 'en';
+    const language = validateLanguage(req.query.language) || 'en';
 
     if (!community) {
       res.status(400).json({ error: 'Missing required query parameter: community' });
