@@ -111,6 +111,10 @@ export default function NeighborhoodPage() {
     setReportError(null);
   }, [selectedCommunity, reportLang]);
 
+  // Track whether we already have a report to avoid stale closure reads
+  const hasReportRef = useRef(false);
+  useEffect(() => { hasReportRef.current = report !== null; }, [report]);
+
   // Auto-fetch pre-generated report, falling back to on-demand generation
   useEffect(() => {
     if (!selectedCommunity) return;
@@ -138,7 +142,7 @@ export default function NeighborhoodPage() {
       }
 
       // Already have a report — don't regenerate on metrics updates
-      if (report) {
+      if (hasReportRef.current) {
         setReportLoading(false);
         return;
       }
@@ -175,7 +179,10 @@ export default function NeighborhoodPage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      generatingRef.current = false;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunity, reportLang, metrics]);
 
