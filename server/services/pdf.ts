@@ -129,6 +129,7 @@ const PDF_TIMEOUT_MS = 45_000; // 45s internal timeout (Vercel hard limit is 60s
 export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
   const startTime = Date.now();
   let browser: import('puppeteer-core').Browser | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
     // Race the entire operation against an internal timeout
@@ -142,6 +143,22 @@ export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
         const fullHtml = buildHtmlPage(bodyHtml, data.report.language);
 
         const page = await browser.newPage();
+
+        // Restrict network requests to allowlisted domains (prevents SSRF)
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+          const url = new URL(req.url());
+          const allowed = [
+            'fonts.googleapis.com',
+            'fonts.gstatic.com',
+            'cdn.tailwindcss.com',
+          ];
+          if (allowed.includes(url.hostname) || url.protocol === 'data:') {
+            req.continue();
+          } else {
+            req.abort();
+          }
+        });
 
         await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 30_000 });
 
@@ -160,12 +177,13 @@ export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
         return Buffer.from(pdfBuffer);
       })(),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('PDF generation timed out')), PDF_TIMEOUT_MS);
+        timeoutId = setTimeout(() => reject(new Error('PDF generation timed out')), PDF_TIMEOUT_MS);
       }),
     ]);
 
     return result;
   } finally {
+    if (timeoutId) clearTimeout(timeoutId);
     if (browser) {
       try {
         await (browser as import('puppeteer-core').Browser).close();

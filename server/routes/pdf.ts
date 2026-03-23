@@ -47,9 +47,9 @@ router.post('/pdf', async (req: Request, res: Response) => {
       baseUrl,
     });
 
-    // Build filename: {slug}-{lang-code}.pdf
+    // Build filename: restrict to safe characters for Content-Disposition header
     const langCode = report.language?.toLowerCase().slice(0, 10) || 'en';
-    const filename = `${sanitizedSlug}-${langCode}.pdf`;
+    const filename = `${sanitizedSlug}-${langCode}`.replace(/[^a-z0-9.-]/g, '-') + '.pdf';
 
     res.set({
       'Content-Type': 'application/pdf',
