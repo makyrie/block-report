@@ -142,7 +142,10 @@ router.get('/', async (req: Request, res: Response) => {
       if (cached) {
         res.json(cached);
       } else {
-        res.status(404).json({ error: 'No cached block report found for this location' });
+        res.status(404).json({
+          error: 'No cached block report found for this location',
+          generateEndpoint: '/api/report/generate-block',
+        });
       }
       return;
     }
