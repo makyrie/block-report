@@ -15,6 +15,8 @@ interface FlyerLayoutProps {
   topLanguages?: { language: string; percentage: number }[];
   /** When true, the flyer is visible on screen (used in preview). Default: hidden (print-only). */
   inline?: boolean;
+  /** Base URL for links and QR codes. Defaults to window.location.origin in browser. Required for SSR. */
+  baseUrl?: string;
 }
 
 /** Truncate text to roughly N sentences. */
@@ -24,14 +26,26 @@ function truncateSentences(text: string, max: number): string {
   return sentences.slice(0, max).join('').trim();
 }
 
-export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, inline = false }: FlyerLayoutProps) {
-  const formattedDate = new Date(report.generatedAt).toLocaleDateString('en-US', {
+/** Map report language names to BCP 47 locale codes for date formatting. */
+const LANGUAGE_TO_LOCALE: Record<string, string> = {
+  English: 'en-US',
+  Spanish: 'es',
+  Vietnamese: 'vi',
+  Tagalog: 'fil',
+  Chinese: 'zh-CN',
+  Arabic: 'ar',
+};
+
+export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, inline = false, baseUrl }: FlyerLayoutProps) {
+  const locale = LANGUAGE_TO_LOCALE[report.language] ?? 'en-US';
+  const formattedDate = new Date(report.generatedAt).toLocaleDateString(locale, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
 
-  const qrUrl = `${window.location.origin}/neighborhood/${neighborhoodSlug}`;
+  const origin = baseUrl ?? (typeof window !== 'undefined' ? window.location.origin : '');
+  const qrUrl = `${origin}/neighborhood/${neighborhoodSlug}`;
 
   const resolutionPct = metrics ? Math.round(metrics.resolutionRate * 100) : null;
   const avgDays = metrics ? Math.round(metrics.avgDaysToResolve) : null;
@@ -43,7 +57,7 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
     .slice(0, 4);
 
   return (
-    <div className={`flyer-layout ${inline ? '' : 'hidden'} text-black font-sans`}>
+    <div dir={report.language === 'Arabic' ? 'rtl' : 'ltr'} className={`flyer-layout ${inline ? '' : 'hidden'} text-black font-sans`}>
 
       {/* ── TOP BANNER ── */}
       <div className="border-b-4 border-black pb-3 mb-4">
@@ -209,7 +223,7 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
             Block Report &mdash; Your neighborhood, your voice
           </p>
           <p className="text-[10px] text-gray-600">
-            Generated {formattedDate} &middot; {window.location.origin}/resources
+            Generated {formattedDate} &middot; {origin}/resources
           </p>
         </div>
         <div className="flex flex-col items-center">
