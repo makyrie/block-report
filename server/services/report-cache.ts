@@ -5,23 +5,20 @@ import type { CommunityReport } from '../../src/types/index.js';
 import { isVercel } from '../env.js';
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
+import { validateReportShape } from './claude.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-/** Validate that a cached JSONB value has the expected CommunityReport shape */
+/** Check whether a cached value has a valid CommunityReport shape */
 function isValidReportShape(data: unknown): data is CommunityReport {
-  if (typeof data !== 'object' || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return (
-    typeof obj.neighborhoodName === 'string' &&
-    typeof obj.summary === 'string' &&
-    Array.isArray(obj.goodNews) &&
-    Array.isArray(obj.topIssues) &&
-    Array.isArray(obj.howToParticipate) &&
-    typeof obj.contactInfo === 'object' && obj.contactInfo !== null
-  );
+  try {
+    validateReportShape(data);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
