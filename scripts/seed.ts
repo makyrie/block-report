@@ -1,7 +1,11 @@
 import { prisma } from '../server/services/db.js';
+import type { PrismaClient } from '@prisma/client';
 import { parse } from 'csv-parse/sync';
 import { toTitleCase, findCommunity, parseCommunityFeatures } from './geo-helpers.js';
 import type { CommunityFeature } from './geo-helpers.js';
+
+// Transaction client has the same shape as PrismaClient for data operations
+type TxClient = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
 // --- Helpers ---
 
@@ -27,7 +31,7 @@ function parseInt_(val: string | undefined): number | null {
 
 // --- Seeders ---
 
-async function seedLibraries() {
+async function seedLibraries(tx: TxClient) {
   console.log('Seeding libraries...');
   const rows = await fetchCsv('https://seshat.datasd.org/gis_library_locations/libraries_datasd.csv');
   const mapped = rows.map((r) => ({
@@ -41,11 +45,11 @@ async function seedLibraries() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const result = await prisma.library.createMany({ data: mapped });
+  const result = await tx.library.createMany({ data: mapped });
   console.log(`  ✓ ${result.count} libraries`);
 }
 
-async function seedRecCenters() {
+async function seedRecCenters(tx: TxClient) {
   console.log('Seeding rec centers...');
   const rows = await fetchCsv('https://seshat.datasd.org/gis_recreation_center/rec_centers_datasd.csv');
   const mapped = rows.map((r) => ({
@@ -63,11 +67,11 @@ async function seedRecCenters() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const result = await prisma.recCenter.createMany({ data: mapped });
+  const result = await tx.recCenter.createMany({ data: mapped });
   console.log(`  ✓ ${result.count} rec centers`);
 }
 
-async function seedTransitStops() {
+async function seedTransitStops(tx: TxClient) {
   console.log('Seeding transit stops...');
   const rows = await fetchCsv('https://seshat.datasd.org/gis_transit_stops/transit_stops_datasd.csv');
   const mapped = rows.map((r) => ({
@@ -86,11 +90,11 @@ async function seedTransitStops() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const result = await prisma.transitStop.createMany({ data: mapped });
+  const result = await tx.transitStop.createMany({ data: mapped });
   console.log(`  ✓ ${result.count} transit stops`);
 }
 
-async function seed311() {
+async function seed311(tx: TxClient) {
   console.log('Seeding 311 requests (last 12 months)...');
 
   const cutoffDate = new Date();
@@ -144,7 +148,7 @@ async function seed311() {
   let inserted = 0;
   for (let i = 0; i < allRows.length; i += batchSize) {
     const batch = allRows.slice(i, i + batchSize);
-    const result = await prisma.request311.createMany({ data: batch });
+    const result = await tx.request311.createMany({ data: batch });
     inserted += result.count;
   }
   console.log(`  ✓ ${inserted} total 311 requests`);
@@ -171,7 +175,7 @@ function mapRequest311(r: Record<string, string>) {
   };
 }
 
-async function seedCensusLanguage() {
+async function seedCensusLanguage(tx: TxClient) {
   console.log('Seeding Census language data...');
 
   const censusKey = process.env.CENSUS_API_KEY;
@@ -210,14 +214,14 @@ async function seedCensusLanguage() {
     other_unspecified: parseInt_(row[11]),
   }));
 
-  const result = await prisma.censusLanguage.createMany({ data: mapped });
+  const result = await tx.censusLanguage.createMany({ data: mapped });
   console.log(`  ✓ ${result.count} Census tracts`);
 
   // Map tracts to communities using centroids + community boundaries
-  await mapTractsToCommunitites(rows);
+  await mapTractsToCommunitites(tx, rows);
 }
 
-async function mapTractsToCommunitites(censusRows: string[][]) {
+async function mapTractsToCommunitites(tx: TxClient, censusRows: string[][]) {
   console.log('Mapping Census tracts to communities...');
 
   // Fetch community boundaries GeoJSON
@@ -267,7 +271,7 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
     const community = findCommunity(centroid.lat, centroid.lng, communities);
     if (!community) continue;
 
-    await prisma.censusLanguage.update({
+    await tx.censusLanguage.update({
       where: { tract },
       data: { community },
     });
@@ -281,6 +285,8 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
 async function main() {
   console.log('Starting seed...\n');
 
+  // Truncate and re-seed inside a single transaction so a failed seed
+  // rolls back the truncate — preventing empty tables on partial failure.
   await prisma.$transaction(async (tx) => {
     console.log('Truncating tables...');
     await tx.$executeRawUnsafe(
@@ -288,16 +294,13 @@ async function main() {
     );
     console.log('  ✓ Tables truncated\n');
 
-    // Note: seed functions use the global prisma client for external fetch + insert.
-    // The TRUNCATE is wrapped in the transaction so a failure rolls back the truncate,
-    // preventing a partial seed from leaving the DB empty.
-  });
-
-  await seedLibraries();
-  await seedRecCenters();
-  await seedTransitStops();
-  await seed311();
-  await seedCensusLanguage();
+    // Pass tx to seed functions so all inserts share the transaction
+    await seedLibraries(tx);
+    await seedRecCenters(tx);
+    await seedTransitStops(tx);
+    await seed311(tx);
+    await seedCensusLanguage(tx);
+  }, { timeout: 300_000 }); // 5 min timeout for large fetches + inserts
 
   console.log('\nSeed complete.');
 }
