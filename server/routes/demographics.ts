@@ -41,6 +41,10 @@ function computeTopLanguages(rows: Record<string, unknown>[]) {
     .sort((a, b) => b.percentage - a.percentage);
 }
 
+// Tract IDs are numeric (state+county+tract), e.g. "06073008346"
+const TRACT_RE = /^\d{6,11}$/;
+const MAX_COMMUNITY_LEN = 100;
+
 router.get('/', async (req, res) => {
   const tract = req.query.tract as string | undefined;
   const community = req.query.community as string | undefined;
@@ -48,6 +52,21 @@ router.get('/', async (req, res) => {
   if (!tract && !community) {
     res.status(400).json({ error: 'tract or community query parameter is required' });
     return;
+  }
+
+  // Validate tract format
+  if (tract && !TRACT_RE.test(tract)) {
+    res.status(400).json({ error: 'Invalid tract format — expected a numeric census tract ID' });
+    return;
+  }
+
+  // Validate community parameter
+  if (community) {
+    const cleaned = community.replace(/[%_]/g, '');
+    if (cleaned.length === 0 || cleaned.length > MAX_COMMUNITY_LEN) {
+      res.status(400).json({ error: 'Invalid community parameter' });
+      return;
+    }
   }
 
   // Single tract lookup
