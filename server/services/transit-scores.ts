@@ -55,6 +55,11 @@ function getStopsInBBox(
   return result;
 }
 
+/** Yield to the event loop so other requests can be served during heavy computation */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 export interface TransitScore {
   stopCount: number;
   agencyCount: number;
@@ -96,10 +101,17 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
   );
 
   const scores = new Map<string, TransitScore>();
+  const YIELD_INTERVAL = 5; // yield every N communities to keep event loop responsive
 
-  for (const feature of geojson.features) {
+  for (let fi = 0; fi < geojson.features.length; fi++) {
+    const feature = geojson.features[fi];
     const communityName: string = feature.properties?.cpname || feature.properties?.name || '';
     if (!communityName) continue;
+
+    // Yield to event loop periodically so other requests can be served
+    if (fi > 0 && fi % YIELD_INTERVAL === 0) {
+      await yieldToEventLoop();
+    }
 
     // Use spatial grid + bbox to narrow candidate stops
     const bbox = computeBBox(feature.geometry);
