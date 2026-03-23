@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -107,11 +107,16 @@ app.use('/api/block', blockRouter);
 // Protected by CRON_SECRET to prevent abuse
 app.get('/api/cron/purge-cache', async (req, res) => {
   const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
   const authHeader = req.headers.authorization ?? '';
-  const expected = `Bearer ${cronSecret}`;
-  const headersMatch = authHeader.length === expected.length &&
-    timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
-  if (!cronSecret || !headersMatch) {
+  // Hash both values to fixed-length buffers so timingSafeEqual always runs
+  // without leaking token length via short-circuit.
+  const hashA = createHmac('sha256', 'cron').update(authHeader).digest();
+  const hashB = createHmac('sha256', 'cron').update(`Bearer ${cronSecret}`).digest();
+  if (!timingSafeEqual(hashA, hashB)) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }

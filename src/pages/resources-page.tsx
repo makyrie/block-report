@@ -3,6 +3,15 @@ import { getLibraries, getRecCenters } from '../api/client';
 import { useLanguage } from '../i18n/context';
 import type { CommunityAnchor } from '../types';
 
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, 'https://placeholder.invalid');
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function ResourceCard({ resource }: { resource: CommunityAnchor }) {
   return (
     <div className="p-4 bg-white border border-gray-200 rounded-lg">
@@ -17,7 +26,7 @@ function ResourceCard({ resource }: { resource: CommunityAnchor }) {
           </a>
         </p>
       )}
-      {resource.website && (
+      {resource.website && isSafeUrl(resource.website) && (
         <p className="text-sm mt-1">
           <a
             href={resource.website}
