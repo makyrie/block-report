@@ -27,6 +27,8 @@ export function getPrisma(): PrismaClient {
   const pool = new Pool({
     connectionString,
     max: 2, // Serverless handles one request at a time; keep pool small for Neon free tier
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
   });
   const adapter = new PrismaNeon(pool);
   _prisma = new PrismaClient({ adapter });

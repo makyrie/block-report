@@ -107,11 +107,19 @@ app.use('/api/block', blockRouter);
 // Protected by CRON_SECRET to prevent abuse
 app.get('/api/cron/purge-cache', async (req, res) => {
   const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.authorization ?? '';
-  const expected = `Bearer ${cronSecret}`;
-  const headersMatch = authHeader.length === expected.length &&
-    timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
-  if (!cronSecret || !headersMatch) {
+  if (!cronSecret) {
+    logger.warn('CRON_SECRET is not set — cron endpoint will reject all requests');
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  // Vercel cron sends the secret via x-vercel-cron-secret header;
+  // non-Vercel callers use the standard Authorization: Bearer header.
+  const provided = isVercel
+    ? (req.headers['x-vercel-cron-secret'] as string ?? '')
+    : (req.headers.authorization ?? '').replace(/^Bearer\s+/, '');
+  const headersMatch = provided.length === cronSecret.length &&
+    timingSafeEqual(Buffer.from(provided), Buffer.from(cronSecret));
+  if (!headersMatch) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -125,6 +133,11 @@ app.get('/api/cron/purge-cache', async (req, res) => {
     });
     res.status(500).json({ error: 'Purge failed' });
   }
+});
+
+// API 404 catch-all — unknown API paths return JSON instead of falling through to SPA
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
 export default app;

@@ -2,10 +2,18 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited } from '../services/report-cache.js';
+import type { NeighborhoodProfile } from '../../types/index.js';
+import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited, GENERATION_RATE_WINDOW_MS } from '../services/report-cache.js';
 
 const router = Router();
+
+// In-memory lock to coalesce concurrent generation requests for the same community+language
+const inFlightGenerations = new Map<string, Promise<import('../../types/index.js').CommunityReport>>();
+const RETRY_AFTER_SECONDS = Math.ceil(GENERATION_RATE_WINDOW_MS / 1000);
+
+const SUPPORTED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
+const MAX_PROFILE_SIZE = 10_000;
+const MAX_BLOCK_METRICS_SIZE = 5_000;
 
 // GET /api/report?community={name}&language={lang} — cached community report
 // GET /api/report?lat=X&lng=Y&radius=Z&language=L — cached block-level report (by anchor ID)
@@ -63,8 +71,12 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'profile must be an object with a communityName string' });
       return;
     }
-    if (typeof language !== 'string' || !language || language.length > 50) {
-      res.status(400).json({ error: 'language must be a non-empty string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !language || !SUPPORTED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `language must be one of: ${Array.from(SUPPORTED_LANGUAGES).join(', ')}` });
+      return;
+    }
+    if (JSON.stringify(profile).length > MAX_PROFILE_SIZE) {
+      res.status(400).json({ error: `profile payload too large (max ${MAX_PROFILE_SIZE} bytes)` });
       return;
     }
 
@@ -79,20 +91,27 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
     if (rateLimited) {
-      res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
+      res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
 
-    // Fall back to on-demand generation
-    logger.info('No pre-generated report found, generating on-demand', {
-      community: profile.communityName,
-      language,
-    });
-    const report = await generateReport(profile, language);
+    // Coalesce concurrent requests for the same community+language
+    const generationKey = `community:${profile.communityName}:${language}`;
+    let reportPromise = inFlightGenerations.get(generationKey);
+    if (!reportPromise) {
+      logger.info('No pre-generated report found, generating on-demand', {
+        community: profile.communityName,
+        language,
+      });
+      reportPromise = generateReport(profile, language).then(async (report) => {
+        await saveCachedReport(profile.communityName, language, report);
+        return report;
+      });
+      inFlightGenerations.set(generationKey, reportPromise);
+      reportPromise.finally(() => inFlightGenerations.delete(generationKey));
+    }
 
-    // Cache the generated report for future instant access (saveCachedReport handles its own errors)
-    await saveCachedReport(profile.communityName, language, report);
-
+    const report = await reportPromise;
     res.json(report);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -132,8 +151,12 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
       }
     }
-    if (typeof language !== 'string' || language.length > 50) {
-      res.status(400).json({ error: 'language must be a string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !SUPPORTED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `language must be one of: ${Array.from(SUPPORTED_LANGUAGES).join(', ')}` });
+      return;
+    }
+    if (JSON.stringify(blockMetrics).length > MAX_BLOCK_METRICS_SIZE) {
+      res.status(400).json({ error: `blockMetrics payload too large (max ${MAX_BLOCK_METRICS_SIZE} bytes)` });
       return;
     }
 
@@ -149,20 +172,27 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       return;
     }
     if (rateLimited) {
-      res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
+      res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
 
-    logger.info('Generating block report on-demand', {
-      anchor: anchor.name,
-      language,
-    });
+    // Coalesce concurrent requests for the same anchor+language
+    const blockGenKey = `block:${anchorCacheId}:${language}`;
+    let blockPromise = inFlightGenerations.get(blockGenKey);
+    if (!blockPromise) {
+      logger.info('Generating block report on-demand', {
+        anchor: anchor.name,
+        language,
+      });
+      blockPromise = generateBlockReport(anchor, blockMetrics, language, demographics).then(async (report) => {
+        await saveCachedBlockReport(anchorCacheId, language, report);
+        return report;
+      });
+      inFlightGenerations.set(blockGenKey, blockPromise);
+      blockPromise.finally(() => inFlightGenerations.delete(blockGenKey));
+    }
 
-    const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
-
-    // Cache the generated block report for future requests (saveCachedBlockReport handles its own errors)
-    await saveCachedBlockReport(anchorCacheId, language, report);
-
+    const report = await blockPromise;
     res.json(report);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

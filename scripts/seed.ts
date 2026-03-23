@@ -41,7 +41,7 @@ async function seedLibraries() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const result = await prisma.library.createMany({ data: mapped });
+  const result = await prisma.library.createMany({ data: mapped, skipDuplicates: true });
   console.log(`  ✓ ${result.count} libraries`);
 }
 
@@ -63,7 +63,7 @@ async function seedRecCenters() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const result = await prisma.recCenter.createMany({ data: mapped });
+  const result = await prisma.recCenter.createMany({ data: mapped, skipDuplicates: true });
   console.log(`  ✓ ${result.count} rec centers`);
 }
 
@@ -86,7 +86,7 @@ async function seedTransitStops() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const result = await prisma.transitStop.createMany({ data: mapped });
+  const result = await prisma.transitStop.createMany({ data: mapped, skipDuplicates: true });
   console.log(`  ✓ ${result.count} transit stops`);
 }
 
@@ -144,7 +144,7 @@ async function seed311() {
   let inserted = 0;
   for (let i = 0; i < allRows.length; i += batchSize) {
     const batch = allRows.slice(i, i + batchSize);
-    const result = await prisma.request311.createMany({ data: batch });
+    const result = await prisma.request311.createMany({ data: batch, skipDuplicates: true });
     inserted += result.count;
   }
   console.log(`  ✓ ${inserted} total 311 requests`);
@@ -210,7 +210,7 @@ async function seedCensusLanguage() {
     other_unspecified: parseInt_(row[11]),
   }));
 
-  const result = await prisma.censusLanguage.createMany({ data: mapped });
+  const result = await prisma.censusLanguage.createMany({ data: mapped, skipDuplicates: true });
   console.log(`  ✓ ${result.count} Census tracts`);
 
   // Map tracts to communities using centroids + community boundaries
@@ -257,8 +257,8 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
   }
   console.log(`  ${tractCentroids.size} tract centroids loaded`);
 
-  // Match each tract to a community
-  let mapped = 0;
+  // Match each tract to a community (batched transaction)
+  const updates: ReturnType<typeof prisma.censusLanguage.update>[] = [];
   for (const row of censusRows) {
     const tract = row[row.length - 1];
     const centroid = tractCentroids.get(tract);
@@ -267,13 +267,15 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
     const community = findCommunity(centroid.lat, centroid.lng, communities);
     if (!community) continue;
 
-    await prisma.censusLanguage.update({
+    updates.push(prisma.censusLanguage.update({
       where: { tract },
       data: { community },
-    });
-    mapped++;
+    }));
   }
-  console.log(`  ✓ ${mapped} tracts mapped to communities`);
+  if (updates.length > 0) {
+    await prisma.$transaction(updates);
+  }
+  console.log(`  ✓ ${updates.length} tracts mapped to communities`);
 }
 
 // --- Main ---
@@ -283,7 +285,7 @@ async function main() {
 
   console.log('Truncating tables...');
   await prisma.$executeRawUnsafe(
-    'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language'
+    'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language CASCADE'
   );
   console.log('  ✓ Tables truncated\n');
 

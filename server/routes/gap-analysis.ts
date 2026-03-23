@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAccessGapScore, getAccessGapScores, getTopUnderserved } from '../services/gap-analysis.js';
+import { getAccessGapScore, getAccessGapScores, describeTopFactors } from '../services/gap-analysis.js';
 import { logger } from '../logger.js';
 import { validateCommunityParam } from '../utils/community.js';
 
@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    logger.error('Failed to compute access gap score', { error: (err as Error).message });
+    logger.error('Failed to compute access gap score', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -46,15 +46,23 @@ router.get('/ranking', async (req, res) => {
 
   try {
     const allScores = await getAccessGapScores();
-    const ranking = await getTopUnderserved(limit);
-    const allEntries = Array.from(allScores.values());
-    const withGaps = allEntries.filter((r) => r.accessGapScore >= 50).length;
+    const entries = Array.from(allScores.entries());
+    entries.sort(([, a], [, b]) => b.accessGapScore - a.accessGapScore);
+    const ranking = entries.slice(0, limit).map(([community, data]) => ({
+      community,
+      accessGapScore: data.accessGapScore,
+      signals: data.signals,
+      topFactors: describeTopFactors(data.signals),
+      rank: data.rank,
+      totalCommunities: data.totalCommunities,
+    }));
+    const withGaps = entries.filter(([, r]) => r.accessGapScore >= 50).length;
     res.json({
       ranking,
       summary: { total: allScores.size, withGaps },
     });
   } catch (err) {
-    logger.error('Failed to compute access gap ranking', { error: (err as Error).message });
+    logger.error('Failed to compute access gap ranking', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

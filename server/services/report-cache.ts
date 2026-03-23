@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { CommunityReport } from '../../src/types/index.js';
+import type { CommunityReport } from '../../types/index.js';
 import { isVercel } from '../env.js';
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
@@ -164,7 +164,7 @@ export async function saveCachedBlockReport(anchorId: string, language: string, 
  * Returns true if the limit has been exceeded.
  */
 const GENERATION_RATE_LIMIT = 20; // max reports per window
-const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+export const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 export async function isGenerationRateLimited(): Promise<boolean> {
   try {
