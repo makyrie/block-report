@@ -1,4 +1,5 @@
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CommunityReport } from '../../src/types/index.js';
@@ -81,7 +82,10 @@ const fileStrategy: CacheStrategy = {
   async set(community, language, report) {
     await mkdir(CACHE_DIR, { recursive: true });
     const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
-    await writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
+    // Atomic write: write to temp file then rename to avoid partial reads on crash
+    const tmpPath = `${filePath}.${randomBytes(4).toString('hex')}.tmp`;
+    await writeFile(tmpPath, JSON.stringify(report), 'utf-8');
+    await rename(tmpPath, filePath);
   },
 
   async countRecent() {
