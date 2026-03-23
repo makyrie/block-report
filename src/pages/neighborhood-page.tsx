@@ -220,6 +220,7 @@ export default function NeighborhoodPage() {
     (anchor: CommunityAnchor) => {
       setSelectedAnchor(anchor);
       setSelectedCommunity(anchor.community);
+      setMobileView('info');
       navigate(`/neighborhood/${toSlug(anchor.community)}`);
     },
     [navigate],
@@ -406,7 +407,7 @@ export default function NeighborhoodPage() {
           transitStops={transitStops}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
-          onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}
+          onAnchorClick={handleAnchorClick}
           onMapClick={handleMapClick}
           pinnedLocation={pinnedLocation}
           blockData={blockData}
