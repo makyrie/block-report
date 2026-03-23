@@ -17,6 +17,7 @@ router.get('/', async (req, res) => {
     const result = await getAccessGapScore(cleaned);
 
     if (!result) {
+      res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
       res.json({
         accessGapScore: null,
         signals: { lowEngagement: null, lowTransit: null, highNonEnglish: null },
@@ -26,6 +27,7 @@ router.get('/', async (req, res) => {
       return;
     }
 
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json(result);
   } catch (err) {
     logger.error('Failed to compute access gap score', { error: err instanceof Error ? err.message : String(err) });

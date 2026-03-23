@@ -103,12 +103,3 @@ export function generateReport(profile: NeighborhoodProfile, language: string): 
   });
 }
 
-export function getBlockReport(
-  anchorId: string,
-  lat: number,
-  lng: number,
-  radius = 0.25,
-  language = 'en',
-): Promise<CommunityReport & { preGenerated?: boolean; anchorName?: string; anchorType?: string }> {
-  return fetchJSON(`${BASE}/report?anchorId=${encodeURIComponent(anchorId)}&lat=${lat}&lng=${lng}&radius=${radius}&language=${language}`);
-}
