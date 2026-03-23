@@ -3,8 +3,10 @@
 /**
  * Canonical key for community lookups. Strips non-alphanumeric characters and
  * uppercases for consistent matching across data sources (311, transit, census).
- * Frontend uses its own norm() (lowercase) for display matching — that's fine
- * because the two domains don't share lookup maps directly.
+ * Intentionally different from:
+ * - frontend norm() (lowercase + spaces) — display matching only
+ * - report-cache normalizeKey() (lowercase + dashes) — cache key storage only
+ * Each normalizer only compares within its own domain, so the differences are safe.
  */
 export function communityKey(name: string): string {
   return name.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();

@@ -14,7 +14,13 @@ export function scoreToColor(score: number): string {
   return ACCESS_GAP_COLORS[4];
 }
 
-// Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
+/**
+ * Normalize strings for fuzzy frontend display matching.
+ * Uses lowercase + collapsed spaces. This is intentionally different from:
+ * - server communityKey() — uppercase for data-source matching (311, transit, census)
+ * - report-cache normalizeKey() — lowercase + dashed for cache key storage
+ * Each normalizer only compares against its own domain, so the differences are safe.
+ */
 export function norm(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
 }
