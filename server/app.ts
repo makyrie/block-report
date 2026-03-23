@@ -137,4 +137,13 @@ app.get('/api/cron/purge-cache', async (req, res) => {
   }
 });
 
+// Global error handler — catches unhandled errors and returns JSON instead of Express's default HTML 500
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error('Unhandled error', {
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 export default app;

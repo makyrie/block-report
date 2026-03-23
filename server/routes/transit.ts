@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
       cityAverage: getCityAverage(scores),
     });
   } catch (err) {
-    logger.error('Failed to compute transit scores', { error: (err as Error).message });
+    logger.error('Failed to compute transit scores', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
