@@ -104,7 +104,7 @@ const fileStrategy: CacheStrategy = {
   async set(community, language, report) {
     await mkdir(CACHE_DIR, { recursive: true });
     const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
-    await writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
+    await writeFile(filePath, JSON.stringify(report), 'utf-8');
   },
 
   async countRecent() {

@@ -103,7 +103,7 @@ app.use('/api/block', blockRouter);
 // Cron-triggered cache purge — call via Vercel Cron or manual GET
 // Protected by CRON_SECRET to prevent abuse
 app.get('/api/cron/purge-cache', async (req, res) => {
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET?.trim();
   if (!cronSecret) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
