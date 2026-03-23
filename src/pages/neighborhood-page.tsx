@@ -4,8 +4,8 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
-import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
+import { getLibraries, getRecCenters, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
+import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile } from '../types';
 import type { FeatureCollection } from 'geojson';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
@@ -20,7 +20,6 @@ export default function NeighborhoodPage() {
 
   const [libraries, setLibraries] = useState<CommunityAnchor[]>([]);
   const [recCenters, setRecCenters] = useState<CommunityAnchor[]>([]);
-  const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
   const [neighborhoodBoundaries, setNeighborhoodBoundaries] = useState<FeatureCollection | null>(null);
 
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
@@ -58,9 +57,6 @@ export default function NeighborhoodPage() {
     getLibraries().then(setLibraries).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
     getRecCenters().then(setRecCenters).catch(console.error);
     getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch(console.error);
-    getTransitStops()
-      .then(setTransitStops)
-      .catch(console.error);
   }, []);
 
   // Fetch 311 metrics and demographics when community changes
@@ -369,7 +365,6 @@ export default function NeighborhoodPage() {
         <SanDiegoMap
           libraries={libraries}
           recCenters={recCenters}
-          transitStops={transitStops}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
           onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}
