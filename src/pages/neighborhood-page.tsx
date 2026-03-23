@@ -74,33 +74,37 @@ export default function NeighborhoodPage() {
       return;
     }
 
+    const controller = new AbortController();
+    const { signal } = controller;
+
     setMetricsLoading(true);
     setMetrics(null);
     setTopLanguages([]);
     setTransitScore(null);
     setAccessGap(null);
 
-    get311(selectedCommunity)
+    get311(selectedCommunity, signal)
       .then(setMetrics)
-      .catch(console.error)
-      .finally(() => setMetricsLoading(false));
+      .catch((e) => { if (!signal.aborted) console.error(e); })
+      .finally(() => { if (!signal.aborted) setMetricsLoading(false); });
 
-    getTransitScore(selectedCommunity)
+    getTransitScore(selectedCommunity, signal)
       .then(setTransitScore)
       .catch(() => { /* transit score may not be available */ });
 
-    getAccessGap(selectedCommunity)
+    getAccessGap(selectedCommunity, signal)
       .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
-    // Try to fetch demographics for language suggestion
-    getDemographics(selectedCommunity)
+    getDemographics(selectedCommunity, signal)
       .then((data) => {
         if (data?.topLanguages) setTopLanguages(data.topLanguages);
       })
       .catch(() => {
         // Demographics may not be available for all communities
       });
+
+    return () => { controller.abort(); };
   }, [selectedCommunity]);
 
   // Clear report when community or language changes
@@ -220,11 +224,13 @@ export default function NeighborhoodPage() {
   // Re-fetch block data when radius changes
   useEffect(() => {
     if (!pinnedLocation) return;
+    const controller = new AbortController();
     setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
+    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
       .then(setBlockData)
-      .catch((err) => console.error('Failed to fetch block data', err))
-      .finally(() => setBlockLoading(false));
+      .catch((err) => { if (!controller.signal.aborted) console.error('Failed to fetch block data', err); })
+      .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
+    return () => { controller.abort(); };
   }, [blockRadius, pinnedLocation]);
 
   const handleGenerateReport = useCallback(async (language: string) => {

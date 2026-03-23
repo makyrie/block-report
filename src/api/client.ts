@@ -46,20 +46,20 @@ export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
   return boundaryPromise;
 }
 
-export function getTransitScore(community: string): Promise<NeighborhoodProfile['transit']> {
-  return fetchJSON(`${BASE}/transit?community=${encodeURIComponent(community)}`);
+export function getTransitScore(community: string, signal?: AbortSignal): Promise<NeighborhoodProfile['transit']> {
+  return fetchJSON(`${BASE}/transit?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
-export function get311(community: string): Promise<NeighborhoodProfile['metrics']> {
-  return fetchJSON(`${BASE}/311?community=${encodeURIComponent(community)}`);
+export function get311(community: string, signal?: AbortSignal): Promise<NeighborhoodProfile['metrics']> {
+  return fetchJSON(`${BASE}/311?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
-export function getDemographics(tractOrCommunity: string): Promise<NeighborhoodProfile['demographics']> {
-  return fetchJSON(`${BASE}/demographics?community=${encodeURIComponent(tractOrCommunity)}`);
+export function getDemographics(tractOrCommunity: string, signal?: AbortSignal): Promise<NeighborhoodProfile['demographics']> {
+  return fetchJSON(`${BASE}/demographics?community=${encodeURIComponent(tractOrCommunity)}`, signal ? { signal } : undefined);
 }
 
-export function getAccessGap(community: string): Promise<NonNullable<NeighborhoodProfile['accessGap']>> {
-  return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`);
+export function getAccessGap(community: string, signal?: AbortSignal): Promise<NonNullable<NeighborhoodProfile['accessGap']>> {
+  return fetchJSON(`${BASE}/access-gap?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
 }
 
 export function getCitywideGaps(signal?: AbortSignal): Promise<{
@@ -69,8 +69,8 @@ export function getCitywideGaps(signal?: AbortSignal): Promise<{
   return fetchJSON(`${BASE}/access-gap/ranking?limit=0`, signal ? { signal } : undefined);
 }
 
-export function getBlockData(lat: number, lng: number, radius = 0.25): Promise<BlockMetrics> {
-  return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`);
+export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: AbortSignal): Promise<BlockMetrics> {
+  return fetchJSON(`${BASE}/block?lat=${lat}&lng=${lng}&radius=${radius}`, signal ? { signal } : undefined);
 }
 
 export async function getPreGeneratedReport(community: string, language: string): Promise<CommunityReport | null> {
