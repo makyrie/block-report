@@ -1,22 +1,18 @@
-// Shared geo utilities — single source of truth for point-in-polygon logic
+// Server geo utilities — delegates core point-in-polygon to shared types/geo.ts
+// and adds server-specific helpers (bbox, haversine, centroid).
 
 import type { Polygon, MultiPolygon } from 'geojson';
+import { pointInRing, pointInGeometry } from '../../types/geo.js';
 
 type PolygonLike = Polygon | MultiPolygon;
 
-// Ray-casting point-in-polygon test
-// Coordinates: lat/lng for the point, polygon ring as [lng, lat] pairs (GeoJSON convention)
+// Re-export the shared algorithm under the legacy name used by scripts/geo-helpers.ts
 export function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
+  return pointInRing(lng, lat, polygon);
 }
+
+// Re-export for direct use
+export { pointInGeometry };
 
 // Test whether a point is inside a GeoJSON Feature geometry (Polygon or MultiPolygon)
 export function pointInFeature(
@@ -24,28 +20,7 @@ export function pointInFeature(
   lng: number,
   geometry: PolygonLike,
 ): boolean {
-  if (geometry.type === 'Polygon') {
-    const [outer, ...holes] = geometry.coordinates as number[][][];
-    if (!pointInPolygon(lat, lng, outer)) return false;
-    for (const hole of holes) {
-      if (pointInPolygon(lat, lng, hole)) return false;
-    }
-    return true;
-  }
-  if (geometry.type === 'MultiPolygon') {
-    for (const poly of geometry.coordinates as number[][][][]) {
-      const [outer, ...holes] = poly;
-      if (pointInPolygon(lat, lng, outer)) {
-        let inHole = false;
-        for (const hole of holes) {
-          if (pointInPolygon(lat, lng, hole)) { inHole = true; break; }
-        }
-        if (!inHole) return true;
-      }
-    }
-    return false;
-  }
-  return false;
+  return pointInGeometry(lng, lat, geometry);
 }
 
 // Compute bounding box for a polygon ring (used for spatial pre-filtering)

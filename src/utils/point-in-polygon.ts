@@ -1,47 +1,10 @@
-import type { FeatureCollection, Geometry, Position } from 'geojson';
+// Re-exports shared point-in-polygon utilities and adds the
+// findCommunityAtPoint helper specific to the frontend.
 
-/**
- * Ray-casting point-in-polygon test.
- * Returns true if the point (x, y) lies inside the polygon ring.
- */
-function pointInRing(x: number, y: number, ring: Position[]): boolean {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
+import type { FeatureCollection } from 'geojson';
+import { pointInGeometry } from '../../types/geo';
 
-/**
- * Check if a point is inside a GeoJSON geometry (Polygon or MultiPolygon).
- */
-function pointInGeometry(lng: number, lat: number, geometry: Geometry): boolean {
-  if (geometry.type === 'Polygon') {
-    const [outer, ...holes] = geometry.coordinates;
-    if (!pointInRing(lng, lat, outer)) return false;
-    for (const hole of holes) {
-      if (pointInRing(lng, lat, hole)) return false;
-    }
-    return true;
-  }
-  if (geometry.type === 'MultiPolygon') {
-    for (const polygon of geometry.coordinates) {
-      const [outer, ...holes] = polygon;
-      if (pointInRing(lng, lat, outer)) {
-        let inHole = false;
-        for (const hole of holes) {
-          if (pointInRing(lng, lat, hole)) { inHole = true; break; }
-        }
-        if (!inHole) return true;
-      }
-    }
-  }
-  return false;
-}
+export { pointInGeometry };
 
 /**
  * Given a lat/lng and the neighborhoods GeoJSON FeatureCollection,

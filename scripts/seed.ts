@@ -284,9 +284,7 @@ async function main() {
   console.log('Starting seed...\n');
 
   console.log('Truncating tables...');
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language CASCADE'
-  );
+  await prisma.$executeRaw`TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language CASCADE`;
   console.log('  ✓ Tables truncated\n');
 
   await seedLibraries();

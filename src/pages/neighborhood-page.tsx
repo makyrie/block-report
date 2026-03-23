@@ -55,12 +55,20 @@ export default function NeighborhoodPage() {
 
   // Fetch map data on mount
   useEffect(() => {
-    getLibraries().then(setLibraries).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
-    getRecCenters().then(setRecCenters).catch(console.error);
-    getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch(console.error);
+    const controller = new AbortController();
+    getLibraries()
+      .then((data) => { if (!controller.signal.aborted) setLibraries(data); })
+      .catch((err) => { if (!controller.signal.aborted) { console.error(err); setDataError('Failed to load map data'); } });
+    getRecCenters()
+      .then((data) => { if (!controller.signal.aborted) setRecCenters(data); })
+      .catch((err) => { if (!controller.signal.aborted) { console.error(err); setDataError('Failed to load map data'); } });
+    getNeighborhoodBoundaries()
+      .then((data) => { if (!controller.signal.aborted) setNeighborhoodBoundaries(data); })
+      .catch((err) => { if (!controller.signal.aborted) { console.error(err); setDataError('Failed to load map data'); } });
     getTransitStops()
-      .then(setTransitStops)
-      .catch(console.error);
+      .then((data) => { if (!controller.signal.aborted) setTransitStops(data); })
+      .catch((err) => { if (!controller.signal.aborted) { console.error(err); setDataError('Failed to load map data'); } });
+    return () => { controller.abort(); };
   }, []);
 
   // Fetch 311 metrics and demographics when community changes
@@ -74,6 +82,8 @@ export default function NeighborhoodPage() {
       return;
     }
 
+    const controller = new AbortController();
+
     setMetricsLoading(true);
     setMetrics(null);
     setTopLanguages([]);
@@ -81,26 +91,28 @@ export default function NeighborhoodPage() {
     setAccessGap(null);
 
     get311(selectedCommunity)
-      .then(setMetrics)
-      .catch(console.error)
-      .finally(() => setMetricsLoading(false));
+      .then((data) => { if (!controller.signal.aborted) setMetrics(data); })
+      .catch((err) => { if (!controller.signal.aborted) { console.error(err); setDataError('Failed to load 311 metrics'); } })
+      .finally(() => { if (!controller.signal.aborted) setMetricsLoading(false); });
 
     getTransitScore(selectedCommunity)
-      .then(setTransitScore)
+      .then((data) => { if (!controller.signal.aborted) setTransitScore(data); })
       .catch(() => { /* transit score may not be available */ });
 
     getAccessGap(selectedCommunity)
-      .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
+      .then((data) => { if (!controller.signal.aborted && data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
     // Try to fetch demographics for language suggestion
     getDemographics(selectedCommunity)
       .then((data) => {
-        if (data?.topLanguages) setTopLanguages(data.topLanguages);
+        if (!controller.signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
       .catch(() => {
         // Demographics may not be available for all communities
       });
+
+    return () => { controller.abort(); };
   }, [selectedCommunity]);
 
   // Clear report when community or language changes

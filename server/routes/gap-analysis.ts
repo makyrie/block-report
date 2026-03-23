@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAccessGapScore, getAccessGapScores, describeTopFactors } from '../services/gap-analysis.js';
+import { getAccessGapScore, getAccessGapScores, getTopUnderserved } from '../services/gap-analysis.js';
 import { logger } from '../logger.js';
 import { validateCommunityParam } from '../utils/community.js';
 
@@ -45,18 +45,11 @@ router.get('/ranking', async (req, res) => {
       : 10;
 
   try {
-    const allScores = await getAccessGapScores();
-    const entries = Array.from(allScores.entries());
-    entries.sort(([, a], [, b]) => b.accessGapScore - a.accessGapScore);
-    const ranking = entries.slice(0, limit).map(([community, data]) => ({
-      community,
-      accessGapScore: data.accessGapScore,
-      signals: data.signals,
-      topFactors: describeTopFactors(data.signals),
-      rank: data.rank,
-      totalCommunities: data.totalCommunities,
-    }));
-    const withGaps = entries.filter(([, r]) => r.accessGapScore >= 50).length;
+    const [ranking, allScores] = await Promise.all([
+      getTopUnderserved(limit),
+      getAccessGapScores(),
+    ]);
+    const withGaps = Array.from(allScores.values()).filter((r) => r.accessGapScore >= 50).length;
     res.json({
       ranking,
       summary: { total: allScores.size, withGaps },

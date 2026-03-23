@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
+import { memo, useEffect, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
@@ -227,6 +227,37 @@ function findCommunityFeature(features: Feature[], community: string): Feature |
   );
 }
 
+// Child component — renders all transit stops as a single Leaflet layer (avoids 6000+ React components)
+function TransitStopsLayer({ stops }: { stops: TransitStop[] }) {
+  const map = useMap();
+  const layerRef = useRef<L.LayerGroup | null>(null);
+
+  useEffect(() => {
+    if (layerRef.current) {
+      layerRef.current.remove();
+    }
+    const group = L.layerGroup();
+    for (const stop of stops) {
+      const marker = L.circleMarker([stop.lat, stop.lng], {
+        radius: 4,
+        color: '#7c3aed',
+        fillColor: '#7c3aed',
+        fillOpacity: 0.8,
+        weight: 1,
+      });
+      marker.bindPopup(
+        `<div class="min-w-[160px] max-w-[240px]"><div class="flex items-center gap-1.5 mb-2"><span class="w-2.5 h-2.5 rounded-full shrink-0 bg-violet-600" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7c3aed;"></span><span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6d28d9;">Transit Stop</span></div><p style="font-weight:600;color:#111827;font-size:14px;line-height:1.375;">${stop.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p></div>`,
+      );
+      group.addLayer(marker);
+    }
+    group.addTo(map);
+    layerRef.current = group;
+    return () => { group.remove(); };
+  }, [stops, map]);
+
+  return null;
+}
+
 // Child component — pinned block location marker that auto-opens its popup
 function PinnedMarker({
   lat,
@@ -299,12 +330,13 @@ function SanDiegoMap({
   blockLoading = false,
   blockRadius = 0.25,
 }: SanDiegoMapProps) {
-  const handleMarkerClick = useCallback(
-    (anchor: CommunityAnchor) => () => {
-      onAnchorClick(anchor);
-    },
-    [onAnchorClick],
-  );
+  const markerClickHandlers = useMemo(() => {
+    const handlers = new Map<string, () => void>();
+    for (const anchor of [...libraries, ...recCenters]) {
+      handlers.set(anchor.id, () => onAnchorClick(anchor));
+    }
+    return handlers;
+  }, [libraries, recCenters, onAnchorClick]);
 
   const selectedFeature = selectedCommunity && neighborhoodBoundaries
     ? findCommunityFeature(neighborhoodBoundaries.features, selectedCommunity)
@@ -381,19 +413,8 @@ function SanDiegoMap({
         />
       )}
 
-      {/* Transit stops — violet circles */}
-      {transitStops.map((stop) => (
-        <CircleMarker
-          key={stop.id}
-          center={[stop.lat, stop.lng]}
-          radius={4}
-          pathOptions={{ color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.8, weight: 1 }}
-        >
-          <Popup>
-            <TransitPopupContent name={stop.name} />
-          </Popup>
-        </CircleMarker>
-      ))}
+      {/* Transit stops — single imperative layer instead of 6000+ React components */}
+      <TransitStopsLayer stops={transitStops} />
 
       {/* Library markers — blue */}
       {libraries.map((lib) => (
@@ -403,7 +424,7 @@ function SanDiegoMap({
           icon={blueIcon}
           title={`Library: ${lib.name}`}
           alt={`Library: ${lib.name}`}
-          eventHandlers={{ click: handleMarkerClick(lib) }}
+          eventHandlers={{ click: markerClickHandlers.get(lib.id) }}
         >
           <Popup>
             <AnchorPopupContent anchor={lib} />
@@ -419,7 +440,7 @@ function SanDiegoMap({
           icon={greenIcon}
           title={`Rec Center: ${rc.name}`}
           alt={`Rec Center: ${rc.name}`}
-          eventHandlers={{ click: handleMarkerClick(rc) }}
+          eventHandlers={{ click: markerClickHandlers.get(rc.id) }}
         >
           <Popup>
             <AnchorPopupContent anchor={rc} />

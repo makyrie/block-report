@@ -1,6 +1,7 @@
 // Shared helpers for seed scripts — keeps seed.ts and map-tracts.ts DRY
 
 import { pointInPolygon } from '../server/utils/geo.js';
+import { titleCase } from '../types/community.js';
 
 export type Polygon = number[][][]; // [ring][point][lng, lat]
 
@@ -9,12 +10,8 @@ export interface CommunityFeature {
   polygons: Polygon[];
 }
 
-// Canonical title-case — matches src/utils/community.ts titleCase()
-export function toTitleCase(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/(^|\s|[-:])(\w)/g, (_, sep, char) => sep + char.toUpperCase());
-}
+// Re-export shared titleCase as toTitleCase for backwards compatibility
+export const toTitleCase = titleCase;
 
 export function findCommunity(lat: number, lng: number, communities: CommunityFeature[]): string | null {
   for (const c of communities) {

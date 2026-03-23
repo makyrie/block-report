@@ -7,7 +7,10 @@ import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBloc
 
 const router = Router();
 
-// In-memory lock to coalesce concurrent generation requests for the same community+language
+// In-memory lock to coalesce concurrent generation requests within the same process.
+// On serverless (Vercel), each invocation may have its own process — the DB-backed
+// cache check (getCachedReport) is the primary deduplication; this Map is a best-effort
+// optimization to avoid duplicate Claude API calls within a single warm instance.
 const inFlightGenerations = new Map<string, Promise<import('../../types/index.js').CommunityReport>>();
 const RETRY_AFTER_SECONDS = Math.ceil(GENERATION_RATE_WINDOW_MS / 1000);
 
@@ -138,6 +141,8 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     const anchor = { ...rawAnchor };
     const MAX_FIELD_LEN = 200;
     const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
+    const ANCHOR_ID_RE = /^[a-zA-Z0-9_-]+$/;
+    const VALID_ANCHOR_TYPES = new Set(['library', 'rec_center']);
     for (const field of ['id', 'name', 'address', 'community', 'type'] as const) {
       if (anchor[field] !== undefined) {
         if (typeof anchor[field] !== 'string') {
@@ -151,6 +156,16 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
       }
     }
+    // Validate anchor.id format to prevent cache key collision/poisoning
+    if (anchor.id && !ANCHOR_ID_RE.test(anchor.id)) {
+      res.status(400).json({ error: 'anchor.id must contain only alphanumeric characters, hyphens, and underscores' });
+      return;
+    }
+    // Validate anchor.type against allowed enum values
+    if (anchor.type && !VALID_ANCHOR_TYPES.has(anchor.type)) {
+      res.status(400).json({ error: `anchor.type must be one of: ${Array.from(VALID_ANCHOR_TYPES).join(', ')}` });
+      return;
+    }
     if (typeof language !== 'string' || !SUPPORTED_LANGUAGES.has(language)) {
       res.status(400).json({ error: `language must be one of: ${Array.from(SUPPORTED_LANGUAGES).join(', ')}` });
       return;
@@ -158,6 +173,17 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     if (JSON.stringify(blockMetrics).length > MAX_BLOCK_METRICS_SIZE) {
       res.status(400).json({ error: `blockMetrics payload too large (max ${MAX_BLOCK_METRICS_SIZE} bytes)` });
       return;
+    }
+    // Validate demographics if provided
+    if (demographics !== undefined && demographics !== null) {
+      if (typeof demographics !== 'object' || !Array.isArray(demographics.topLanguages)) {
+        res.status(400).json({ error: 'demographics must be an object with a topLanguages array' });
+        return;
+      }
+      if (JSON.stringify(demographics).length > MAX_BLOCK_METRICS_SIZE) {
+        res.status(400).json({ error: `demographics payload too large (max ${MAX_BLOCK_METRICS_SIZE} bytes)` });
+        return;
+      }
     }
 
     // Run cache lookup and rate limit check in parallel to save a DB round trip

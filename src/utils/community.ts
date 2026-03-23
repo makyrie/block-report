@@ -1,4 +1,7 @@
-// Shared utility functions for citywide community features
+// Frontend community utilities — re-exports shared normalization and adds
+// frontend-specific display helpers.
+
+export { norm, titleCase } from '../../types/community';
 
 // Sequential red-orange color ramp for access gap scores
 export const ACCESS_GAP_COLORS = ['#fee5d9', '#fcae91', '#fb6a4a', '#de2d26', '#a50f15'] as const;
@@ -12,18 +15,6 @@ export function scoreToColor(score: number): string {
   if (score <= 60) return ACCESS_GAP_COLORS[2];
   if (score <= 80) return ACCESS_GAP_COLORS[3];
   return ACCESS_GAP_COLORS[4];
-}
-
-// Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
-export function norm(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-// Convert UPPERCASE community name to title case for display
-export function titleCase(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/(^|\s|[-:])(\w)/g, (_, sep, char) => sep + char.toUpperCase());
 }
 
 // Allowlist of valid factor keys from the access gap scoring system
