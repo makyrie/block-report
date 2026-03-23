@@ -1,32 +1,13 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { generateFlyerPdf } from '../services/pdf.js';
+import { sanitizeStringFields, CONTROL_CHAR_RE } from '../services/claude.js';
 import { logger } from '../logger.js';
 
 const router = Router();
 
 const SUPPORTED_LANGUAGES = ['English', 'Spanish', 'Vietnamese', 'Tagalog', 'Chinese', 'Arabic'];
 const MAX_ARRAY_ITEMS = 10;
-const MAX_STRING_LEN = 2000;
-
-/** Truncate string fields and cap array lengths to prevent abuse */
-function capReport(report: Record<string, unknown>): Record<string, unknown> {
-  const capped: Record<string, unknown> = {};
-  for (const [key, val] of Object.entries(report)) {
-    if (typeof val === 'string') {
-      capped[key] = val.slice(0, MAX_STRING_LEN);
-    } else if (Array.isArray(val)) {
-      capped[key] = val.slice(0, MAX_ARRAY_ITEMS).map((item) =>
-        typeof item === 'string' ? item.slice(0, MAX_STRING_LEN) : item,
-      );
-    } else if (val && typeof val === 'object') {
-      capped[key] = capReport(val as Record<string, unknown>);
-    } else {
-      capped[key] = val;
-    }
-  }
-  return capped;
-}
 
 /**
  * POST /api/report/pdf
@@ -57,11 +38,13 @@ router.post('/pdf', async (req: Request, res: Response) => {
       return;
     }
 
-    // Cap array/string sizes to prevent memory abuse
-    const cappedReport = capReport(report) as typeof report;
+    // Cap array/string sizes and strip control characters to prevent abuse
+    const cappedReport = sanitizeStringFields(report, undefined, undefined, {
+      maxStringLen: 2000,
+      maxArrayItems: MAX_ARRAY_ITEMS,
+    }) as typeof report;
 
-    // ── Sanitize: strip control characters from user-provided strings ──
-    const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
+    // ── Sanitize slug ──
     const sanitizedSlug = neighborhoodSlug.replace(CONTROL_CHAR_RE, '').slice(0, 200);
 
     // Determine base URL for QR codes and links

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { generateReport, generateBlockReport } from '../services/claude.js';
+import { generateReport, generateBlockReport, CONTROL_CHAR_RE } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited } from '../services/report-cache.js';
@@ -118,7 +118,6 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     // Work on a copy to avoid mutating req.body
     const anchor = { ...rawAnchor };
     const MAX_FIELD_LEN = 200;
-    const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
     for (const field of ['id', 'name', 'address', 'community', 'type'] as const) {
       if (anchor[field] !== undefined) {
         if (typeof anchor[field] !== 'string') {
