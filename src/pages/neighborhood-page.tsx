@@ -114,6 +114,18 @@ export default function NeighborhoodPage() {
     setReportError(null);
   }, [selectedCommunity, reportLang]);
 
+  // Refs for values the report effect needs to read without triggering re-runs
+  const reportRef = useRef(report);
+  reportRef.current = report;
+  const selectedAnchorRef = useRef(selectedAnchor);
+  selectedAnchorRef.current = selectedAnchor;
+  const topLanguagesRef = useRef(topLanguages);
+  topLanguagesRef.current = topLanguages;
+  const transitScoreRef = useRef(transitScore);
+  transitScoreRef.current = transitScore;
+  const accessGapRef = useRef(accessGap);
+  accessGapRef.current = accessGap;
+
   // Auto-fetch pre-generated report, falling back to on-demand generation
   useEffect(() => {
     if (!selectedCommunity) return;
@@ -141,14 +153,14 @@ export default function NeighborhoodPage() {
       }
 
       // Already have a report — don't regenerate on metrics updates
-      if (report) {
+      if (reportRef.current) {
         setReportLoading(false);
         return;
       }
 
       generatingRef.current = true;
 
-      const anchor = selectedAnchor ?? {
+      const anchor = selectedAnchorRef.current ?? {
         id: '',
         name: selectedCommunity,
         type: 'library' as const,
@@ -162,9 +174,9 @@ export default function NeighborhoodPage() {
         communityName: selectedCommunity,
         anchor,
         metrics,
-        transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
-        demographics: { topLanguages },
-        accessGap: accessGap ?? null,
+        transit: transitScoreRef.current ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
+        demographics: { topLanguages: topLanguagesRef.current },
+        accessGap: accessGapRef.current ?? null,
       };
 
       try {
