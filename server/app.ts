@@ -64,13 +64,10 @@ app.get('/api/health/ready', async (_req, res) => {
   }
 });
 
-// WARNING: In-memory rate limiting resets on every cold start in serverless (Vercel).
-// This provides best-effort protection only — a determined caller can bypass it by
-// waiting for new instances. For production, use Vercel WAF or Upstash Redis-backed
-// rate limiting to protect against Claude API cost exposure.
-if (isVercel) {
-  logger.warn('Rate limiting is in-memory only — ineffective across serverless instances. Configure Vercel WAF or Upstash for production.');
-}
+// In-memory rate limiting is per-IP best-effort (resets on serverless cold starts).
+// The authoritative protection is the DB-backed rate limit in isGenerationRateLimited()
+// which counts total reports generated across all instances within a 1-hour window.
+// For per-IP durability in production, add Vercel WAF rules or Upstash Redis.
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
 const reportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
