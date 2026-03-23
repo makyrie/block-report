@@ -15,6 +15,27 @@ export interface CachedComputationOptions {
   diskCachePath?: string;
 }
 
+/**
+ * JSON replacer that serializes Map instances as tagged arrays of entries.
+ * Without this, JSON.stringify(new Map()) produces "{}" — silently losing data.
+ */
+function mapReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Map) {
+    return { __mapEntries: Array.from(value.entries()) };
+  }
+  return value;
+}
+
+/**
+ * JSON reviver that restores Map instances from the tagged format.
+ */
+function mapReviver(_key: string, value: unknown): unknown {
+  if (typeof value === 'object' && value !== null && '__mapEntries' in value) {
+    return new Map((value as { __mapEntries: [unknown, unknown][] }).__mapEntries);
+  }
+  return value;
+}
+
 export function createCachedComputation<T>(
   compute: () => Promise<T>,
   ttlMs: number,
@@ -28,7 +49,7 @@ export function createCachedComputation<T>(
     if (!options?.diskCachePath) return null;
     try {
       const raw = await readFile(options.diskCachePath, 'utf-8');
-      const envelope = JSON.parse(raw) as { cachedAt: number; data: T };
+      const envelope = JSON.parse(raw, mapReviver) as { cachedAt: number; data: T };
       if (Date.now() - envelope.cachedAt < ttlMs) {
         return envelope.data;
       }
@@ -43,7 +64,7 @@ export function createCachedComputation<T>(
     try {
       await mkdir(dirname(options.diskCachePath), { recursive: true });
       const tmpFile = options.diskCachePath + '.tmp';
-      await writeFile(tmpFile, JSON.stringify({ cachedAt: Date.now(), data }));
+      await writeFile(tmpFile, JSON.stringify({ cachedAt: Date.now(), data }, mapReplacer));
       await rename(tmpFile, options.diskCachePath);
     } catch (err) {
       logger.warn('Failed to write disk cache', { error: (err as Error).message });
