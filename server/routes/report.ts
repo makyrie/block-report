@@ -51,22 +51,24 @@ function pickProfileFields(raw: Record<string, unknown>): NeighborhoodProfile {
     demographics: {
       topLanguages: Array.isArray(demographics.topLanguages) ? (demographics.topLanguages as { language: string; percentage: number }[]).slice(0, 20) : [],
     },
-    accessGap: accessGap ? {
-      accessGapScore: Number((accessGap as Record<string, unknown>).accessGapScore) || 0,
-      signals: {
-        lowEngagement: (accessGap as Record<string, unknown>).signals && typeof (accessGap as Record<string, unknown>).signals === 'object'
-          ? ((accessGap as Record<string, unknown>).signals as Record<string, unknown>).lowEngagement != null ? Number(((accessGap as Record<string, unknown>).signals as Record<string, unknown>).lowEngagement) : null
-          : null,
-        lowTransit: (accessGap as Record<string, unknown>).signals && typeof (accessGap as Record<string, unknown>).signals === 'object'
-          ? ((accessGap as Record<string, unknown>).signals as Record<string, unknown>).lowTransit != null ? Number(((accessGap as Record<string, unknown>).signals as Record<string, unknown>).lowTransit) : null
-          : null,
-        highNonEnglish: (accessGap as Record<string, unknown>).signals && typeof (accessGap as Record<string, unknown>).signals === 'object'
-          ? ((accessGap as Record<string, unknown>).signals as Record<string, unknown>).highNonEnglish != null ? Number(((accessGap as Record<string, unknown>).signals as Record<string, unknown>).highNonEnglish) : null
-          : null,
-      },
-      rank: Number((accessGap as Record<string, unknown>).rank) || 0,
-      totalCommunities: Number((accessGap as Record<string, unknown>).totalCommunities) || 0,
-    } : null,
+    accessGap: accessGap ? (() => {
+      const ag = accessGap as Record<string, unknown>;
+      const signals = ag.signals && typeof ag.signals === 'object'
+        ? ag.signals as Record<string, unknown>
+        : {} as Record<string, unknown>;
+      const pickSignal = (key: string): number | null =>
+        signals[key] != null ? Number(signals[key]) : null;
+      return {
+        accessGapScore: Number(ag.accessGapScore) || 0,
+        signals: {
+          lowEngagement: pickSignal('lowEngagement'),
+          lowTransit: pickSignal('lowTransit'),
+          highNonEnglish: pickSignal('highNonEnglish'),
+        },
+        rank: Number(ag.rank) || 0,
+        totalCommunities: Number(ag.totalCommunities) || 0,
+      };
+    })() : null,
   };
 }
 

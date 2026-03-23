@@ -192,17 +192,17 @@ export async function generateReport(
   // Sanitize language to prevent prompt injection
   const safeLang = language.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, '');
 
-  // Sanitize entire profile to prevent prompt injection via nested fields
-  const safeProfile = sanitizeProfile(profile);
+  // Profile is already allowlisted and type-coerced by pickProfileFields in the
+  // route layer. We use it directly here — no redundant sanitizeProfile pass.
 
   const client = getClient();
 
-  const prompt = `You are generating a community report for the ${safeProfile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
+  const prompt = `You are generating a community report for the ${profile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
 
 Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the data for this neighborhood:
-${JSON.stringify(safeProfile)}
+${JSON.stringify(profile)}
 
 Generate a report with these sections:
 1. **Welcome** — A 2-sentence greeting that names the neighborhood.
