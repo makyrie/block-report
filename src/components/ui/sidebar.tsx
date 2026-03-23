@@ -44,16 +44,16 @@ function Badge({ children, color }: { children: string; color: 'green' | 'yellow
   );
 }
 
-function resolutionBadge(rate: number) {
-  if (rate >= 0.75) return <Badge color="green">Most issues resolved</Badge>;
-  if (rate >= 0.5)  return <Badge color="yellow">About half resolved</Badge>;
-  return <Badge color="red">Many issues still open</Badge>;
+function resolutionBadge(rate: number, t: (key: string) => string) {
+  if (rate >= 0.75) return <Badge color="green">{t('sidebar.mostResolved')}</Badge>;
+  if (rate >= 0.5)  return <Badge color="yellow">{t('sidebar.halfResolved')}</Badge>;
+  return <Badge color="red">{t('sidebar.manyOpen')}</Badge>;
 }
 
-function responseBadge(days: number) {
-  if (days <= 7)  return <Badge color="green">Usually fixed in under a week</Badge>;
-  if (days <= 21) return <Badge color="yellow">Typically takes a few weeks</Badge>;
-  return <Badge color="orange">Can take over a month</Badge>;
+function responseBadge(days: number, t: (key: string) => string) {
+  if (days <= 7)  return <Badge color="green">{t('sidebar.underWeek')}</Badge>;
+  if (days <= 21) return <Badge color="yellow">{t('sidebar.fewWeeks')}</Badge>;
+  return <Badge color="orange">{t('sidebar.overMonth')}</Badge>;
 }
 
 function formatDate(iso: string): string {
@@ -139,12 +139,12 @@ export default function Sidebar({
             </p>
             {metrics.requestsPer1000Residents != null && metrics.population > 0 && (
               <p className="text-sm text-gray-600 mb-3">
-                Residents here report about <span className="font-semibold">{metrics.requestsPer1000Residents}</span> issues per 1,000 people.
+                {t('sidebar.perCapita', { count: String(metrics.requestsPer1000Residents) })}
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              {resolutionBadge(metrics.resolutionRate)}
-              {responseBadge(metrics.avgDaysToResolve)}
+              {resolutionBadge(metrics.resolutionRate, t)}
+              {responseBadge(metrics.avgDaysToResolve, t)}
             </div>
 
             {/* Progressive disclosure — raw numbers */}
@@ -173,24 +173,24 @@ export default function Sidebar({
                 </div>
                 {metrics.population > 0 && (
                   <div className="flex justify-between">
-                    <dt className="text-gray-500">Est. population</dt>
+                    <dt className="text-gray-500">{t('sidebar.population')}</dt>
                     <dd className="font-mono font-medium">{metrics.population.toLocaleString()}</dd>
                   </div>
                 )}
                 {metrics.requestsPer1000Residents != null && (
                   <div className="flex justify-between">
-                    <dt className="text-gray-500">Requests per 1,000</dt>
+                    <dt className="text-gray-500">{t('sidebar.requestsPer1000')}</dt>
                     <dd className="font-mono font-medium">{metrics.requestsPer1000Residents}</dd>
                   </div>
                 )}
                 {transitScore && transitScore.stopCount > 0 && (
                   <>
                     <div className="flex justify-between">
-                      <dt className="text-gray-500">Transit stops</dt>
+                      <dt className="text-gray-500">{t('sidebar.transitStops')}</dt>
                       <dd className="font-mono font-medium">{transitScore.stopCount}</dd>
                     </div>
                     <div className="flex justify-between">
-                      <dt className="text-gray-500">Transit score</dt>
+                      <dt className="text-gray-500">{t('sidebar.transitScoreLabel')}</dt>
                       <dd className="font-mono font-medium">{transitScore.transitScore}/100</dd>
                     </div>
                   </>
@@ -203,7 +203,7 @@ export default function Sidebar({
           {transitScore && transitScore.stopCount > 0 && (
             <section aria-labelledby="transit-heading" className="rounded-lg bg-indigo-50 border border-indigo-200 p-3">
               <h2 id="transit-heading" className="text-sm font-medium text-indigo-800 mb-2">
-                Transit Access
+                {t('sidebar.transitAccess')}
               </h2>
               <div className="flex items-center gap-3 mb-2">
                 <div className="text-2xl font-bold text-indigo-700">{transitScore.transitScore}</div>
@@ -211,10 +211,10 @@ export default function Sidebar({
                   <span className="block">/ 100</span>
                   <span className="block">
                     {transitScore.transitScore > transitScore.cityAverage
-                      ? 'Above city average'
+                      ? t('sidebar.aboveCityAvg')
                       : transitScore.transitScore === transitScore.cityAverage
-                        ? 'At city average'
-                        : 'Below city average'}
+                        ? t('sidebar.atCityAvg')
+                        : t('sidebar.belowCityAvg')}
                     {' '}({transitScore.cityAverage})
                   </span>
                 </div>
@@ -228,7 +228,7 @@ export default function Sidebar({
               </p>
               {transitScore.travelTimeToCityHall != null && transitScore.travelTimeToCityHall > 0 && (
                 <p className="text-sm text-indigo-700 mt-1">
-                  Estimated travel time to City Hall:{' '}
+                  {t('sidebar.travelTime')}{' '}
                   <span className="font-semibold">~{transitScore.travelTimeToCityHall} min</span>
                 </p>
               )}
@@ -239,7 +239,7 @@ export default function Sidebar({
           {accessGap && accessGap.accessGapScore != null && (
             <section aria-labelledby="access-gap-heading" className="rounded-lg bg-amber-50 border border-amber-200 p-3">
               <h2 id="access-gap-heading" className="text-sm font-medium text-amber-800 mb-2">
-                Access Gap Assessment
+                {t('sidebar.accessGap')}
               </h2>
               <div className="flex items-center gap-3 mb-2">
                 <div className="text-2xl font-bold text-amber-700">{accessGap.accessGapScore}</div>
@@ -252,33 +252,33 @@ export default function Sidebar({
               </div>
               <p className="text-sm text-amber-700 mb-2">
                 {accessGap.accessGapScore >= 65
-                  ? 'Data patterns suggest this neighborhood may face significant access barriers to civic services.'
+                  ? t('sidebar.accessGapHigh')
                   : accessGap.accessGapScore >= 40
-                    ? 'Some indicators suggest potential access gaps in this neighborhood.'
-                    : 'This neighborhood shows relatively fewer signs of access barriers.'}
+                    ? t('sidebar.accessGapMedium')
+                    : t('sidebar.accessGapLow')}
               </p>
               <div className="space-y-1.5 text-xs text-amber-600">
                 {accessGap.signals.lowEngagement != null && (
                   <div className="flex justify-between">
-                    <span>Low civic engagement signal</span>
+                    <span>{t('sidebar.lowEngagement')}</span>
                     <span className="font-mono">{Math.round(accessGap.signals.lowEngagement * 100)}%</span>
                   </div>
                 )}
                 {accessGap.signals.lowTransit != null && (
                   <div className="flex justify-between">
-                    <span>Limited transit access signal</span>
+                    <span>{t('sidebar.lowTransit')}</span>
                     <span className="font-mono">{Math.round(accessGap.signals.lowTransit * 100)}%</span>
                   </div>
                 )}
                 {accessGap.signals.highNonEnglish != null && (
                   <div className="flex justify-between">
-                    <span>Language barrier signal</span>
+                    <span>{t('sidebar.langBarrier')}</span>
                     <span className="font-mono">{Math.round(accessGap.signals.highNonEnglish * 100)}%</span>
                   </div>
                 )}
               </div>
               <p className="text-xs text-amber-500 mt-2 italic">
-                This score identifies potential access gaps based on available data. It does not prove a neighborhood is underserved.
+                {t('sidebar.accessGapDisclaimer')}
               </p>
             </section>
           )}
@@ -287,7 +287,7 @@ export default function Sidebar({
           {metrics.goodNews.length > 0 && (
             <section aria-labelledby="good-news-heading" className="rounded-lg bg-green-50 border border-green-200 p-3">
               <h2 id="good-news-heading" className="text-sm font-medium text-green-800 mb-2">
-                Good News
+                {t('sidebar.goodNews')}
               </h2>
               <ul className="space-y-1.5 text-sm text-green-700">
                 {metrics.goodNews.map((item, i) => (
@@ -356,7 +356,7 @@ export default function Sidebar({
                 disabled={reportLoading}
                 className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
-                {t('sidebar.switchReportLang', { language: suggestedLangMeta.nativeLabel }) ?? `Switch report to ${suggestedLangMeta.nativeLabel}`}
+                {t('sidebar.switchReportLang', { language: suggestedLangMeta.nativeLabel })}
               </button>
             </div>
           )}
@@ -391,7 +391,7 @@ export default function Sidebar({
               onClick={() => onGenerateReport(reportLang)}
               className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
-              {t('sidebar.regenerateReport') ?? 'Regenerate Report'}
+              {t('sidebar.regenerateReport')}
             </button>
           )}
         </>

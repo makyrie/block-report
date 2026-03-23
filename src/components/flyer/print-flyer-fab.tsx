@@ -44,7 +44,7 @@ export function PrintFlyerFab({ visible }: PrintFlyerFabProps) {
         {t('flyer.printFlyer')}
         {!hasInteracted && (
           <span className="ml-1 rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wider">
-            New
+            {t('fab.new')}
           </span>
         )}
       </button>
@@ -74,7 +74,7 @@ export function PrintFlyerFab({ visible }: PrintFlyerFabProps) {
           {t('flyer.printFlyer')}
           {!hasInteracted && (
             <span className="ml-1 rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wider">
-              New
+              {t('fab.new')}
             </span>
           )}
         </button>
