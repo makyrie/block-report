@@ -2,6 +2,7 @@
  * Extracted from claude.ts to avoid circular dependency with report-cache.ts. */
 export function validateReportShape(input: unknown): asserts input is {
   neighborhoodName: string;
+  language: string;
   summary: string;
   goodNews: unknown[];
   topIssues: unknown[];
@@ -29,5 +30,8 @@ export function validateReportShape(input: unknown): asserts input is {
   }
   if (typeof obj.contactInfo !== 'object' || obj.contactInfo === null) {
     throw new Error('Claude response missing contactInfo object');
+  }
+  if (typeof obj.language !== 'string') {
+    throw new Error('Claude response missing language string');
   }
 }

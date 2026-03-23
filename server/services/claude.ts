@@ -6,9 +6,6 @@ import { logger } from '../logger.js';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
 import { validateReportShape } from '../utils/report-validation.js';
 
-// Re-export for any existing consumers
-export { validateReportShape };
-
 const MAX_RECURSION_DEPTH = 10;
 
 /** Strip any string values longer than maxLen and remove control characters */
@@ -34,14 +31,6 @@ export function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unk
     return sanitized;
   }
   return obj;
-}
-
-/** Validate and sanitize a NeighborhoodProfile before embedding in a prompt */
-export function sanitizeProfile(profile: NeighborhoodProfile): NeighborhoodProfile {
-  if (typeof profile !== 'object' || profile === null) {
-    throw new Error('profile must be an object');
-  }
-  return sanitizeStringFields(profile) as NeighborhoodProfile;
 }
 
 /** Validate and sanitize BlockMetrics before embedding in a prompt */
@@ -124,7 +113,7 @@ const REPORT_TOOL: Anthropic.Messages.Tool = {
   },
 };
 
-/** Extract and validate the report from a Claude tool_use response */
+/** Extract and validate the report from a Claude tool_use response, allowlisting known fields */
 function parseReportResponse(message: Anthropic.Messages.Message): CommunityReport {
   const toolBlock = message.content.find((block) => block.type === 'tool_use');
   if (!toolBlock || toolBlock.type !== 'tool_use') {
@@ -133,8 +122,15 @@ function parseReportResponse(message: Anthropic.Messages.Message): CommunityRepo
 
   validateReportShape(toolBlock.input);
 
+  const input = toolBlock.input as Record<string, unknown>;
   return {
-    ...(toolBlock.input),
+    neighborhoodName: input.neighborhoodName as string,
+    language: input.language as string,
+    summary: input.summary as string,
+    goodNews: input.goodNews as string[],
+    topIssues: input.topIssues as string[],
+    howToParticipate: input.howToParticipate as string[],
+    contactInfo: input.contactInfo as CommunityReport['contactInfo'],
     generatedAt: new Date().toISOString(),
   };
 }
@@ -171,7 +167,7 @@ export async function generateReport(
   const safeLang = language.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, '');
 
   // Profile is already allowlisted and type-coerced by pickProfileFields in the
-  // route layer. We use it directly here — no redundant sanitizeProfile pass.
+  // route layer — used directly here without additional sanitization.
 
   const client = getClient();
 

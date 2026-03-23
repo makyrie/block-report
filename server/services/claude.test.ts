@@ -1,13 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  validateReportShape,
   sanitizeStringFields,
-  sanitizeProfile,
   sanitizeBlockMetrics,
   sanitizeDemographics,
   generateReport,
   generateBlockReport,
 } from './claude';
+import { validateReportShape } from '../utils/report-validation';
 import type { NeighborhoodProfile, BlockMetrics } from '../../src/types/index';
 
 // --- validateReportShape ---
@@ -96,31 +95,6 @@ describe('sanitizeStringFields', () => {
     expect(sanitizeStringFields(42)).toBe(42);
     expect(sanitizeStringFields(true)).toBe(true);
     expect(sanitizeStringFields(null)).toBe(null);
-  });
-});
-
-// --- sanitizeProfile ---
-
-describe('sanitizeProfile', () => {
-  const baseProfile: NeighborhoodProfile = {
-    communityName: 'Mira Mesa',
-    anchor: { id: '1', name: 'Library', type: 'library', lat: 32.9, lng: -117.1, address: '123 Main', community: 'Mira Mesa' },
-    metrics: {
-      totalRequests311: 100, resolvedCount: 80, resolutionRate: 0.8, avgDaysToResolve: 5,
-      topIssues: [], recentlyResolved: [], population: 50000, requestsPer1000Residents: 2, goodNews: [],
-    },
-    transit: { nearbyStopCount: 5, nearestStopDistance: 0.3, stopCount: 10, agencyCount: 2, agencies: ['MTS'], transitScore: 60, cityAverage: 50, travelTimeToCityHall: null },
-    demographics: { topLanguages: [{ language: 'English', percentage: 70 }] },
-  };
-
-  it('accepts a valid profile and returns sanitized copy', () => {
-    const result = sanitizeProfile(baseProfile);
-    expect(result.communityName).toBe('Mira Mesa');
-    expect(result.metrics.totalRequests311).toBe(100);
-  });
-
-  it('rejects null profile', () => {
-    expect(() => sanitizeProfile(null as unknown as NeighborhoodProfile)).toThrow('must be an object');
   });
 });
 
