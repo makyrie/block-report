@@ -77,6 +77,7 @@ router.get('/', async (req, res) => {
         res.status(404).json({ error: 'Tract not found' });
         return;
       }
+      res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
       res.json({ topLanguages: computeTopLanguages([data as Record<string, unknown>]) });
       return;
     } catch (err) {
@@ -91,6 +92,7 @@ router.get('/', async (req, res) => {
   // crosswalk table is needed to map community plan names → tract IDs.
   // Return empty so the frontend degrades gracefully rather than throwing 500.
   logger.warn('Demographics by community requested but crosswalk not implemented', { community });
+  res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
   res.json({ topLanguages: [] });
 });
 

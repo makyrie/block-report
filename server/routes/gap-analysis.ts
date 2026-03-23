@@ -52,6 +52,7 @@ router.get('/ranking', async (req, res) => {
       getAccessGapScores(),
     ]);
     const withGaps = Array.from(allScores.values()).filter((r) => r.accessGapScore >= 50).length;
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json({
       ranking,
       summary: { total: allScores.size, withGaps },

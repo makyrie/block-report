@@ -97,6 +97,7 @@ router.get('/', async (req, res) => {
     .slice(0, 5)
     .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
 
+  res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
   res.json({
     totalRequests: nearby.length,
     openCount: open.length,
