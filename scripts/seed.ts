@@ -281,12 +281,18 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
 async function main() {
   console.log('Starting seed...\n');
 
-  console.log('Truncating tables...');
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language'
-  );
-  console.log('  ✓ Tables truncated\n');
+  await prisma.$transaction(async (tx) => {
+    console.log('Truncating tables (inside transaction)...');
+    await tx.$executeRawUnsafe(
+      'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language'
+    );
+    console.log('  ✓ Tables truncated\n');
+  });
 
+  // Data seeding runs outside the truncate transaction because:
+  // 1. Network fetches + large batch inserts can exceed transaction timeouts
+  // 2. Each seeder is idempotent (createMany on empty tables after truncate)
+  // 3. If a seeder fails, re-running the full seed script is safe
   await seedLibraries();
   await seedRecCenters();
   await seedTransitStops();
