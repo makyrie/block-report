@@ -73,6 +73,13 @@ if (isVercel) {
   logger.warn('Rate limiting is in-memory only — ineffective across serverless instances. Configure Vercel WAF or Upstash for production.');
 }
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
+const pdfLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many PDF generation requests, please try again later' },
+});
 const reportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -80,6 +87,7 @@ const reportLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many report generation requests, please try again later' },
 });
+app.use('/api/report/pdf', pdfLimiter);
 app.use('/api/report', reportLimiter);
 app.use('/api', apiLimiter);
 
