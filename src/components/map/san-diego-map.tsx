@@ -323,14 +323,6 @@ function SanDiegoMap({
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
           <span className="text-gray-700">Rec Center</span>
         </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
-          <span className="text-gray-700">Transit Stop</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-orange-500 shrink-0" />
-          <span className="text-gray-700">Your Block</span>
-        </li>
       </ul>
     </nav>
     <MapContainer
