@@ -190,8 +190,11 @@ router.post('/generate', async (req: Request, res: Response) => {
         community: profile.communityName,
         language,
       });
-      reportPromise = generateReport(profile, language).then(async (r) => {
-        await saveCachedReport(profile.communityName, language, r);
+      reportPromise = generateReport(profile, language).then((r) => {
+        // Save to cache in the background — don't let cache failures reject the promise
+        saveCachedReport(profile.communityName, language, r).catch((err) => {
+          logger.error('Background cache save failed', { error: err instanceof Error ? err.message : String(err) });
+        });
         return r;
       });
       inflight.set(coalescingKey, reportPromise);
@@ -272,8 +275,11 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         anchor: anchor.name,
         language,
       });
-      blockPromise = generateBlockReport(anchor, blockMetrics, language, demographics).then(async (r) => {
-        await saveCachedBlockReport(anchorCacheId, language, r);
+      blockPromise = generateBlockReport(anchor, blockMetrics, language, demographics).then((r) => {
+        // Save to cache in the background — don't let cache failures reject the promise
+        saveCachedBlockReport(anchorCacheId, language, r).catch((err) => {
+          logger.error('Background block cache save failed', { error: err instanceof Error ? err.message : String(err) });
+        });
         return r;
       });
       inflight.set(blockCoalescingKey, blockPromise);
