@@ -34,6 +34,7 @@ router.get('/', async (req, res) => {
   const latDelta = radius / MILES_PER_LAT_DEG;
   const lngDelta = radius / MILES_PER_LNG_DEG;
 
+  const BLOCK_QUERY_LIMIT = 10000;
   let data;
   try {
     data = await prisma.request311.findMany({
@@ -49,6 +50,7 @@ router.get('/', async (req, res) => {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
         lng: { gte: lng - lngDelta, lte: lng + lngDelta },
       },
+      take: BLOCK_QUERY_LIMIT,
     });
   } catch (err) {
     logger.error('Failed to fetch block data', { error: err instanceof Error ? err.message : String(err) });
@@ -107,6 +109,7 @@ router.get('/', async (req, res) => {
     topIssues,
     recentlyResolved,
     radiusMiles: radius,
+    truncated: data.length >= BLOCK_QUERY_LIMIT,
   });
 });
 
