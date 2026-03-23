@@ -2,14 +2,15 @@ import type { FeatureCollection, Geometry, Position } from 'geojson';
 
 /**
  * Ray-casting point-in-polygon test.
- * Returns true if the point (x, y) lies inside the polygon ring.
+ * Ring coordinates follow GeoJSON convention: [lng, lat] pairs.
+ * Point coordinates: (lng, lat) to match ring ordering.
  */
-function pointInRing(x: number, y: number, ring: Position[]): boolean {
+function pointInRing(lng: number, lat: number, ring: Position[]): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+    const [xi, yi] = [ring[i][0], ring[i][1]]; // [lng, lat]
+    const [xj, yj] = [ring[j][0], ring[j][1]];
+    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
   }
@@ -18,6 +19,7 @@ function pointInRing(x: number, y: number, ring: Position[]): boolean {
 
 /**
  * Check if a point is inside a GeoJSON geometry (Polygon or MultiPolygon).
+ * Point must be inside the outer ring and outside all holes.
  */
 function pointInGeometry(lng: number, lat: number, geometry: Geometry): boolean {
   if (geometry.type === 'Polygon') {
@@ -46,6 +48,10 @@ function pointInGeometry(lng: number, lat: number, geometry: Geometry): boolean 
 /**
  * Given a lat/lng and the neighborhoods GeoJSON FeatureCollection,
  * return the community name that contains the point, or null if outside all boundaries.
+ *
+ * NOTE: This is the client-side equivalent of server/utils/geo.ts pointInFeature().
+ * Both use ray-casting with the same algorithm. The client version works with
+ * GeoJSON typed geometries; the server version works with raw number[][].
  */
 export function findCommunityAtPoint(
   lat: number,
@@ -56,7 +62,6 @@ export function findCommunityAtPoint(
     if (!feature.geometry) continue;
     if (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon') continue;
     if (pointInGeometry(lng, lat, feature.geometry)) {
-      // Try common property names for community name
       const props = feature.properties;
       if (!props) continue;
       const name = props.cpname || props.community || props.name || props.NAME || props.COMMUNITY;

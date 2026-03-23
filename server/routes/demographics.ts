@@ -51,8 +51,12 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  // Single tract lookup
+  // Single tract lookup — validate format (Census FIPS: digits and optional dots)
   if (tract) {
+    if (!/^[\d.]+$/.test(tract)) {
+      res.status(400).json({ error: 'Invalid tract format' });
+      return;
+    }
     try {
       const data = await prisma.censusLanguage.findUnique({ where: { tract } });
       if (!data) {

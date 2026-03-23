@@ -5,7 +5,8 @@ import { FlyerLayout } from '../components/flyer/flyer-layout';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
-import { get311, getDemographics, getPreGeneratedReport, generateReport } from '../api/client';
+import { getPreGeneratedReport, generateReport } from '../api/client';
+import { useCommunityData } from '../hooks/use-community-data';
 import type { CommunityReport, NeighborhoodProfile } from '../types';
 import { DEFAULT_TRANSIT } from '../utils/defaults';
 
@@ -15,28 +16,11 @@ export default function FlyerPage() {
   const { lang, setLang, t, reportLang } = useLanguage();
 
   const community = slug ? fromSlug(slug) : null;
+  const { metrics, topLanguages } = useCommunityData(community);
 
-  const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
-  const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
   const [report, setReport] = useState<CommunityReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch metrics and demographics when community is set
-  useEffect(() => {
-    if (!community) return;
-    let cancelled = false;
-    const controller = new AbortController();
-    setMetrics(null);
-    setTopLanguages([]);
-    get311(community, controller.signal)
-      .then((data) => { if (!cancelled) setMetrics(data); })
-      .catch((err) => { if (!cancelled && err?.name !== 'AbortError') console.error(err); });
-    getDemographics(community, controller.signal)
-      .then((data) => { if (!cancelled && data?.topLanguages) setTopLanguages(data.topLanguages); })
-      .catch(() => {});
-    return () => { cancelled = true; controller.abort(); };
-  }, [community]);
 
   // Auto-fetch report when community and language are ready
   useEffect(() => {

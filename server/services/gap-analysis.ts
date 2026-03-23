@@ -4,7 +4,7 @@ import { logger } from '../logger.js';
 import { getTransitScoreValues } from './transit-scores.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
 import { communityKey } from '../utils/community.js';
-import { isVercel } from '../env.js';
+import { DISK_CACHE_DIR } from '../env.js';
 
 export interface AccessGapResult {
   accessGapScore: number;
@@ -34,6 +34,7 @@ interface CensusRow {
 async function fetchCensusData(): Promise<CensusRow[]> {
   return prisma.censusLanguage.findMany({
     select: { community: true, total_pop_5plus: true, english_only: true },
+    take: 50_000, // Safety bound — SD county has ~900 tracts; prevents runaway queries
   });
 }
 
@@ -214,7 +215,6 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
 // ── Public API ──────────────────────────────────────────────────────
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
-const DISK_CACHE_DIR = isVercel ? '/tmp/block-report-cache' : join(process.cwd(), 'server', 'cache');
 const DISK_CACHE_PATH = join(DISK_CACHE_DIR, 'gap-analysis.json');
 const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL, { diskCachePath: DISK_CACHE_PATH });
 

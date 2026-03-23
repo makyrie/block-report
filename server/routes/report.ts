@@ -11,29 +11,8 @@ const router = Router();
 const ALLOWED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
 
 // GET /api/report?community={name}&language={lang} — cached community report
-// GET /api/report?lat=X&lng=Y&radius=Z&language=L — cached block-level report (by anchor ID)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Block-level lookup by coordinates — delegate to strategy-based cache
-    if (req.query.lat && req.query.lng) {
-      const anchorId = req.query.anchorId as string;
-      const language = (req.query.language as string) || 'en';
-
-      if (!anchorId) {
-        res.status(400).json({ error: 'Missing required query parameter: anchorId' });
-        return;
-      }
-
-      const cached = await getCachedBlockReport(anchorId, language);
-      if (cached) {
-        res.json(cached);
-      } else {
-        res.status(404).json({ error: 'No cached block report found for this location' });
-      }
-      return;
-    }
-
-    // Community-level lookup by name
     const community = req.query.community as string;
     const language = req.query.language as string || 'en';
 
@@ -51,6 +30,30 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Report lookup error', { error: message, stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/report/block?anchorId={id}&language={lang} — cached block-level report
+router.get('/block', async (req: Request, res: Response) => {
+  try {
+    const anchorId = req.query.anchorId as string;
+    const language = (req.query.language as string) || 'en';
+
+    if (!anchorId) {
+      res.status(400).json({ error: 'Missing required query parameter: anchorId' });
+      return;
+    }
+
+    const cached = await getCachedBlockReport(anchorId, language);
+    if (cached) {
+      res.json(cached);
+    } else {
+      res.status(404).json({ error: 'No cached block report found' });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Block report lookup error', { error: message, stack: error instanceof Error ? error.stack : undefined });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

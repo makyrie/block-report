@@ -40,4 +40,22 @@ router.get('/neighborhoods', async (_req, res) => {
   }
 });
 
+// GET /api/locations/communities — list valid community names (for agents and programmatic use)
+router.get('/communities', async (_req, res) => {
+  try {
+    const data = await fetchBoundaries();
+    const names: string[] = [];
+    for (const feature of data.features) {
+      const name = feature.properties?.cpname || feature.properties?.community || feature.properties?.name;
+      if (name) names.push(name as string);
+    }
+    names.sort();
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    res.json({ communities: names });
+  } catch (err) {
+    logger.error('Failed to list communities', { error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

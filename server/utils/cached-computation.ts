@@ -10,7 +10,7 @@ export interface CachedComputation<T> {
   invalidate(): void;
 }
 
-export interface CachedComputationOptions {
+interface CachedComputationOptions {
   /** Path to a JSON file for disk-based cache persistence (survives cold starts) */
   diskCachePath?: string;
 }
