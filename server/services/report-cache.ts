@@ -22,8 +22,10 @@ function isValidReportShape(data: unknown): data is CommunityReport {
 }
 
 /**
- * Shared key normalization — single source of truth for cache key generation.
- * Exported so route handlers can reuse it instead of duplicating the logic.
+ * Cache key normalization — lowercase + dashed for filesystem/DB storage.
+ * NOTE: This is intentionally different from communityKey() (uppercase for
+ * data-source matching). Cache keys only compare to other cache keys, so
+ * internal consistency is sufficient.
  */
 export function normalizeKey(value: string): string {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
