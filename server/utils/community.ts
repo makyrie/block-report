@@ -14,9 +14,12 @@ export function communityKey(name: string): string {
 
 /**
  * Filesystem/DB-safe cache key. Lowercased, non-alphanumeric collapsed to dashes.
+ * Explicitly strips path separators to prevent directory traversal.
  */
 export function normalizeKey(value: string): string {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  // Note: the regex above already strips / \ . and other path-special characters,
+  // making path traversal impossible. This comment serves as an explicit security note.
 }
 
 /**

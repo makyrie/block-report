@@ -324,9 +324,12 @@ function SanDiegoMap({
     return map;
   }, [libraries, recCenters, onAnchorClick]);
 
-  const selectedFeature = selectedCommunity && neighborhoodBoundaries
-    ? findCommunityFeature(neighborhoodBoundaries.features, selectedCommunity)
-    : null;
+  const selectedFeature = useMemo(
+    () => selectedCommunity && neighborhoodBoundaries
+      ? findCommunityFeature(neighborhoodBoundaries.features, selectedCommunity)
+      : null,
+    [selectedCommunity, neighborhoodBoundaries],
+  );
 
   // Convert transit stops to a single GeoJSON layer for performance
   // (~5800 stops rendered as one canvas layer instead of individual React components)
