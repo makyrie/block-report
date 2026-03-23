@@ -51,6 +51,18 @@ export default function NeighborhoodPage() {
     setReportError(null);
   }, [selectedCommunity, reportLang]);
 
+  // Refs for supplementary data — read during generation but should not trigger the effect
+  const selectedAnchorRef = useRef(selectedAnchor);
+  selectedAnchorRef.current = selectedAnchor;
+  const transitScoreRef = useRef(transitScore);
+  transitScoreRef.current = transitScore;
+  const topLanguagesRef = useRef(topLanguages);
+  topLanguagesRef.current = topLanguages;
+  const accessGapRef = useRef(accessGap);
+  accessGapRef.current = accessGap;
+  const reportRef = useRef(report);
+  reportRef.current = report;
+
   // Auto-fetch pre-generated report, falling back to on-demand generation
   useEffect(() => {
     if (!selectedCommunity) return;
@@ -74,14 +86,17 @@ export default function NeighborhoodPage() {
         return;
       }
 
-      if (report) {
+      if (reportRef.current) {
         setReportLoading(false);
         return;
       }
 
       generatingRef.current = true;
 
-      const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
+      const profile = buildProfile(
+        selectedCommunity, selectedAnchorRef.current, metrics,
+        transitScoreRef.current, topLanguagesRef.current, accessGapRef.current,
+      );
 
       try {
         const result = await generateReport(profile, reportLang);
@@ -95,7 +110,6 @@ export default function NeighborhoodPage() {
     })();
 
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunity, reportLang, metrics]);
 
   const handleCommunityChange = useCallback(
