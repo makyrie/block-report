@@ -78,6 +78,7 @@ router.get('/', async (req, res) => {
     );
   }
 
+  res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
   res.json({
     totalRequests311: total,
     resolvedCount,

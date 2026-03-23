@@ -26,6 +26,7 @@ router.get('/', async (req, res) => {
       return;
     }
 
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json(result);
   } catch (err) {
     logger.error('Failed to compute access gap score', { error: err instanceof Error ? err.message : String(err) });
@@ -49,6 +50,7 @@ router.get('/ranking', async (req, res) => {
     const ranking = await getTopUnderserved(limit);
     const allEntries = Array.from(allScores.values());
     const withGaps = allEntries.filter((r) => r.accessGapScore >= 50).length;
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json({
       ranking,
       summary: { total: allScores.size, withGaps },

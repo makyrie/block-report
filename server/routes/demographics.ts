@@ -64,6 +64,7 @@ router.get('/', async (req, res) => {
         res.status(404).json({ error: 'Tract not found' });
         return;
       }
+      res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
       res.json({ topLanguages: computeTopLanguages([data as Record<string, unknown>]) });
       return;
     } catch (err) {

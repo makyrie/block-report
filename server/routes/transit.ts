@@ -17,6 +17,8 @@ router.get('/', async (req, res) => {
     const key = communityKey(cleaned);
     const score = scores.get(key);
 
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+
     if (!score) {
       res.json({
         stopCount: 0,

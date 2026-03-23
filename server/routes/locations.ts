@@ -7,7 +7,9 @@ const router = Router();
 
 router.get('/libraries', async (_req, res) => {
   try {
-    const data = await prisma.library.findMany();
+    const data = await prisma.library.findMany({
+      select: { objectid: true, name: true, address: true, phone: true, website: true, lat: true, lng: true },
+    });
     res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json(data);
   } catch (err) {
@@ -18,7 +20,9 @@ router.get('/libraries', async (_req, res) => {
 
 router.get('/rec-centers', async (_req, res) => {
   try {
-    const data = await prisma.recCenter.findMany();
+    const data = await prisma.recCenter.findMany({
+      select: { objectid: true, rec_bldg: true, park_name: true, address: true, neighborhd: true, lat: true, lng: true },
+    });
     res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json(data);
   } catch (err) {
