@@ -35,9 +35,9 @@ async function getLauncher(): Promise<() => Promise<import('puppeteer-core').Bro
         '/snap/bin/chromium',
       ];
       let executablePath: string | undefined;
+      const { accessSync } = await import('node:fs');
       for (const p of possiblePaths) {
         try {
-          const { accessSync } = await import('node:fs');
           accessSync(p);
           executablePath = p;
           break;
@@ -57,13 +57,22 @@ async function getLauncher(): Promise<() => Promise<import('puppeteer-core').Bro
 // Reuse browser across warm requests to avoid cold-start cost per PDF
 let _browser: import('puppeteer-core').Browser | null = null;
 let _launchPromise: Promise<import('puppeteer-core').Browser> | null = null;
+let _pageCount = 0;
+const MAX_PAGES_BEFORE_RECYCLE = 50;
 
 async function getBrowser(): Promise<import('puppeteer-core').Browser> {
+  // Recycle browser if disconnected or page count exceeded
+  if (_browser && (!_browser.isConnected() || _pageCount >= MAX_PAGES_BEFORE_RECYCLE)) {
+    _browser.close().catch(() => {});
+    _browser = null;
+    _pageCount = 0;
+  }
   if (_browser && _browser.isConnected()) return _browser;
   if (!_launchPromise) {
     _launchPromise = (async () => {
       const launcher = await getLauncher();
       _browser = await launcher();
+      _pageCount = 0;
       _launchPromise = null;
       return _browser;
     })();
@@ -242,12 +251,26 @@ export function buildHtmlPage(bodyHtml: string, language: string): string {
 }
 
 const PDF_TIMEOUT_MS = 45_000; // 45s internal timeout (Vercel hard limit is 60s)
+const MAX_CONCURRENT_PDFS = 3;
+let _activePdfs = 0;
 
 /**
  * Generate a PDF buffer from the flyer data.
  * Launches headless Chromium, renders the React component as HTML, and exports to PDF.
  */
 export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
+  if (_activePdfs >= MAX_CONCURRENT_PDFS) {
+    throw new Error('PDF generation is busy, please try again later');
+  }
+  _activePdfs++;
+  try {
+    return await _generateFlyerPdfInner(data);
+  } finally {
+    _activePdfs--;
+  }
+}
+
+async function _generateFlyerPdfInner(data: PdfRequest): Promise<Buffer> {
   const startTime = Date.now();
   // Use a shared ref so the finally block can close a page created after timeout
   const pageRef: { current: import('puppeteer-core').Page | null } = { current: null };
@@ -264,6 +287,7 @@ export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
         const fullHtml = buildHtmlPage(bodyHtml, data.report.language);
 
         const newPage = await browser.newPage();
+        _pageCount++;
         pageRef.current = newPage;
 
         // Restrict network requests to allowlisted domains (prevents SSRF)
