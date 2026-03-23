@@ -109,7 +109,7 @@ export default function NeighborhoodPage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; generatingRef.current = false; };
   }, [selectedCommunity, reportLang, metrics]);
 
   const handleCommunityChange = useCallback(
@@ -149,21 +149,29 @@ export default function NeighborhoodPage() {
     }
   }, [neighborhoodBoundaries, selectedCommunity, navigate, setPinnedLocation, setBlockData]);
 
+  const selectedCommunityRef = useRef(selectedCommunity);
+  selectedCommunityRef.current = selectedCommunity;
+
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
+    const communityAtCallTime = selectedCommunity;
     const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
 
     setReportLoading(true);
     setReportError(null);
     try {
       const result = await generateReport(profile, language);
+      if (selectedCommunityRef.current !== communityAtCallTime) return;
       setReport(result);
     } catch (err) {
+      if (selectedCommunityRef.current !== communityAtCallTime) return;
       const message = err instanceof Error ? err.message : 'Failed to generate report';
       setReportError(message);
     } finally {
-      setReportLoading(false);
+      if (selectedCommunityRef.current === communityAtCallTime) {
+        setReportLoading(false);
+      }
     }
   }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
 

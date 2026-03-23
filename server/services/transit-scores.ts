@@ -7,6 +7,7 @@ import { fetchBoundaries } from './boundaries.js';
 import { pointInFeature, computeBBox, pointInBBox, haversineDistanceMiles, computeCentroid } from '../utils/geo.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
 import { communityKey } from '../utils/community.js';
+import { isVercel } from '../env.js';
 
 const CITY_HALL = { lat: 32.7157, lng: -117.1611 };
 const WALKING_SPEED_MPH = 3;
@@ -166,7 +167,8 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
 }
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
-const DISK_CACHE_PATH = join(process.cwd(), 'server', 'cache', 'transit-scores.json');
+const DISK_CACHE_DIR = isVercel ? '/tmp/block-report-cache' : join(process.cwd(), 'server', 'cache');
+const DISK_CACHE_PATH = join(DISK_CACHE_DIR, 'transit-scores.json');
 const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL, { diskCachePath: DISK_CACHE_PATH });
 
 export function getTransitScores(): Promise<Map<string, TransitScore>> {

@@ -45,11 +45,11 @@ router.get('/ranking', async (req, res) => {
       : 10;
 
   try {
-    const allScores = await getAccessGapScores();
-    const allEntries = Array.from(allScores.values());
-    const sorted = allEntries.sort((a, b) => b.accessGapScore - a.accessGapScore);
-    const ranking = sorted.slice(0, limit);
-    const withGaps = allEntries.filter((r) => r.accessGapScore >= 50).length;
+    const [ranking, allScores] = await Promise.all([
+      getTopUnderserved(limit),
+      getAccessGapScores(),
+    ]);
+    const withGaps = Array.from(allScores.values()).filter((r) => r.accessGapScore >= 50).length;
     res.json({
       ranking,
       summary: { total: allScores.size, withGaps },

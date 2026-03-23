@@ -49,13 +49,6 @@ export interface NeighborhoodProfile {
   } | null;
 }
 
-export interface TransitStop {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-}
-
 export interface BlockMetrics {
   totalRequests: number;
   openCount: number;
