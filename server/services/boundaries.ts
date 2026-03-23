@@ -4,6 +4,7 @@ import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FeatureCollection, Feature, Polygon, MultiPolygon } from 'geojson';
 import { logger } from '../logger.js';
+import { isVercel } from '../env.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
 
 const BOUNDARY_URL = 'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson';
@@ -33,6 +34,7 @@ export function validateBoundaryCollection(data: unknown): data is BoundaryColle
 }
 
 async function readDiskCache(): Promise<BoundaryCollection | null> {
+  if (isVercel) return null; // Vercel has a read-only filesystem
   try {
     const raw = await readFile(DISK_CACHE_FILE, 'utf-8');
     const parsed: unknown = JSON.parse(raw);
@@ -49,6 +51,7 @@ async function readDiskCache(): Promise<BoundaryCollection | null> {
 }
 
 async function writeDiskCache(data: BoundaryCollection): Promise<void> {
+  if (isVercel) return; // Vercel has a read-only filesystem
   try {
     await mkdir(DISK_CACHE_DIR, { recursive: true });
     const tmpFile = DISK_CACHE_FILE + '.tmp';

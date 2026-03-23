@@ -1,5 +1,10 @@
 // Shared utility for TTL-cached computations with promise coalescing.
 // Replaces the duplicated CACHE_TTL / inflight / cache pattern across services.
+//
+// NOTE: This is an in-memory cache. On serverless platforms (Vercel), the cache
+// resets on every cold start. The TTL only governs cache lifetime within a warm
+// instance. For data that is expensive to compute (transit scores, gap analysis),
+// callers should also set HTTP Cache-Control headers so the CDN caches responses.
 
 export interface CachedComputation<T> {
   get(): Promise<T>;
