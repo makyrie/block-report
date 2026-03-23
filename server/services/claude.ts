@@ -272,8 +272,8 @@ Keep the total report under 400 words. It should fit on one printed page.`;
   } catch (error) {
     logger.error('Claude API call failed for block report', {
       error: error instanceof Error ? error.message : String(error),
-      anchor: anchor.name,
-      community: anchor.community,
+      anchor: safeAnchor.name,
+      community: safeAnchor.community,
     });
     throw error;
   }

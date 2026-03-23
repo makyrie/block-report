@@ -43,17 +43,17 @@ export function useCommunityData(selectedCommunity: string | null): CommunityDat
 
     getTransitScore(selectedCommunity, signal)
       .then((data) => { if (!signal.aborted) setTransitScore(data); })
-      .catch(() => { /* transit score may not be available */ });
+      .catch((err) => { if (!signal.aborted) console.error('Failed to load transit score', err); });
 
     getAccessGap(selectedCommunity, signal)
       .then((data) => { if (!signal.aborted && data?.accessGapScore != null) setAccessGap(data); })
-      .catch(() => { /* access gap score may not be available */ });
+      .catch((err) => { if (!signal.aborted) console.error('Failed to load access gap', err); });
 
     getDemographics(selectedCommunity, signal)
       .then((data) => {
         if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
-      .catch(() => { /* demographics may not be available for all communities */ });
+      .catch((err) => { if (!signal.aborted) console.error('Failed to load demographics', err); });
 
     return () => { controller.abort(); };
   }, [selectedCommunity]);

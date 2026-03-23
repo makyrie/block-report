@@ -39,7 +39,7 @@ export function useReport(
         if (cancelled) return;
         if (cached) setReport(cached);
       })
-      .catch(() => {})
+      .catch((err) => { if (!cancelled) console.error('Failed to fetch pre-generated report', err); })
       .finally(() => {
         if (!cancelled) setReportLoading(false);
       });
