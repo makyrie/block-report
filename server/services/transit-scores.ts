@@ -182,7 +182,8 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
 }
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
-const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL);
+/** @internal Exported for test isolation — call invalidate() in beforeEach */
+export const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL);
 
 export function getTransitScores(): Promise<Map<string, TransitScore>> {
   return cachedScores.get();

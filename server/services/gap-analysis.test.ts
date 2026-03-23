@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { describeTopFactors } from './gap-analysis';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { describeTopFactors, cachedScores } from './gap-analysis';
 
 describe('describeTopFactors', () => {
+  beforeEach(() => { cachedScores.invalidate(); });
   it('returns factors with signal values above 0.5', () => {
     const signals = { lowEngagement: 0.8, lowTransit: 0.6, highNonEnglish: 0.9 };
     const factors = describeTopFactors(signals);
