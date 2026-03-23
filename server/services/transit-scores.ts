@@ -1,5 +1,6 @@
 // Single source of truth for transit score computation across all communities
 
+import { join } from 'node:path';
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
 import { fetchBoundaries } from './boundaries.js';
@@ -164,7 +165,8 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
 }
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
-const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL);
+const DISK_CACHE_PATH = join(process.cwd(), 'server', 'cache', 'transit-scores.json');
+const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL, { diskCachePath: DISK_CACHE_PATH });
 
 export function getTransitScores(): Promise<Map<string, TransitScore>> {
   return cachedScores.get();
