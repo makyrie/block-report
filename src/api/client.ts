@@ -96,5 +96,5 @@ export function getBlockReport(
   radius = 0.25,
   language = 'en',
 ): Promise<CommunityReport & { preGenerated?: boolean; anchorName?: string; anchorType?: string }> {
-  return fetchJSON(`${BASE}/report?lat=${lat}&lng=${lng}&radius=${radius}&language=${language}&anchorId=${encodeURIComponent(anchorId)}`);
+  return fetchJSON(`${BASE}/report?lat=${lat}&lng=${lng}&radius=${radius}&language=${encodeURIComponent(language)}&anchorId=${encodeURIComponent(anchorId)}`);
 }

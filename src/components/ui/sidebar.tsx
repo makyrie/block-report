@@ -110,7 +110,7 @@ export default function Sidebar({
   }
 
   return (
-    <div className="p-4 space-y-5">
+    <div className="p-4 space-y-5" aria-live="polite" aria-atomic="false">
       <h1 className="text-lg font-semibold">{community}</h1>
 
       {/* Dual-scale view: block + neighborhood comparison */}
