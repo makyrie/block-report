@@ -89,16 +89,16 @@ export default function NeighborhoodPage() {
       .finally(() => { if (!signal.aborted) setMetricsLoading(false); });
 
     getTransitScore(selectedCommunity, signal)
-      .then(setTransitScore)
+      .then((data) => { if (!signal.aborted) setTransitScore(data); })
       .catch(() => { /* transit score may not be available */ });
 
     getAccessGap(selectedCommunity, signal)
-      .then((data) => { if (data?.accessGapScore != null) setAccessGap(data); })
+      .then((data) => { if (!signal.aborted && data?.accessGapScore != null) setAccessGap(data); })
       .catch(() => { /* access gap score may not be available */ });
 
     getDemographics(selectedCommunity, signal)
       .then((data) => {
-        if (data?.topLanguages) setTopLanguages(data.topLanguages);
+        if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
       .catch(() => {
         // Demographics may not be available for all communities
@@ -190,7 +190,11 @@ export default function NeighborhoodPage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Reset the lock so the next community can generate a report
+      generatingRef.current = false;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunity, reportLang, metrics]);
 
