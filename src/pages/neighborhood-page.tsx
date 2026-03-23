@@ -220,11 +220,13 @@ export default function NeighborhoodPage() {
   // Re-fetch block data when radius changes
   useEffect(() => {
     if (!pinnedLocation) return;
+    let cancelled = false;
     setBlockLoading(true);
     getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius)
-      .then(setBlockData)
-      .catch((err) => console.error('Failed to fetch block data', err))
-      .finally(() => setBlockLoading(false));
+      .then((data) => { if (!cancelled) setBlockData(data); })
+      .catch((err) => { if (!cancelled) console.error('Failed to fetch block data', err); })
+      .finally(() => { if (!cancelled) setBlockLoading(false); });
+    return () => { cancelled = true; };
   }, [blockRadius, pinnedLocation]);
 
   const handleGenerateReport = useCallback(async (language: string) => {

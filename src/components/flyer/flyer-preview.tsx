@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
 import { FlyerLayout } from './flyer-layout';
 import { toSlug } from '../../utils/slug';
@@ -20,11 +20,17 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
   const [visible, setVisible] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [pdfState, setPdfState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const mountedRef = useRef(true);
 
   // Fade-in animation on mount
   useEffect(() => {
     const timer = setTimeout(() => setVisible(true), 50);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Track unmount to guard async state updates
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
   }, []);
 
   const slug = toSlug(report.neighborhoodName);
@@ -34,6 +40,7 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
     setPdfState('loading');
     try {
       const blob = await downloadPdf(report, slug, metrics, topLanguages);
+      if (!mountedRef.current) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -45,7 +52,7 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
       URL.revokeObjectURL(url);
       setPdfState('idle');
     } catch {
-      setPdfState('error');
+      if (mountedRef.current) setPdfState('error');
     }
   };
 
