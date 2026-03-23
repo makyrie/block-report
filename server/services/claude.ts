@@ -7,6 +7,32 @@ import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAncho
 
 const MAX_RECURSION_DEPTH = 10;
 
+/** Runtime validation for Claude tool_use response shape before type assertion */
+function validateReportShape(input: unknown): asserts input is Omit<import('../../src/types/index.js').CommunityReport, 'generatedAt'> {
+  if (typeof input !== 'object' || input === null) {
+    throw new Error('Claude response is not an object');
+  }
+  const obj = input as Record<string, unknown>;
+  if (typeof obj.neighborhoodName !== 'string') {
+    throw new Error('Claude response missing neighborhoodName string');
+  }
+  if (typeof obj.summary !== 'string') {
+    throw new Error('Claude response missing summary string');
+  }
+  if (!Array.isArray(obj.goodNews)) {
+    throw new Error('Claude response missing goodNews array');
+  }
+  if (!Array.isArray(obj.topIssues)) {
+    throw new Error('Claude response missing topIssues array');
+  }
+  if (!Array.isArray(obj.howToParticipate)) {
+    throw new Error('Claude response missing howToParticipate array');
+  }
+  if (typeof obj.contactInfo !== 'object' || obj.contactInfo === null) {
+    throw new Error('Claude response missing contactInfo object');
+  }
+}
+
 /** Strip any string values longer than maxLen and remove control characters */
 function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
   if (depth > MAX_RECURSION_DEPTH) {
@@ -167,8 +193,10 @@ Keep the total report under 400 words. It should fit on one printed page.`;
       throw new Error('No tool use block in response');
     }
 
+    validateReportShape(toolBlock.input);
+
     const report: CommunityReport = {
-      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
+      ...(toolBlock.input),
       generatedAt: new Date().toISOString(),
     };
 
@@ -176,7 +204,6 @@ Keep the total report under 400 words. It should fit on one printed page.`;
   } catch (error) {
     logger.error('Claude API call failed', {
       error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
       community: profile.communityName,
     });
     throw error;
@@ -273,8 +300,10 @@ Keep the total report under 400 words. It should fit on one printed page.`;
       throw new Error('No tool use block in response');
     }
 
+    validateReportShape(toolBlock.input);
+
     const report: CommunityReport = {
-      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
+      ...(toolBlock.input),
       generatedAt: new Date().toISOString(),
     };
 
