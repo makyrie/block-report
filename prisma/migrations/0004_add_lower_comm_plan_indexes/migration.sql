@@ -1,3 +1,4 @@
+-- DropTransaction
 -- Add functional indexes on LOWER(comm_plan_name) and LOWER(community)
 -- to support the case-insensitive lookups in get_community_metrics().
 -- Without these, each call to that function triggers 5 sequential scans
