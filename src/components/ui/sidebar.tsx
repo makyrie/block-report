@@ -115,9 +115,9 @@ export default function Sidebar({
 
       {/* Dual-scale view: block + neighborhood comparison */}
       {blockLoading && (
-        <div role="status" aria-label="Loading block data" className="flex items-center gap-2 py-3">
+        <div role="status" aria-label={t('sidebar.loadingBlock')} className="flex items-center gap-2 py-3">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-orange-300 border-t-orange-600" />
-          <span className="text-xs text-orange-600">Loading block data...</span>
+          <span className="text-xs text-orange-600">{t('sidebar.loadingBlock')}</span>
         </div>
       )}
       {blockData && metrics && community && blockRadius != null && (
@@ -220,8 +220,7 @@ export default function Sidebar({
                 </div>
               </div>
               <p className="text-sm text-indigo-700">
-                Your neighborhood has <span className="font-semibold">{transitScore.stopCount}</span> transit stop{transitScore.stopCount !== 1 ? 's' : ''} served
-                by <span className="font-semibold">{transitScore.agencyCount}</span> transit agenc{transitScore.agencyCount !== 1 ? 'ies' : 'y'}
+                {t('sidebar.transitDescription', { stopCount: String(transitScore.stopCount), agencyCount: String(transitScore.agencyCount) })}
                 {transitScore.agencies.length > 0 && (
                   <> ({transitScore.agencies.join(', ')})</>
                 )}.
@@ -246,7 +245,7 @@ export default function Sidebar({
                 <div className="text-xs text-amber-600">
                   <span className="block">/ 100</span>
                   <span className="block">
-                    Rank {accessGap.rank} of {accessGap.totalCommunities} communities
+                    {t('sidebar.rankOf', { rank: String(accessGap.rank), totalCommunities: String(accessGap.totalCommunities) })}
                   </span>
                 </div>
               </div>
