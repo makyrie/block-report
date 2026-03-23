@@ -19,18 +19,32 @@ export function pointInPolygon(lat: number, lng: number, polygon: number[][]): b
 }
 
 // Test whether a point is inside a GeoJSON Feature geometry (Polygon or MultiPolygon)
+// Correctly handles polygon holes: point must be inside outer ring AND outside all holes
 export function pointInFeature(
   lat: number,
   lng: number,
   geometry: PolygonLike,
 ): boolean {
   if (geometry.type === 'Polygon') {
-    return pointInPolygon(lat, lng, (geometry.coordinates as number[][][])[0]);
+    const [outer, ...holes] = geometry.coordinates as number[][][];
+    if (!pointInPolygon(lat, lng, outer)) return false;
+    for (const hole of holes) {
+      if (pointInPolygon(lat, lng, hole)) return false;
+    }
+    return true;
   }
   if (geometry.type === 'MultiPolygon') {
-    return (geometry.coordinates as number[][][][]).some((poly) =>
-      pointInPolygon(lat, lng, poly[0]),
-    );
+    for (const poly of geometry.coordinates as number[][][][]) {
+      const [outer, ...holes] = poly;
+      if (pointInPolygon(lat, lng, outer)) {
+        let inHole = false;
+        for (const hole of holes) {
+          if (pointInPolygon(lat, lng, hole)) { inHole = true; break; }
+        }
+        if (!inHole) return true;
+      }
+    }
+    return false;
   }
   return false;
 }
