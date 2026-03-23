@@ -4,6 +4,9 @@ import { generateReport, generateBlockReport, CONTROL_CHAR_RE } from '../service
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited } from '../services/report-cache.js';
+import { SUPPORTED_LANGUAGES } from '../../src/i18n/translations.js';
+
+const SUPPORTED_LANGUAGE_LABELS = SUPPORTED_LANGUAGES.map((l) => l.label);
 
 const router = Router();
 
@@ -63,8 +66,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'profile must be an object with a communityName string' });
       return;
     }
-    if (typeof language !== 'string' || !language || language.length > 50) {
-      res.status(400).json({ error: 'language must be a non-empty string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !language || !SUPPORTED_LANGUAGE_LABELS.includes(language)) {
+      res.status(400).json({ error: `language must be one of: ${SUPPORTED_LANGUAGE_LABELS.join(', ')}` });
       return;
     }
 
@@ -113,6 +116,11 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;
     }
+    if (typeof blockMetrics !== 'object' || blockMetrics === null ||
+        typeof blockMetrics.totalRequests !== 'number' || typeof blockMetrics.radiusMiles !== 'number') {
+      res.status(400).json({ error: 'blockMetrics must be an object with numeric totalRequests and radiusMiles' });
+      return;
+    }
 
     // Validate anchor fields to prevent prompt injection via user-controlled strings
     // Work on a copy to avoid mutating req.body
@@ -131,8 +139,8 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
       }
     }
-    if (typeof language !== 'string' || language.length > 50) {
-      res.status(400).json({ error: 'language must be a string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !SUPPORTED_LANGUAGE_LABELS.includes(language)) {
+      res.status(400).json({ error: `language must be one of: ${SUPPORTED_LANGUAGE_LABELS.join(', ')}` });
       return;
     }
 

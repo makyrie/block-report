@@ -49,9 +49,10 @@ router.post('/pdf', async (req: Request, res: Response) => {
     const sanitizedSlug = neighborhoodSlug.replace(CONTROL_CHAR_RE, '').slice(0, 200);
 
     // Determine base URL for QR codes and links
-    const baseUrl = process.env.APP_URL
-      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
-      || 'https://blockreport.org';
+    // Only trust VERCEL_URL if it's on the .vercel.app domain (prevents fork preview abuse)
+    const vercelUrl = process.env.VERCEL_URL;
+    const safeVercelUrl = vercelUrl?.endsWith('.vercel.app') ? `https://${vercelUrl}` : '';
+    const baseUrl = process.env.APP_URL || safeVercelUrl || 'https://blockreport.org';
 
     const pdfBuffer = await generateFlyerPdf({
       report: cappedReport,
