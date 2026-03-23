@@ -2,6 +2,16 @@ import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import { fetchBoundaries } from '../services/boundaries.js';
+import { createCachedComputation } from '../utils/cached-computation.js';
+
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+const cachedTransitStops = createCachedComputation(
+  () => prisma.transitStop.findMany({
+    select: { objectid: true, stop_name: true, lat: true, lng: true },
+  }),
+  CACHE_TTL,
+);
 
 const router = Router();
 
@@ -29,9 +39,7 @@ router.get('/rec-centers', async (_req, res) => {
 
 router.get('/transit-stops', async (_req, res) => {
   try {
-    const data = await prisma.transitStop.findMany({
-      select: { objectid: true, stop_name: true, lat: true, lng: true },
-    });
+    const data = await cachedTransitStops.get();
     res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json(data);
   } catch (err) {

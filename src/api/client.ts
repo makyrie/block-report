@@ -24,8 +24,22 @@ export function getRecCenters(): Promise<CommunityAnchor[]> {
   return fetchJSON(`${BASE}/locations/rec-centers`);
 }
 
+let transitStopsPromise: Promise<TransitStop[]> | null = null;
+let transitStopsCachedAt = 0;
+const TRANSIT_STOPS_CLIENT_TTL = 60 * 60 * 1000; // 1 hour
+
 export function getTransitStops(): Promise<TransitStop[]> {
-  return fetchJSON(`${BASE}/locations/transit-stops`);
+  if (transitStopsPromise && Date.now() - transitStopsCachedAt < TRANSIT_STOPS_CLIENT_TTL) {
+    return transitStopsPromise;
+  }
+  transitStopsCachedAt = Date.now();
+  transitStopsPromise = fetchJSON<TransitStop[]>(
+    `${BASE}/locations/transit-stops`,
+  ).catch((err) => {
+    transitStopsPromise = null;
+    throw err;
+  });
+  return transitStopsPromise;
 }
 
 let boundaryPromise: Promise<FeatureCollection> | null = null;
