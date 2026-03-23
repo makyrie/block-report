@@ -2,11 +2,12 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { generateFlyerPdf } from '../services/pdf.js';
 import { sanitizeStringFields, CONTROL_CHAR_RE } from '../services/claude.js';
+import { SUPPORTED_LANGUAGES } from '../../src/i18n/translations.js';
 import { logger } from '../logger.js';
 
 const router = Router();
 
-const SUPPORTED_LANGUAGES = ['English', 'Spanish', 'Vietnamese', 'Tagalog', 'Chinese', 'Arabic'];
+const SUPPORTED_LANGUAGE_LABELS = SUPPORTED_LANGUAGES.map((l) => l.label);
 const MAX_ARRAY_ITEMS = 10;
 
 /**
@@ -33,8 +34,8 @@ router.post('/pdf', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'report must contain neighborhoodName and language strings' });
       return;
     }
-    if (!SUPPORTED_LANGUAGES.includes(report.language)) {
-      res.status(400).json({ error: `Unsupported language. Must be one of: ${SUPPORTED_LANGUAGES.join(', ')}` });
+    if (!SUPPORTED_LANGUAGE_LABELS.includes(report.language)) {
+      res.status(400).json({ error: `Unsupported language. Must be one of: ${SUPPORTED_LANGUAGE_LABELS.join(', ')}` });
       return;
     }
 
