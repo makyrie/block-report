@@ -7,8 +7,9 @@
  * Lowercase, strip non-alphanumeric to hyphens, trim leading/trailing hyphens.
  * Examples: "Mira Mesa" → "mira-mesa", "Mid-City: City Heights" → "mid-city-city-heights"
  *
- * This is the single normalization function for the server. The frontend
- * uses its own norm() (in types/community.ts) for display-side matching.
+ * WARNING: This produces DIFFERENT output from norm() in types/community.ts.
+ * norm() uses spaces for fuzzy frontend matching; communityKey() uses hyphens
+ * for deterministic server-side keys. Do NOT mix them.
  */
 export function communityKey(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
