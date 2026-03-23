@@ -283,10 +283,15 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
 async function main() {
   console.log('Starting seed...\n');
 
-  console.log('Truncating tables...');
-  await prisma.$executeRaw`TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language CASCADE`;
-  console.log('  ✓ Tables truncated\n');
+  console.log('Truncating tables (inside transaction)...');
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language, report_cache CASCADE`;
+    console.log('  ✓ Tables truncated\n');
+  });
 
+  // Seed operations run outside the truncate transaction because they involve
+  // external network fetches that can take minutes. If any step fails, the
+  // truncate has already committed — re-run the full seed to recover.
   await seedLibraries();
   await seedRecCenters();
   await seedTransitStops();
