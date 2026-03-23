@@ -3,6 +3,14 @@ import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport,
 
 const BASE = '/api';
 
+class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
@@ -17,7 +25,7 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
         if (text) message = text.slice(0, 200);
       }
     } catch { /* use default message */ }
-    throw new Error(message);
+    throw new ApiError(res.status, message);
   }
   return res.json() as Promise<T>;
 }
@@ -82,8 +90,14 @@ export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: A
 export async function getPreGeneratedReport(community: string, language: string): Promise<CommunityReport | null> {
   try {
     return await fetchJSON(`${BASE}/report?community=${encodeURIComponent(community)}&language=${encodeURIComponent(language)}`);
-  } catch {
-    return null; // 404 or error — no pre-generated report available
+  } catch (err) {
+    // Only treat 404 (no cached report) as a null result.
+    // Re-throw 500s and other errors so callers can decide whether to
+    // fall back to on-demand generation or surface the failure.
+    if (err instanceof ApiError && err.status === 404) {
+      return null;
+    }
+    throw err;
   }
 }
 
