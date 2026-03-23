@@ -88,7 +88,7 @@ export default function DualScaleView({ blockData, blockRadius, communityName, m
                   aria-hidden="true"
                   className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${calloutDot[comparison.type]}`}
                 />
-                <span>{comparison.text}</span>
+                <span>{t(comparison.key, comparison.vars)}</span>
               </li>
             ))}
           </ul>

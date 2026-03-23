@@ -1,13 +1,14 @@
 import type { BlockMetrics, NeighborhoodProfile } from '../types';
 
 export interface ScaleComparison {
-  text: string;
+  key: string;
+  vars: Record<string, string>;
   type: 'insight' | 'good-news' | 'concern';
 }
 
 /**
- * Generate plain-language comparison callouts between block-level and
- * neighborhood-level 311 data. Returns up to 3 most relevant comparisons.
+ * Generate comparison callouts between block-level and neighborhood-level 311
+ * data. Returns i18n keys + interpolation vars for translatable display.
  */
 export function generateComparisons(
   block: BlockMetrics,
@@ -20,7 +21,8 @@ export function generateComparisons(
   // No block reports at all
   if (block.totalRequests === 0) {
     return [{
-      text: `No reports found near your pin within ${block.radiusMiles} mi. Try a larger radius.`,
+      key: 'comparison.noReports',
+      vars: { radius: String(block.radiusMiles) },
       type: 'insight',
     }];
   }
@@ -30,7 +32,12 @@ export function generateComparisons(
   // 1. Open count comparison
   const neighborhoodOpenCount = Math.max(0, neighborhood.totalRequests311 - neighborhood.resolvedCount);
   comparisons.push({
-    text: `Your block has ${block.openCount} open report${block.openCount !== 1 ? 's' : ''}. Across ${communityName}, there are ${neighborhoodOpenCount.toLocaleString()} unresolved issues.`,
+    key: 'comparison.openCount',
+    vars: {
+      blockOpen: String(block.openCount),
+      community: communityName,
+      neighborhoodOpen: neighborhoodOpenCount.toLocaleString(),
+    },
     type: 'insight',
   });
 
@@ -42,15 +49,20 @@ export function generateComparisons(
     const rateDiff = Math.abs(blockRate - neighborhoodRate);
 
     if (rateDiff > 10) {
-      const direction = blockRate > neighborhoodRate ? 'higher' : 'lower';
-      const compType = blockRate > neighborhoodRate ? 'good-news' : 'concern';
+      const higher = blockRate > neighborhoodRate;
       comparisons.push({
-        text: `Around your pin, ${Math.round(blockRate)}% of issues are resolved — ${direction} than the ${Math.round(neighborhoodRate)}% rate across ${communityName}.`,
-        type: compType as ScaleComparison['type'],
+        key: higher ? 'comparison.resolutionHigher' : 'comparison.resolutionLower',
+        vars: {
+          blockRate: String(Math.round(blockRate)),
+          neighborhoodRate: String(Math.round(neighborhoodRate)),
+          community: communityName,
+        },
+        type: higher ? 'good-news' : 'concern',
       });
     } else if (rateDiff <= 5) {
       comparisons.push({
-        text: `Your block's resolution rate mirrors the ${communityName} average.`,
+        key: 'comparison.resolutionSimilar',
+        vars: { community: communityName },
         type: 'insight',
       });
     }
@@ -61,7 +73,12 @@ export function generateComparisons(
       if (daysDiff > 2) {
         const faster = block.avgDaysToResolve < neighborhood.avgDaysToResolve;
         comparisons.push({
-          text: `Issues near you take about ${Math.round(block.avgDaysToResolve)} days to resolve — ${faster ? 'faster' : 'slower'} than the ${communityName} average of ${Math.round(neighborhood.avgDaysToResolve)} days.`,
+          key: faster ? 'comparison.responseFaster' : 'comparison.responseSlower',
+          vars: {
+            blockDays: String(Math.round(block.avgDaysToResolve)),
+            neighborhoodDays: String(Math.round(neighborhood.avgDaysToResolve)),
+            community: communityName,
+          },
           type: faster ? 'good-news' : 'concern',
         });
       }
@@ -73,12 +90,14 @@ export function generateComparisons(
       const neighborhoodTop = neighborhood.topIssues[0].category;
       if (blockTop === neighborhoodTop) {
         comparisons.push({
-          text: `"${blockTop}" is the top issue both near you and across ${communityName}.`,
+          key: 'comparison.sameTopIssue',
+          vars: { issue: blockTop, community: communityName },
           type: 'insight',
         });
       } else {
         comparisons.push({
-          text: `Near you it's "${blockTop}", but neighborhood-wide the top issue is "${neighborhoodTop}".`,
+          key: 'comparison.differentTopIssue',
+          vars: { blockIssue: blockTop, neighborhoodIssue: neighborhoodTop },
           type: 'insight',
         });
       }
