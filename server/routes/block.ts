@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
-import { computeBlockMetrics } from '../services/block.js';
+import { computeBlockMetrics, type BlockResult } from '../services/block.js';
 
 const router = Router();
 
@@ -9,6 +9,16 @@ const router = Router();
 const MILES_PER_LAT_DEG = 69;
 // At San Diego (~32.7°N): 1 deg longitude ~ 58.8 miles
 const MILES_PER_LNG_DEG = 58.8;
+
+// In-memory cache for block results — coordinates are rounded to 4 decimal places
+// (~11m precision) so nearby requests share cache entries.
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_SIZE = 200;
+const blockCache = new Map<string, { data: BlockResult; expires: number }>();
+
+function cacheKey(lat: number, lng: number, radius: number): string {
+  return `${lat.toFixed(4)},${lng.toFixed(4)},${radius}`;
+}
 
 router.get('/', async (req, res) => {
   const lat = parseFloat(req.query.lat as string);
@@ -28,6 +38,14 @@ router.get('/', async (req, res) => {
 
   if (radius < 0.1 || radius > 2) {
     res.status(400).json({ error: 'Radius must be between 0.1 and 2 miles' });
+    return;
+  }
+
+  // Check cache
+  const key = cacheKey(lat, lng, radius);
+  const cached = blockCache.get(key);
+  if (cached && cached.expires > Date.now()) {
+    res.json(cached.data);
     return;
   }
 
@@ -61,7 +79,16 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  res.json(computeBlockMetrics(data, lat, lng, radius));
+  const result = computeBlockMetrics(data, lat, lng, radius);
+
+  // Store in cache, evicting oldest entries if over limit
+  if (blockCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = blockCache.keys().next().value;
+    if (firstKey !== undefined) blockCache.delete(firstKey);
+  }
+  blockCache.set(key, { data: result, expires: Date.now() + CACHE_TTL });
+
+  res.json(result);
 });
 
 export default router;
