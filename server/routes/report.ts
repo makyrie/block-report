@@ -161,8 +161,14 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     }
 
     // Validate anchor fields to prevent prompt injection via user-controlled strings
-    // Work on a copy to avoid mutating req.body
-    const anchor = { ...rawAnchor };
+    // Work on a copy with only allowed keys to prevent prototype pollution and prompt bloat
+    const ALLOWED_ANCHOR_KEYS = new Set(['id', 'name', 'type', 'lat', 'lng', 'address', 'phone', 'website', 'community']);
+    const anchor: Record<string, unknown> = {};
+    for (const key of Object.keys(rawAnchor)) {
+      if (ALLOWED_ANCHOR_KEYS.has(key)) {
+        anchor[key] = rawAnchor[key];
+      }
+    }
     const MAX_FIELD_LEN = 200;
     const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
     for (const field of ['id', 'name', 'address', 'community', 'type'] as const) {
@@ -183,10 +189,16 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       return;
     }
 
-    // Validate blockMetrics structure
+    // Validate blockMetrics structure — strip unexpected keys to prevent prompt bloat
     if (typeof blockMetrics !== 'object' || blockMetrics === null) {
       res.status(400).json({ error: 'blockMetrics must be an object' });
       return;
+    }
+    const ALLOWED_METRICS_KEYS = new Set(['totalRequests', 'openCount', 'resolvedCount', 'resolutionRate', 'avgDaysToResolve', 'topIssues', 'recentlyResolved', 'radiusMiles']);
+    for (const key of Object.keys(blockMetrics)) {
+      if (!ALLOWED_METRICS_KEYS.has(key)) {
+        delete blockMetrics[key];
+      }
     }
     for (const field of ['totalRequests', 'openCount', 'resolvedCount', 'resolutionRate', 'radiusMiles'] as const) {
       if (typeof blockMetrics[field] !== 'number' || !isFinite(blockMetrics[field])) {
@@ -198,6 +210,26 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'blockMetrics.topIssues and recentlyResolved must be arrays' });
       return;
     }
+    // Validate and sanitize array element contents to prevent prompt injection
+    const MAX_ARRAY_LEN = 20;
+    const MAX_STR_LEN = 200;
+    const CTRL_RE = /[\x00-\x1f\x7f]/g;
+    blockMetrics.topIssues = blockMetrics.topIssues.slice(0, MAX_ARRAY_LEN).map((item: unknown) => {
+      if (typeof item !== 'object' || item === null) return { category: 'Unknown', count: 0 };
+      const it = item as Record<string, unknown>;
+      return {
+        category: typeof it.category === 'string' ? it.category.slice(0, MAX_STR_LEN).replace(CTRL_RE, '') : 'Unknown',
+        count: typeof it.count === 'number' && isFinite(it.count) ? it.count : 0,
+      };
+    });
+    blockMetrics.recentlyResolved = blockMetrics.recentlyResolved.slice(0, MAX_ARRAY_LEN).map((item: unknown) => {
+      if (typeof item !== 'object' || item === null) return { category: 'Unknown', date: '' };
+      const it = item as Record<string, unknown>;
+      return {
+        category: typeof it.category === 'string' ? it.category.slice(0, MAX_STR_LEN).replace(CTRL_RE, '') : 'Unknown',
+        date: typeof it.date === 'string' ? it.date.slice(0, 30).replace(CTRL_RE, '') : '',
+      };
+    });
 
     // Validate demographics if provided
     if (demographics !== undefined && demographics !== null) {

@@ -19,12 +19,14 @@ function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
     return obj.slice(0, 50).map(item => sanitizeStringFields(item, maxLen, depth + 1));
   }
   if (obj !== null && typeof obj === 'object') {
-    const sanitized: Record<string, unknown> = {};
+    const sanitized: Record<string, unknown> = Object.create(null);
     const keys = Object.keys(obj);
     if (keys.length > 100) {
       throw new Error('Object has too many keys (max 100)');
     }
+    const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
     for (const key of keys) {
+      if (DANGEROUS_KEYS.has(key)) continue;
       sanitized[key] = sanitizeStringFields((obj as Record<string, unknown>)[key], maxLen, depth + 1);
     }
     return sanitized;
