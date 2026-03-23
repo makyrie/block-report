@@ -2,8 +2,94 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile } from '../../src/types/index.js';
+import type { NeighborhoodProfile, BlockMetrics } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited } from '../services/report-cache.js';
+
+/** Maximum serialized prompt size (bytes) to prevent cost amplification */
+const MAX_PROFILE_JSON_SIZE = 8_000;
+
+/** Pick only known NeighborhoodProfile fields from an untrusted object */
+function pickProfileFields(raw: Record<string, unknown>): NeighborhoodProfile {
+  const metrics = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics as Record<string, unknown> : {};
+  const transit = raw.transit && typeof raw.transit === 'object' ? raw.transit as Record<string, unknown> : {};
+  const demographics = raw.demographics && typeof raw.demographics === 'object' ? raw.demographics as Record<string, unknown> : {};
+  const anchor = raw.anchor && typeof raw.anchor === 'object' ? raw.anchor as Record<string, unknown> : {};
+  const accessGap = raw.accessGap && typeof raw.accessGap === 'object' ? raw.accessGap as Record<string, unknown> : null;
+
+  return {
+    communityName: String(raw.communityName ?? ''),
+    anchor: {
+      id: String(anchor.id ?? ''),
+      name: String(anchor.name ?? ''),
+      type: anchor.type === 'rec_center' ? 'rec_center' : 'library',
+      lat: Number(anchor.lat) || 0,
+      lng: Number(anchor.lng) || 0,
+      address: String(anchor.address ?? ''),
+      community: String(anchor.community ?? ''),
+    },
+    metrics: {
+      totalRequests311: Number(metrics.totalRequests311) || 0,
+      resolvedCount: Number(metrics.resolvedCount) || 0,
+      resolutionRate: Number(metrics.resolutionRate) || 0,
+      avgDaysToResolve: Number(metrics.avgDaysToResolve) || 0,
+      topIssues: Array.isArray(metrics.topIssues) ? (metrics.topIssues as { category: string; count: number }[]).slice(0, 20) : [],
+      recentlyResolved: Array.isArray(metrics.recentlyResolved) ? (metrics.recentlyResolved as { category: string; date: string }[]).slice(0, 20) : [],
+      population: Number(metrics.population) || 0,
+      requestsPer1000Residents: metrics.requestsPer1000Residents != null ? Number(metrics.requestsPer1000Residents) : null,
+      goodNews: Array.isArray(metrics.goodNews) ? (metrics.goodNews as string[]).slice(0, 10) : [],
+    },
+    transit: {
+      nearbyStopCount: Number(transit.nearbyStopCount) || 0,
+      nearestStopDistance: Number(transit.nearestStopDistance) || 0,
+      stopCount: Number(transit.stopCount) || 0,
+      agencyCount: Number(transit.agencyCount) || 0,
+      agencies: Array.isArray(transit.agencies) ? (transit.agencies as string[]).slice(0, 20) : [],
+      transitScore: Number(transit.transitScore) || 0,
+      cityAverage: Number(transit.cityAverage) || 0,
+      travelTimeToCityHall: transit.travelTimeToCityHall != null ? Number(transit.travelTimeToCityHall) : null,
+    },
+    demographics: {
+      topLanguages: Array.isArray(demographics.topLanguages) ? (demographics.topLanguages as { language: string; percentage: number }[]).slice(0, 20) : [],
+    },
+    accessGap: accessGap ? {
+      accessGapScore: Number((accessGap as Record<string, unknown>).accessGapScore) || 0,
+      signals: {
+        lowEngagement: (accessGap as Record<string, unknown>).signals && typeof (accessGap as Record<string, unknown>).signals === 'object'
+          ? ((accessGap as Record<string, unknown>).signals as Record<string, unknown>).lowEngagement != null ? Number(((accessGap as Record<string, unknown>).signals as Record<string, unknown>).lowEngagement) : null
+          : null,
+        lowTransit: (accessGap as Record<string, unknown>).signals && typeof (accessGap as Record<string, unknown>).signals === 'object'
+          ? ((accessGap as Record<string, unknown>).signals as Record<string, unknown>).lowTransit != null ? Number(((accessGap as Record<string, unknown>).signals as Record<string, unknown>).lowTransit) : null
+          : null,
+        highNonEnglish: (accessGap as Record<string, unknown>).signals && typeof (accessGap as Record<string, unknown>).signals === 'object'
+          ? ((accessGap as Record<string, unknown>).signals as Record<string, unknown>).highNonEnglish != null ? Number(((accessGap as Record<string, unknown>).signals as Record<string, unknown>).highNonEnglish) : null
+          : null,
+      },
+      rank: Number((accessGap as Record<string, unknown>).rank) || 0,
+      totalCommunities: Number((accessGap as Record<string, unknown>).totalCommunities) || 0,
+    } : null,
+  };
+}
+
+/** Pick only known BlockMetrics fields from an untrusted object */
+function pickBlockMetricsFields(raw: Record<string, unknown>): BlockMetrics {
+  return {
+    totalRequests: Number(raw.totalRequests) || 0,
+    openCount: Number(raw.openCount) || 0,
+    resolvedCount: Number(raw.resolvedCount) || 0,
+    resolutionRate: Number(raw.resolutionRate) || 0,
+    avgDaysToResolve: raw.avgDaysToResolve != null ? Number(raw.avgDaysToResolve) : null,
+    topIssues: Array.isArray(raw.topIssues) ? (raw.topIssues as { category: string; count: number }[]).slice(0, 20) : [],
+    recentlyResolved: Array.isArray(raw.recentlyResolved) ? (raw.recentlyResolved as { category: string; date: string }[]).slice(0, 20) : [],
+    radiusMiles: Number(raw.radiusMiles) || 0,
+  };
+}
+
+/** Pick only known demographics fields */
+function pickDemographicsFields(raw: Record<string, unknown>): { topLanguages: { language: string; percentage: number }[] } {
+  return {
+    topLanguages: Array.isArray(raw.topLanguages) ? (raw.topLanguages as { language: string; percentage: number }[]).slice(0, 20) : [],
+  };
+}
 
 const router = Router();
 
@@ -57,17 +143,27 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.post('/generate', async (req: Request, res: Response) => {
   try {
-    const { profile, language } = req.body as {
-      profile: NeighborhoodProfile;
+    const { profile: rawProfile, language } = req.body as {
+      profile: unknown;
       language: string;
     };
 
-    if (typeof profile !== 'object' || profile === null || typeof profile.communityName !== 'string') {
+    if (typeof rawProfile !== 'object' || rawProfile === null || typeof (rawProfile as Record<string, unknown>).communityName !== 'string') {
       res.status(400).json({ error: 'profile must be an object with a communityName string' });
       return;
     }
     if (typeof language !== 'string' || !language || language.length > 50) {
       res.status(400).json({ error: 'language must be a non-empty string of 50 characters or fewer' });
+      return;
+    }
+
+    // Allowlist profile fields to prevent cost amplification from extra fields
+    const profile = pickProfileFields(rawProfile as Record<string, unknown>);
+
+    // Guard against oversized serialized prompts
+    const serialized = JSON.stringify(profile);
+    if (serialized.length > MAX_PROFILE_JSON_SIZE) {
+      res.status(400).json({ error: `Profile data too large (${serialized.length} bytes, max ${MAX_PROFILE_JSON_SIZE})` });
       return;
     }
 
@@ -119,12 +215,16 @@ router.post('/generate', async (req: Request, res: Response) => {
 // POST /api/report/generate-block — Generate a block-level report for an anchor location
 router.post('/generate-block', async (req: Request, res: Response) => {
   try {
-    const { anchor: rawAnchor, blockMetrics, language, demographics } = req.body;
+    const { anchor: rawAnchor, blockMetrics: rawBlockMetrics, language, demographics: rawDemographics } = req.body;
 
-    if (!rawAnchor || !blockMetrics || !language) {
+    if (!rawAnchor || !rawBlockMetrics || !language) {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;
     }
+
+    // Allowlist blockMetrics and demographics fields to prevent prompt injection via extra fields
+    const blockMetrics = pickBlockMetricsFields(rawBlockMetrics as Record<string, unknown>);
+    const demographics = rawDemographics ? pickDemographicsFields(rawDemographics as Record<string, unknown>) : undefined;
 
     // Validate anchor fields to prevent prompt injection via user-controlled strings
     // Work on a copy to avoid mutating req.body
