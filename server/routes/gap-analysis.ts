@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    logger.error('Failed to compute access gap score', { error: (err as Error).message });
+    logger.error('Failed to compute access gap score', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -54,7 +54,7 @@ router.get('/ranking', async (req, res) => {
       summary: { total: allScores.size, withGaps },
     });
   } catch (err) {
-    logger.error('Failed to compute access gap ranking', { error: (err as Error).message });
+    logger.error('Failed to compute access gap ranking', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

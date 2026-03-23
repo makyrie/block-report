@@ -17,9 +17,13 @@ export function useMapData(): MapData {
   const [dataError, setDataError] = useState<string | null>(null);
 
   useEffect(() => {
-    getLibraries().then(setLibraries).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
-    getRecCenters().then(setRecCenters).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
-    getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
+    let cancelled = false;
+
+    getLibraries().then((data) => { if (!cancelled) setLibraries(data); }).catch((err) => { if (!cancelled) { console.error(err); setDataError('Failed to load map data'); } });
+    getRecCenters().then((data) => { if (!cancelled) setRecCenters(data); }).catch((err) => { if (!cancelled) { console.error(err); setDataError('Failed to load map data'); } });
+    getNeighborhoodBoundaries().then((data) => { if (!cancelled) setNeighborhoodBoundaries(data); }).catch((err) => { if (!cancelled) { console.error(err); setDataError('Failed to load map data'); } });
+
+    return () => { cancelled = true; };
   }, []);
 
   return { libraries, recCenters, neighborhoodBoundaries, dataError };

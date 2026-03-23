@@ -57,7 +57,7 @@ async function writeDiskCache(data: BoundaryCollection): Promise<void> {
     await writeFile(tmpFile, JSON.stringify({ cachedAt: Date.now(), data }));
     await rename(tmpFile, DISK_CACHE_FILE);
   } catch (err) {
-    logger.warn('Failed to write boundary disk cache', { error: (err as Error).message });
+    logger.warn('Failed to write boundary disk cache', { error: err instanceof Error ? err.message : String(err) });
   }
 }
 

@@ -61,7 +61,7 @@ router.get('/', async (req, res) => {
       res.json({ topLanguages: computeTopLanguages([data as Record<string, unknown>]) });
       return;
     } catch (err) {
-      logger.error('Failed to fetch demographics', { error: (err as Error).message, tract });
+      logger.error('Failed to fetch demographics', { error: err instanceof Error ? err.message : String(err), tract });
       res.status(500).json({ error: 'Internal server error' });
       return;
     }
