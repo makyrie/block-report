@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
@@ -286,6 +286,20 @@ function MapController({ feature }: { feature: Feature | null }) {
   return null;
 }
 
+type MarkerFilter = 'all' | 'library' | 'rec_center';
+
+const FILTER_OPTIONS: readonly { value: MarkerFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'library', label: 'Libraries' },
+  { value: 'rec_center', label: 'Rec Centers' },
+] as const;
+
+const FILTER_ANNOUNCE: Record<MarkerFilter, string> = {
+  all: 'Showing all markers',
+  library: 'Showing libraries only',
+  rec_center: 'Showing rec centers only',
+};
+
 function SanDiegoMap({
   libraries,
   recCenters,
@@ -299,6 +313,8 @@ function SanDiegoMap({
   blockLoading = false,
   blockRadius = 0.25,
 }: SanDiegoMapProps) {
+  const [activeFilter, setActiveFilter] = useState<MarkerFilter>('all');
+
   const handleMarkerClick = useCallback(
     (anchor: CommunityAnchor) => () => {
       onAnchorClick(anchor);
@@ -312,6 +328,33 @@ function SanDiegoMap({
 
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
+    {/* Screen reader announcement for filter changes */}
+    <div aria-live="polite" className="sr-only">{FILTER_ANNOUNCE[activeFilter]}</div>
+
+    {/* Layer filter — bottom-left, above legend */}
+    <div
+      role="radiogroup"
+      aria-label="Filter map markers by type"
+      className="absolute bottom-[7.5rem] left-2 z-[1000] flex rounded-lg overflow-hidden shadow-md print:hidden"
+    >
+      {FILTER_OPTIONS.map(({ value, label }) => (
+        <button
+          key={value}
+          type="button"
+          role="radio"
+          aria-checked={activeFilter === value}
+          onClick={() => setActiveFilter(value)}
+          className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+            activeFilter === value
+              ? 'bg-blue-600 text-white'
+              : 'bg-white/90 text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+
     {/* Legend */}
     <nav aria-label="Map legend" className="absolute bottom-8 left-2 z-[1000] bg-white/90 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 text-xs print:hidden">
       <ul className="space-y-1.5">
@@ -403,37 +446,39 @@ function SanDiegoMap({
         </CircleMarker>
       ))}
 
-      {/* Library markers — blue */}
-      {libraries.map((lib) => (
-        <Marker
-          key={lib.id}
-          position={[lib.lat, lib.lng]}
-          icon={blueIcon}
-          title={`Library: ${lib.name}`}
-          alt={`Library: ${lib.name}`}
-          eventHandlers={{ click: handleMarkerClick(lib) }}
-        >
-          <Popup>
-            <AnchorPopupContent anchor={lib} />
-          </Popup>
-        </Marker>
-      ))}
+      {/* Library markers — blue (shown when filter is 'all' or 'library') */}
+      {(activeFilter === 'all' || activeFilter === 'library') &&
+        libraries.map((lib) => (
+          <Marker
+            key={lib.id}
+            position={[lib.lat, lib.lng]}
+            icon={blueIcon}
+            title={`Library: ${lib.name}`}
+            alt={`Library: ${lib.name}`}
+            eventHandlers={{ click: handleMarkerClick(lib) }}
+          >
+            <Popup>
+              <AnchorPopupContent anchor={lib} />
+            </Popup>
+          </Marker>
+        ))}
 
-      {/* Rec center markers — green */}
-      {recCenters.map((rc) => (
-        <Marker
-          key={rc.id}
-          position={[rc.lat, rc.lng]}
-          icon={greenIcon}
-          title={`Rec Center: ${rc.name}`}
-          alt={`Rec Center: ${rc.name}`}
-          eventHandlers={{ click: handleMarkerClick(rc) }}
-        >
-          <Popup>
-            <AnchorPopupContent anchor={rc} />
-          </Popup>
-        </Marker>
-      ))}
+      {/* Rec center markers — green (shown when filter is 'all' or 'rec_center') */}
+      {(activeFilter === 'all' || activeFilter === 'rec_center') &&
+        recCenters.map((rc) => (
+          <Marker
+            key={rc.id}
+            position={[rc.lat, rc.lng]}
+            icon={greenIcon}
+            title={`Rec Center: ${rc.name}`}
+            alt={`Rec Center: ${rc.name}`}
+            eventHandlers={{ click: handleMarkerClick(rc) }}
+          >
+            <Popup>
+              <AnchorPopupContent anchor={rc} />
+            </Popup>
+          </Marker>
+        ))}
     </MapContainer>
     </div>
   );
