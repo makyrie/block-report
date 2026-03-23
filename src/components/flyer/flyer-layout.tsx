@@ -52,6 +52,7 @@ interface FlyerLabels {
   nearestResource: string;
   tagline: string;
   scanForReport: string;
+  generated: string;
 }
 
 const FLYER_LABELS: Record<string, FlyerLabels> = {
@@ -70,6 +71,7 @@ const FLYER_LABELS: Record<string, FlyerLabels> = {
     nearestResource: 'Nearest Resource',
     tagline: 'Your neighborhood, your voice',
     scanForReport: 'Scan for full report',
+    generated: 'Generated',
   },
   Spanish: {
     blockReport: 'Informe del Barrio',
@@ -86,6 +88,7 @@ const FLYER_LABELS: Record<string, FlyerLabels> = {
     nearestResource: 'Recurso Mas Cercano',
     tagline: 'Tu barrio, tu voz',
     scanForReport: 'Escanea para el informe completo',
+    generated: 'Generado',
   },
   Vietnamese: {
     blockReport: 'Bao Cao Khu Pho',
@@ -102,6 +105,7 @@ const FLYER_LABELS: Record<string, FlyerLabels> = {
     nearestResource: 'Dia Diem Gan Nhat',
     tagline: 'Khu pho cua ban, tieng noi cua ban',
     scanForReport: 'Quet de xem bao cao day du',
+    generated: 'Tao ngay',
   },
   Tagalog: {
     blockReport: 'Ulat ng Block',
@@ -118,6 +122,7 @@ const FLYER_LABELS: Record<string, FlyerLabels> = {
     nearestResource: 'Pinakamalapit na Mapagkukunan',
     tagline: 'Ang iyong komunidad, ang iyong boses',
     scanForReport: 'I-scan para sa buong ulat',
+    generated: 'Ginawa',
   },
   Chinese: {
     blockReport: '\u793e\u533a\u62a5\u544a',
@@ -134,6 +139,7 @@ const FLYER_LABELS: Record<string, FlyerLabels> = {
     nearestResource: '\u6700\u8fd1\u8d44\u6e90',
     tagline: '\u4f60\u7684\u793e\u533a\uff0c\u4f60\u7684\u58f0\u97f3',
     scanForReport: '\u626b\u63cf\u67e5\u770b\u5b8c\u6574\u62a5\u544a',
+    generated: '\u751f\u6210\u4e8e',
   },
   Arabic: {
     blockReport: '\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u062d\u064a',
@@ -150,6 +156,7 @@ const FLYER_LABELS: Record<string, FlyerLabels> = {
     nearestResource: '\u0623\u0642\u0631\u0628 \u0645\u0648\u0631\u062f',
     tagline: '\u062d\u064a\u0643\u060c \u0635\u0648\u062a\u0643',
     scanForReport: '\u0627\u0645\u0633\u062d \u0644\u0644\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0643\u0627\u0645\u0644',
+    generated: '\u062a\u0645 \u0627\u0644\u0625\u0646\u0634\u0627\u0621',
   },
 };
 
@@ -341,7 +348,7 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
             {labels.blockReport} &mdash; {labels.tagline}
           </p>
           <p className="text-[10px] text-gray-600">
-            Generated {formattedDate} &middot; {origin}/resources
+            {labels.generated} {formattedDate} &middot; {origin}/resources
           </p>
         </div>
         <div className="flex flex-col items-center">
