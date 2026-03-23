@@ -223,6 +223,16 @@ svg { display: inline-block; vertical-align: middle; }
 .list-none { list-style: none; padding-left: 0; }
 `;
 
+/** Map language labels to BCP 47 codes for the HTML lang attribute. */
+const LANGUAGE_TO_BCP47: Record<string, string> = {
+  English: 'en',
+  Spanish: 'es',
+  Vietnamese: 'vi',
+  Tagalog: 'fil',
+  Chinese: 'zh',
+  Arabic: 'ar',
+};
+
 /**
  * Build a full HTML page with pre-compiled CSS for the flyer.
  * Loads only the Google Fonts family needed for the target language.
@@ -230,10 +240,11 @@ svg { display: inline-block; vertical-align: middle; }
 export function buildHtmlPage(bodyHtml: string, language: string): string {
   const isRtl = language === 'Arabic';
   const dir = isRtl ? 'rtl' : 'ltr';
+  const langCode = LANGUAGE_TO_BCP47[language] || 'en';
   const fontUrl = getFontUrl(language);
 
   return `<!DOCTYPE html>
-<html lang="${isRtl ? 'ar' : 'en'}" dir="${dir}">
+<html lang="${langCode}" dir="${dir}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

@@ -7,6 +7,11 @@ import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAncho
 
 export const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
 
+/** Sanitize a language string to prevent prompt injection */
+function sanitizeLanguage(language: string): string {
+  return language.slice(0, 50).replace(CONTROL_CHAR_RE, '');
+}
+
 const MAX_RECURSION_DEPTH = 10;
 const MAX_KEYS = 100;
 const MAX_ARRAY_ITEMS = 50;
@@ -148,7 +153,7 @@ export async function generateReport(
   }
 
   // Sanitize language to prevent prompt injection
-  const safeLang = language.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, '');
+  const safeLang = sanitizeLanguage(language);
 
   // Sanitize entire profile to prevent prompt injection via nested fields
   const safeProfile = sanitizeProfile(profile);
@@ -220,7 +225,7 @@ export async function generateBlockReport(
   const safeDemographics = demographics ? sanitizeDemographics(demographics) : undefined;
 
   // Sanitize language to prevent prompt injection
-  const safeLang = language.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, '');
+  const safeLang = sanitizeLanguage(language);
 
   const client = getClient();
 
