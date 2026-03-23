@@ -24,12 +24,17 @@ export default function FlyerPage() {
   // Fetch metrics and demographics when community is set
   useEffect(() => {
     if (!community) return;
+    const controller = new AbortController();
+    const { signal } = controller;
     setMetrics(null);
     setTopLanguages([]);
-    get311(community).then(setMetrics).catch(console.error);
-    getDemographics(community)
-      .then((data) => { if (data?.topLanguages) setTopLanguages(data.topLanguages); })
+    get311(community, signal)
+      .then(setMetrics)
+      .catch((e) => { if (!signal.aborted) console.error(e); });
+    getDemographics(community, signal)
+      .then((data) => { if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages); })
       .catch(() => {});
+    return () => { controller.abort(); };
   }, [community]);
 
   // Auto-fetch report when community and language are ready

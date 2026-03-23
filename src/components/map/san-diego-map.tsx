@@ -316,12 +316,13 @@ function SanDiegoMap({
   const { t } = useLanguage();
   const [activeFilter, setActiveFilter] = useState<MarkerFilter>('all');
 
-  const handleMarkerClick = useCallback(
-    (anchor: CommunityAnchor) => () => {
-      onAnchorClick(anchor);
-    },
-    [onAnchorClick],
-  );
+  // Memoize click handlers per marker to avoid creating new closures on every render
+  const markerClickHandlers = useMemo(() => {
+    const map = new Map<string, () => void>();
+    for (const lib of libraries) map.set(lib.id, () => onAnchorClick(lib));
+    for (const rc of recCenters) map.set(rc.id, () => onAnchorClick(rc));
+    return map;
+  }, [libraries, recCenters, onAnchorClick]);
 
   const selectedFeature = selectedCommunity && neighborhoodBoundaries
     ? findCommunityFeature(neighborhoodBoundaries.features, selectedCommunity)
@@ -472,7 +473,7 @@ function SanDiegoMap({
             icon={blueIcon}
             title={`Library: ${lib.name}`}
             alt={`Library: ${lib.name}`}
-            eventHandlers={{ click: handleMarkerClick(lib) }}
+            eventHandlers={{ click: markerClickHandlers.get(lib.id)! }}
           >
             <Popup>
               <AnchorPopupContent anchor={lib} />
@@ -489,7 +490,7 @@ function SanDiegoMap({
             icon={greenIcon}
             title={`Rec Center: ${rc.name}`}
             alt={`Rec Center: ${rc.name}`}
-            eventHandlers={{ click: handleMarkerClick(rc) }}
+            eventHandlers={{ click: markerClickHandlers.get(rc.id)! }}
           >
             <Popup>
               <AnchorPopupContent anchor={rc} />

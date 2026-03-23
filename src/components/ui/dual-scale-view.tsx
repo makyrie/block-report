@@ -33,7 +33,7 @@ const calloutDot: Record<ScaleComparison['type'], string> = {
 
 export default function DualScaleView({ blockData, blockRadius, communityName, metrics }: DualScaleViewProps) {
   const { t } = useLanguage();
-  const comparisons = generateComparisons(blockData, metrics, communityName);
+  const comparisons = generateComparisons(blockData, metrics, communityName, t);
 
   return (
     <section aria-labelledby="dual-scale-heading" className="space-y-3">

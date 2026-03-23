@@ -9,6 +9,22 @@ const router = Router();
 
 const SUPPORTED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
 
+// Per-IP rate limiting for report generation endpoints
+const PER_IP_LIMIT = 5;
+const PER_IP_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const ipGenerationCounts = new Map<string, { count: number; resetAt: number }>();
+
+function isIpRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = ipGenerationCounts.get(ip);
+  if (!entry || now >= entry.resetAt) {
+    ipGenerationCounts.set(ip, { count: 1, resetAt: now + PER_IP_WINDOW_MS });
+    return false;
+  }
+  entry.count++;
+  return entry.count > PER_IP_LIMIT;
+}
+
 // GET /api/report?community={name}&language={lang} — cached community report
 // GET /api/report?lat=X&lng=Y&radius=Z&language=L — cached block-level report (by anchor ID)
 router.get('/', async (req: Request, res: Response) => {
@@ -70,8 +86,10 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // Run cache lookup and rate limit check in parallel to save a DB round trip
-    const [cached, rateLimited] = await Promise.all([
+    const clientIp = req.ip ?? 'unknown';
+
+    // Run cache lookup and rate limit checks in parallel
+    const [cached, globalRateLimited] = await Promise.all([
       getCachedReport(profile.communityName, language),
       isGenerationRateLimited(),
     ]);
@@ -80,7 +98,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.json(cached);
       return;
     }
-    if (rateLimited) {
+    if (globalRateLimited || isIpRateLimited(clientIp)) {
       res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
@@ -169,9 +187,11 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       }
     }
 
-    // Run cache lookup and rate limit check in parallel to save a DB round trip
+    const clientIp = req.ip ?? 'unknown';
+
+    // Run cache lookup and rate limit checks in parallel
     const anchorCacheId = anchor.id || anchor.name;
-    const [cached, rateLimited] = await Promise.all([
+    const [cached, globalRateLimited] = await Promise.all([
       getCachedBlockReport(anchorCacheId, language),
       isGenerationRateLimited(),
     ]);
@@ -180,7 +200,7 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.json(cached);
       return;
     }
-    if (rateLimited) {
+    if (globalRateLimited || isIpRateLimited(clientIp)) {
       res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
