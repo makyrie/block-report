@@ -32,12 +32,30 @@ function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
   return obj;
 }
 
+const PROFILE_ALLOWED_KEYS = new Set([
+  'communityName', 'anchor', 'metrics', 'transit', 'demographics', 'accessGap',
+]);
+const BLOCK_METRICS_ALLOWED_KEYS = new Set([
+  'totalRequests', 'openCount', 'resolvedCount', 'resolutionRate',
+  'avgDaysToResolve', 'topIssues', 'recentlyResolved', 'radiusMiles', 'truncated',
+]);
+
+/** Strip keys not in the allowlist from a shallow copy of obj */
+function pickAllowedKeys<T extends Record<string, unknown>>(obj: T, allowed: Set<string>): T {
+  const result = {} as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (allowed.has(key)) result[key] = obj[key];
+  }
+  return result as T;
+}
+
 /** Validate and sanitize a NeighborhoodProfile before embedding in a prompt */
 function sanitizeProfile(profile: NeighborhoodProfile): NeighborhoodProfile {
   if (typeof profile !== 'object' || profile === null) {
     throw new Error('profile must be an object');
   }
-  return sanitizeStringFields(profile) as NeighborhoodProfile;
+  const filtered = pickAllowedKeys(profile as unknown as Record<string, unknown>, PROFILE_ALLOWED_KEYS);
+  return sanitizeStringFields(filtered) as NeighborhoodProfile;
 }
 
 /** Validate and sanitize BlockMetrics before embedding in a prompt */
@@ -48,7 +66,8 @@ function sanitizeBlockMetrics(metrics: BlockMetrics): BlockMetrics {
   if (typeof metrics.totalRequests !== 'number' || typeof metrics.radiusMiles !== 'number') {
     throw new Error('blockMetrics.totalRequests and radiusMiles must be numbers');
   }
-  return sanitizeStringFields(metrics) as BlockMetrics;
+  const filtered = pickAllowedKeys(metrics as unknown as Record<string, unknown>, BLOCK_METRICS_ALLOWED_KEYS);
+  return sanitizeStringFields(filtered) as BlockMetrics;
 }
 
 /** Validate and sanitize demographics before embedding in a prompt */
