@@ -25,18 +25,6 @@ router.get('/rec-centers', async (_req, res) => {
   }
 });
 
-router.get('/transit-stops', async (_req, res) => {
-  try {
-    const data = await prisma.transitStop.findMany({
-      select: { objectid: true, stop_name: true, lat: true, lng: true },
-    });
-    res.json(data);
-  } catch (err) {
-    logger.error('Failed to fetch transit stops', { error: (err as Error).message });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 router.get('/neighborhoods', async (_req, res) => {
   try {
     const data = await fetchBoundaries();

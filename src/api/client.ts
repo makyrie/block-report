@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
+import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile } from '../types';
 
 const BASE = '/api';
 
@@ -22,10 +22,6 @@ export function getLibraries(): Promise<CommunityAnchor[]> {
 
 export function getRecCenters(): Promise<CommunityAnchor[]> {
   return fetchJSON(`${BASE}/locations/rec-centers`);
-}
-
-export function getTransitStops(): Promise<TransitStop[]> {
-  return fetchJSON(`${BASE}/locations/transit-stops`);
 }
 
 let boundaryPromise: Promise<FeatureCollection> | null = null;
