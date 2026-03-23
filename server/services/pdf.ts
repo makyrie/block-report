@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { CommunityReport, NeighborhoodProfile } from '../../src/types/index.js';
 import { logger } from '../logger.js';
+import { isServerless } from '../env.js';
 
 // Lazy-load Puppeteer to avoid import cost on non-PDF routes
 let launchBrowser: (() => Promise<import('puppeteer-core').Browser>) | null = null;
@@ -12,7 +13,7 @@ async function getLauncher(): Promise<() => Promise<import('puppeteer-core').Bro
   const puppeteer = await import('puppeteer-core');
 
   // In serverless (Vercel), use @sparticuz/chromium; locally, use system Chromium
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  if (isServerless) {
     const chromium = await import('@sparticuz/chromium');
     launchBrowser = async () => {
       const executablePath = await chromium.default.executablePath();
