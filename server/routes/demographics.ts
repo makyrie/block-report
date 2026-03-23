@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
+import { validateCommunityParam } from '../utils/community.js';
 
 const router = Router();
 
@@ -43,7 +44,7 @@ function computeTopLanguages(rows: Record<string, unknown>[]) {
 
 router.get('/', async (req, res) => {
   const tract = req.query.tract as string | undefined;
-  const community = req.query.community as string | undefined;
+  const community = validateCommunityParam(req.query.community as string | undefined);
 
   if (!tract && !community) {
     res.status(400).json({ error: 'tract or community query parameter is required' });

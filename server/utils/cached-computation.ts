@@ -67,7 +67,7 @@ export function createCachedComputation<T>(
       await writeFile(tmpFile, JSON.stringify({ cachedAt: Date.now(), data }, mapReplacer));
       await rename(tmpFile, options.diskCachePath);
     } catch (err) {
-      logger.warn('Failed to write disk cache', { error: (err as Error).message });
+      logger.warn('Failed to write disk cache', { error: err instanceof Error ? err.message : String(err) });
     }
   }
 
