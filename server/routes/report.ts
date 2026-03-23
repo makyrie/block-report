@@ -7,6 +7,8 @@ import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBloc
 
 const router = Router();
 
+const SUPPORTED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
+
 // GET /api/report?community={name}&language={lang} — cached community report
 // GET /api/report?lat=X&lng=Y&radius=Z&language=L — cached block-level report (by anchor ID)
 router.get('/', async (req: Request, res: Response) => {
@@ -63,8 +65,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'profile must be an object with a communityName string' });
       return;
     }
-    if (typeof language !== 'string' || !language || language.length > 50) {
-      res.status(400).json({ error: 'language must be a non-empty string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !SUPPORTED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `Unsupported language. Supported: ${[...SUPPORTED_LANGUAGES].join(', ')}` });
       return;
     }
 
@@ -90,8 +92,10 @@ router.post('/generate', async (req: Request, res: Response) => {
     });
     const report = await generateReport(profile, language);
 
-    // Cache the generated report for future instant access (saveCachedReport handles its own errors)
-    await saveCachedReport(profile.communityName, language, report);
+    // Fire-and-forget: always return the report even if caching fails
+    saveCachedReport(profile.communityName, language, report).catch((err) => {
+      logger.error('Failed to cache report (fire-and-forget)', { error: err instanceof Error ? err.message : String(err) });
+    });
 
     res.json(report);
   } catch (error) {
@@ -132,8 +136,8 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
       }
     }
-    if (typeof language !== 'string' || language.length > 50) {
-      res.status(400).json({ error: 'language must be a string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !SUPPORTED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `Unsupported language. Supported: ${[...SUPPORTED_LANGUAGES].join(', ')}` });
       return;
     }
 
@@ -188,8 +192,10 @@ router.post('/generate-block', async (req: Request, res: Response) => {
 
     const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
 
-    // Cache the generated block report for future requests (saveCachedBlockReport handles its own errors)
-    await saveCachedBlockReport(anchorCacheId, language, report);
+    // Fire-and-forget: always return the report even if caching fails
+    saveCachedBlockReport(anchorCacheId, language, report).catch((err) => {
+      logger.error('Failed to cache block report (fire-and-forget)', { error: err instanceof Error ? err.message : String(err) });
+    });
 
     res.json(report);
   } catch (error) {
