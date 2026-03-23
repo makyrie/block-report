@@ -5,11 +5,13 @@ import { join } from 'node:path';
 import type { FeatureCollection, Feature, Polygon, MultiPolygon } from 'geojson';
 import { logger } from '../logger.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
+import { isVercel } from '../env.js';
 
 const BOUNDARY_URL = 'https://seshat.datasd.org/gis_community_planning_districts/cmty_plan_datasd.geojson';
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB safety limit
-const DISK_CACHE_DIR = join(process.cwd(), 'server', 'cache');
+// On Vercel, use /tmp for writable disk cache; locally use project cache dir
+const DISK_CACHE_DIR = isVercel ? '/tmp/block-report-cache' : join(process.cwd(), 'server', 'cache');
 const DISK_CACHE_FILE = join(DISK_CACHE_DIR, 'boundaries.json');
 
 export type BoundaryFeature = Feature<Polygon | MultiPolygon>;
