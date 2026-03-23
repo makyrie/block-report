@@ -107,11 +107,17 @@ router.post('/generate', async (req: Request, res: Response) => {
         language,
       });
       reportPromise = generateReport(profile, language).then(async (report) => {
-        await saveCachedReport(profile.communityName, language, report);
+        // Save to cache but don't let save failures propagate — the report is still valid
+        await saveCachedReport(profile.communityName, language, report).catch((err) => {
+          logger.error('Failed to cache report, continuing with generated result', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
         return report;
       });
       inFlightGenerations.set(generationKey, reportPromise);
-      reportPromise.finally(() => inFlightGenerations.delete(generationKey));
+      // Always clean up the in-flight map, even if generation or cache save fails
+      reportPromise.then(() => inFlightGenerations.delete(generationKey), () => inFlightGenerations.delete(generationKey));
     }
 
     const report = await reportPromise;
@@ -211,11 +217,15 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         language,
       });
       blockPromise = generateBlockReport(anchor, blockMetrics, language, demographics).then(async (report) => {
-        await saveCachedBlockReport(anchorCacheId, language, report);
+        await saveCachedBlockReport(anchorCacheId, language, report).catch((err) => {
+          logger.error('Failed to cache block report, continuing with generated result', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
         return report;
       });
       inFlightGenerations.set(blockGenKey, blockPromise);
-      blockPromise.finally(() => inFlightGenerations.delete(blockGenKey));
+      blockPromise.then(() => inFlightGenerations.delete(blockGenKey), () => inFlightGenerations.delete(blockGenKey));
     }
 
     const report = await blockPromise;
