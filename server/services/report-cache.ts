@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CommunityReport } from '../../src/types/index.js';
@@ -81,7 +81,9 @@ const fileStrategy: CacheStrategy = {
   async set(community, language, report) {
     await mkdir(CACHE_DIR, { recursive: true });
     const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
-    await writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
+    const tmpPath = filePath + '.tmp';
+    await writeFile(tmpPath, JSON.stringify(report, null, 2), 'utf-8');
+    await rename(tmpPath, filePath);
   },
 
   async countRecent() {
@@ -130,7 +132,7 @@ export async function saveCachedReport(community: string, language: string, repo
 // ---------------------------------------------------------------------------
 
 function blockCacheKey(anchorId: string): string {
-  return `block:${normalizeKey(anchorId)}`;
+  return `blkreport-${normalizeKey(anchorId)}`;
 }
 
 export async function getCachedBlockReport(anchorId: string, language: string): Promise<CommunityReport | null> {
