@@ -56,12 +56,19 @@ async function getLauncher(): Promise<() => Promise<import('puppeteer-core').Bro
 
 // Reuse browser across warm requests to avoid cold-start cost per PDF
 let _browser: import('puppeteer-core').Browser | null = null;
+let _launchPromise: Promise<import('puppeteer-core').Browser> | null = null;
 
 async function getBrowser(): Promise<import('puppeteer-core').Browser> {
   if (_browser && _browser.isConnected()) return _browser;
-  const launcher = await getLauncher();
-  _browser = await launcher();
-  return _browser;
+  if (!_launchPromise) {
+    _launchPromise = (async () => {
+      const launcher = await getLauncher();
+      _browser = await launcher();
+      _launchPromise = null;
+      return _browser;
+    })();
+  }
+  return _launchPromise;
 }
 
 // Clean up browser on process exit
@@ -243,7 +250,8 @@ const PDF_TIMEOUT_MS = 45_000; // 45s internal timeout (Vercel hard limit is 60s
  */
 export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
   const startTime = Date.now();
-  let page: import('puppeteer-core').Page | null = null;
+  // Use a shared ref so the finally block can close a page created after timeout
+  const pageRef: { current: import('puppeteer-core').Page | null } = { current: null };
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
@@ -256,26 +264,31 @@ export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
         const bodyHtml = await renderFlyerHtml(data);
         const fullHtml = buildHtmlPage(bodyHtml, data.report.language);
 
-        page = await browser.newPage();
+        const newPage = await browser.newPage();
+        pageRef.current = newPage;
 
         // Restrict network requests to allowlisted domains (prevents SSRF)
-        await page.setRequestInterception(true);
-        page.on('request', (req) => {
-          const url = new URL(req.url());
-          const allowed = [
-            'fonts.googleapis.com',
-            'fonts.gstatic.com',
-          ];
-          if (allowed.includes(url.hostname) || url.protocol === 'data:') {
-            req.continue();
-          } else {
+        await newPage.setRequestInterception(true);
+        newPage.on('request', (req) => {
+          try {
+            const url = new URL(req.url());
+            const allowed = [
+              'fonts.googleapis.com',
+              'fonts.gstatic.com',
+            ];
+            if (allowed.includes(url.hostname) || url.protocol === 'data:') {
+              req.continue();
+            } else {
+              req.abort();
+            }
+          } catch {
             req.abort();
           }
         });
 
-        await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 30_000 });
+        await newPage.setContent(fullHtml, { waitUntil: 'networkidle2', timeout: 30_000 });
 
-        const pdfBuffer = await page.pdf({
+        const pdfBuffer = await newPage.pdf({
           format: 'letter',
           printBackground: true,
           margin: { top: '0', bottom: '0', left: '0', right: '0' },
@@ -297,9 +310,9 @@ export async function generateFlyerPdf(data: PdfRequest): Promise<Buffer> {
     return result;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
-    if (page) {
+    if (pageRef.current) {
       try {
-        await (page as import('puppeteer-core').Page).close();
+        await pageRef.current.close();
       } catch (err) {
         logger.error('Failed to close page', {
           error: err instanceof Error ? err.message : String(err),
