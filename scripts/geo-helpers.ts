@@ -19,7 +19,13 @@ export function toTitleCase(str: string): string {
 export function findCommunity(lat: number, lng: number, communities: CommunityFeature[]): string | null {
   for (const c of communities) {
     for (const poly of c.polygons) {
-      if (pointInPolygon(lat, lng, poly[0])) return c.name;
+      const [outer, ...holes] = poly;
+      if (!pointInPolygon(lat, lng, outer)) continue;
+      let inHole = false;
+      for (const hole of holes) {
+        if (pointInPolygon(lat, lng, hole)) { inHole = true; break; }
+      }
+      if (!inHole) return c.name;
     }
   }
   return null;

@@ -10,6 +10,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+/** Validate that a cached JSONB value has the expected CommunityReport shape */
+function isValidReportShape(data: unknown): data is CommunityReport {
+  if (typeof data !== 'object' || data === null) return false;
+  const obj = data as Record<string, unknown>;
+  return (
+    typeof obj.neighborhoodName === 'string' &&
+    typeof obj.summary === 'string' &&
+    Array.isArray(obj.goodNews) &&
+    Array.isArray(obj.topIssues) &&
+    Array.isArray(obj.howToParticipate) &&
+    typeof obj.contactInfo === 'object' && obj.contactInfo !== null
+  );
+}
+
 /**
  * Shared key normalization — single source of truth for cache key generation.
  * Exported so route handlers can reuse it instead of duplicating the logic.
@@ -38,7 +52,12 @@ const dbStrategy: CacheStrategy = {
     if (!row) return null;
     const age = Date.now() - row.createdAt.getTime();
     if (age > CACHE_TTL_MS) return null;
-    return row.report as unknown as CommunityReport;
+    const report = row.report as unknown;
+    if (!isValidReportShape(report)) {
+      logger.warn('Cached report has invalid shape, discarding', { community, language });
+      return null;
+    }
+    return report;
   },
 
   async set(community, language, report) {
@@ -72,7 +91,12 @@ const fileStrategy: CacheStrategy = {
       if (age > CACHE_TTL_MS) return null;
 
       const raw = await readFile(filePath, 'utf-8');
-      return JSON.parse(raw) as CommunityReport;
+      const parsed = JSON.parse(raw);
+      if (!isValidReportShape(parsed)) {
+        logger.warn('Cached report file has invalid shape, discarding', { filePath });
+        return null;
+      }
+      return parsed;
     } catch {
       return null;
     }

@@ -104,11 +104,19 @@ app.use('/api/block', blockRouter);
 // Protected by CRON_SECRET to prevent abuse
 app.get('/api/cron/purge-cache', async (req, res) => {
   const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  // Vercel Cron sends the secret via x-vercel-cron-auth header;
+  // also support Authorization: Bearer for manual/curl invocations.
+  const vercelCronHeader = (req.headers['x-vercel-cron-auth'] as string) ?? '';
   const authHeader = req.headers.authorization ?? '';
-  const expected = `Bearer ${cronSecret}`;
-  const headersMatch = authHeader.length === expected.length &&
-    timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
-  if (!cronSecret || !headersMatch) {
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const token = vercelCronHeader || bearerToken;
+  const tokenMatch = token.length === cronSecret.length &&
+    timingSafeEqual(Buffer.from(token), Buffer.from(cronSecret));
+  if (!tokenMatch) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }

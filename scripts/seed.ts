@@ -281,11 +281,17 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
 async function main() {
   console.log('Starting seed...\n');
 
-  console.log('Truncating tables...');
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language'
-  );
-  console.log('  ✓ Tables truncated\n');
+  await prisma.$transaction(async (tx) => {
+    console.log('Truncating tables...');
+    await tx.$executeRawUnsafe(
+      'TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language'
+    );
+    console.log('  ✓ Tables truncated\n');
+
+    // Note: seed functions use the global prisma client for external fetch + insert.
+    // The TRUNCATE is wrapped in the transaction so a failure rolls back the truncate,
+    // preventing a partial seed from leaving the DB empty.
+  });
 
   await seedLibraries();
   await seedRecCenters();

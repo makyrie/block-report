@@ -1,20 +1,14 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
+import { validateCommunityParam } from '../utils/community.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const community = req.query.community as string | undefined;
-  if (!community) {
+  const cleaned = validateCommunityParam(req.query.community as string | undefined);
+  if (!cleaned) {
     res.status(400).json({ error: 'community query parameter is required' });
-    return;
-  }
-
-  // Strip SQL wildcards and enforce length
-  const cleaned = community.replace(/[%_]/g, '');
-  if (cleaned.length > 100 || cleaned.length === 0) {
-    res.status(400).json({ error: 'Invalid community name' });
     return;
   }
 
@@ -38,7 +32,7 @@ router.get('/', async (req, res) => {
     `;
     metrics = result[0].get_community_metrics;
   } catch (err) {
-    logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community });
+    logger.error('Failed to fetch 311 metrics', { error: err instanceof Error ? err.message : String(err), community: cleaned });
     res.status(500).json({ error: 'Internal server error' });
     return;
   }

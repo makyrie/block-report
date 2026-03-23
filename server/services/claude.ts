@@ -8,7 +8,7 @@ import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAncho
 const MAX_RECURSION_DEPTH = 10;
 
 /** Runtime validation for Claude tool_use response shape before type assertion */
-function validateReportShape(input: unknown): asserts input is Omit<import('../../src/types/index.js').CommunityReport, 'generatedAt'> {
+export function validateReportShape(input: unknown): asserts input is Omit<import('../../src/types/index.js').CommunityReport, 'generatedAt'> {
   if (typeof input !== 'object' || input === null) {
     throw new Error('Claude response is not an object');
   }
@@ -34,7 +34,7 @@ function validateReportShape(input: unknown): asserts input is Omit<import('../.
 }
 
 /** Strip any string values longer than maxLen and remove control characters */
-function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
+export function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
   if (depth > MAX_RECURSION_DEPTH) {
     throw new Error(`Object nesting too deep (max ${MAX_RECURSION_DEPTH} levels)`);
   }
@@ -59,7 +59,7 @@ function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
 }
 
 /** Validate and sanitize a NeighborhoodProfile before embedding in a prompt */
-function sanitizeProfile(profile: NeighborhoodProfile): NeighborhoodProfile {
+export function sanitizeProfile(profile: NeighborhoodProfile): NeighborhoodProfile {
   if (typeof profile !== 'object' || profile === null) {
     throw new Error('profile must be an object');
   }
@@ -67,18 +67,37 @@ function sanitizeProfile(profile: NeighborhoodProfile): NeighborhoodProfile {
 }
 
 /** Validate and sanitize BlockMetrics before embedding in a prompt */
-function sanitizeBlockMetrics(metrics: BlockMetrics): BlockMetrics {
+export function sanitizeBlockMetrics(metrics: BlockMetrics): BlockMetrics {
   if (typeof metrics !== 'object' || metrics === null) {
     throw new Error('blockMetrics must be an object');
   }
   if (typeof metrics.totalRequests !== 'number' || typeof metrics.radiusMiles !== 'number') {
     throw new Error('blockMetrics.totalRequests and radiusMiles must be numbers');
   }
+  // Bounds-check numeric fields to prevent unreasonable values in prompts
+  if (!Number.isFinite(metrics.totalRequests) || metrics.totalRequests < 0 || metrics.totalRequests > 1_000_000) {
+    throw new Error('blockMetrics.totalRequests out of bounds');
+  }
+  if (!Number.isFinite(metrics.radiusMiles) || metrics.radiusMiles < 0 || metrics.radiusMiles > 100) {
+    throw new Error('blockMetrics.radiusMiles out of bounds');
+  }
+  if (typeof metrics.resolutionRate === 'number' && (!Number.isFinite(metrics.resolutionRate) || metrics.resolutionRate < 0 || metrics.resolutionRate > 1)) {
+    throw new Error('blockMetrics.resolutionRate out of bounds');
+  }
+  if (typeof metrics.openCount === 'number' && (!Number.isFinite(metrics.openCount) || metrics.openCount < 0 || metrics.openCount > 1_000_000)) {
+    throw new Error('blockMetrics.openCount out of bounds');
+  }
+  if (typeof metrics.resolvedCount === 'number' && (!Number.isFinite(metrics.resolvedCount) || metrics.resolvedCount < 0 || metrics.resolvedCount > 1_000_000)) {
+    throw new Error('blockMetrics.resolvedCount out of bounds');
+  }
+  if (metrics.avgDaysToResolve !== null && typeof metrics.avgDaysToResolve === 'number' && (!Number.isFinite(metrics.avgDaysToResolve) || metrics.avgDaysToResolve < 0 || metrics.avgDaysToResolve > 10_000)) {
+    throw new Error('blockMetrics.avgDaysToResolve out of bounds');
+  }
   return sanitizeStringFields(metrics) as BlockMetrics;
 }
 
 /** Validate and sanitize demographics before embedding in a prompt */
-function sanitizeDemographics(demographics: { topLanguages: { language: string; percentage: number }[] }): typeof demographics {
+export function sanitizeDemographics(demographics: { topLanguages: { language: string; percentage: number }[] }): typeof demographics {
   if (typeof demographics !== 'object' || demographics === null) {
     throw new Error('demographics must be an object');
   }
