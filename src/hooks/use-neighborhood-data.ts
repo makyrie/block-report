@@ -11,10 +11,15 @@ export function useNeighborhoodData() {
   const [dataError, setDataError] = useState<string | null>(null);
 
   useEffect(() => {
-    getLibraries().then(setLibraries).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
-    getRecCenters().then(setRecCenters).catch((err) => { console.error(err); setDataError('Failed to load recreation center data'); });
-    getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch((err) => { console.error(err); setDataError('Failed to load boundary data'); });
-    getTransitStops().then(setTransitStops).catch((err) => { console.error(err); setDataError('Failed to load transit data'); });
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    getLibraries(signal).then(setLibraries).catch((err) => { if (!signal.aborted) { console.error(err); setDataError('Failed to load map data'); } });
+    getRecCenters(signal).then(setRecCenters).catch((err) => { if (!signal.aborted) { console.error(err); setDataError('Failed to load recreation center data'); } });
+    getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch((err) => { if (!signal.aborted) { console.error(err); setDataError('Failed to load boundary data'); } });
+    getTransitStops(signal).then(setTransitStops).catch((err) => { if (!signal.aborted) { console.error(err); setDataError('Failed to load transit data'); } });
+
+    return () => controller.abort();
   }, []);
 
   return { libraries, recCenters, transitStops, neighborhoodBoundaries, dataError };
