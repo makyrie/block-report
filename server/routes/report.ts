@@ -7,6 +7,9 @@ import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBloc
 
 const router = Router();
 
+// In-flight promise map to deduplicate concurrent generation requests for the same key
+const inflight = new Map<string, Promise<import('../../src/types/index.js').CommunityReport>>();
+
 // GET /api/report?community={name}&language={lang} — cached community report
 // GET /api/report?lat=X&lng=Y&radius=Z&language=L — cached block-level report (by anchor ID)
 router.get('/', async (req: Request, res: Response) => {
@@ -83,15 +86,24 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // Fall back to on-demand generation
-    logger.info('No pre-generated report found, generating on-demand', {
-      community: profile.communityName,
-      language,
-    });
-    const report = await generateReport(profile, language);
-
-    // Cache the generated report for future instant access (saveCachedReport handles its own errors)
-    await saveCachedReport(profile.communityName, language, report);
+    // Fall back to on-demand generation with promise coalescing to prevent duplicate API calls
+    const coalescingKey = `community:${profile.communityName}:${language}`;
+    let reportPromise = inflight.get(coalescingKey);
+    if (!reportPromise) {
+      logger.info('No pre-generated report found, generating on-demand', {
+        community: profile.communityName,
+        language,
+      });
+      reportPromise = generateReport(profile, language).then(async (r) => {
+        await saveCachedReport(profile.communityName, language, r);
+        return r;
+      });
+      inflight.set(coalescingKey, reportPromise);
+      reportPromise.finally(() => inflight.delete(coalescingKey));
+    } else {
+      logger.info('Coalescing concurrent report request', { community: profile.communityName, language });
+    }
+    const report = await reportPromise;
 
     res.json(report);
   } catch (error) {
@@ -153,15 +165,23 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       return;
     }
 
-    logger.info('Generating block report on-demand', {
-      anchor: anchor.name,
-      language,
-    });
-
-    const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
-
-    // Cache the generated block report for future requests (saveCachedBlockReport handles its own errors)
-    await saveCachedBlockReport(anchorCacheId, language, report);
+    const blockCoalescingKey = `block:${anchorCacheId}:${language}`;
+    let blockPromise = inflight.get(blockCoalescingKey);
+    if (!blockPromise) {
+      logger.info('Generating block report on-demand', {
+        anchor: anchor.name,
+        language,
+      });
+      blockPromise = generateBlockReport(anchor, blockMetrics, language, demographics).then(async (r) => {
+        await saveCachedBlockReport(anchorCacheId, language, r);
+        return r;
+      });
+      inflight.set(blockCoalescingKey, blockPromise);
+      blockPromise.finally(() => inflight.delete(blockCoalescingKey));
+    } else {
+      logger.info('Coalescing concurrent block report request', { anchor: anchor.name, language });
+    }
+    const report = await blockPromise;
 
     res.json(report);
   } catch (error) {
