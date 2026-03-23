@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile, BlockMetrics } from '../../src/types/index.js';
+import type { NeighborhoodProfile, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited } from '../services/report-cache.js';
 
 /** Maximum serialized prompt size (bytes) to prevent cost amplification */
@@ -90,6 +90,24 @@ function pickBlockMetricsFields(raw: Record<string, unknown>): BlockMetrics {
 function pickDemographicsFields(raw: Record<string, unknown>): { topLanguages: { language: string; percentage: number }[] } {
   return {
     topLanguages: Array.isArray(raw.topLanguages) ? (raw.topLanguages as { language: string; percentage: number }[]).slice(0, 20) : [],
+  };
+}
+
+const MAX_ANCHOR_FIELD_LEN = 200;
+const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
+
+/** Pick only known CommunityAnchor fields from an untrusted object, with length + control char sanitization */
+function pickAnchorFields(raw: Record<string, unknown>): CommunityAnchor {
+  const str = (v: unknown): string =>
+    String(v ?? '').slice(0, MAX_ANCHOR_FIELD_LEN).replace(CONTROL_CHAR_RE, '');
+  return {
+    id: str(raw.id),
+    name: str(raw.name),
+    type: raw.type === 'rec_center' ? 'rec_center' : 'library',
+    lat: Number(raw.lat) || 0,
+    lng: Number(raw.lng) || 0,
+    address: str(raw.address),
+    community: str(raw.community),
   };
 }
 
@@ -227,28 +245,11 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       return;
     }
 
-    // Allowlist blockMetrics and demographics fields to prevent prompt injection via extra fields
+    // Allowlist all user-supplied fields to prevent prompt injection via extra properties
+    const anchor = pickAnchorFields(rawAnchor as Record<string, unknown>);
     const blockMetrics = pickBlockMetricsFields(rawBlockMetrics as Record<string, unknown>);
     const demographics = rawDemographics ? pickDemographicsFields(rawDemographics as Record<string, unknown>) : undefined;
 
-    // Validate anchor fields to prevent prompt injection via user-controlled strings
-    // Work on a copy to avoid mutating req.body
-    const anchor = { ...rawAnchor };
-    const MAX_FIELD_LEN = 200;
-    const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
-    for (const field of ['id', 'name', 'address', 'community', 'type'] as const) {
-      if (anchor[field] !== undefined) {
-        if (typeof anchor[field] !== 'string') {
-          res.status(400).json({ error: `anchor.${field} must be a string` });
-          return;
-        }
-        if (anchor[field].length > MAX_FIELD_LEN) {
-          res.status(400).json({ error: `anchor.${field} must be ${MAX_FIELD_LEN} characters or fewer` });
-          return;
-        }
-        anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
-      }
-    }
     if (typeof language !== 'string' || language.length > 50) {
       res.status(400).json({ error: 'language must be a string of 50 characters or fewer' });
       return;
