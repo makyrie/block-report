@@ -4,6 +4,7 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
+import { PrintFlyerFab } from '../components/flyer/print-flyer-fab';
 import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
 import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
 import type { FeatureCollection } from 'geojson';
@@ -416,6 +417,9 @@ export default function NeighborhoodPage() {
           {selectedCommunity ?? t('nav.info')}
         </button>
       </div>
+
+      {/* Floating print-flyer action button */}
+      <PrintFlyerFab visible={report !== null && !reportLoading} />
 
       {/* Print-only flyer — rendered outside overflow containers so print.css can position it */}
       {report && (
