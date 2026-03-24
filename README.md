@@ -79,6 +79,33 @@ pnpm db:push    # Push schema to Neon (creates tables)
 pnpm db:seed    # Seed with San Diego open data
 ```
 
+After seeding, create the stored function used by the 311 metrics endpoint:
+
+```bash
+psql $DATABASE_URL -f prisma/functions/get_community_metrics.sql
+```
+
+### Vercel Deployment
+
+The app is deployed to Vercel with a hybrid static + serverless architecture. The SPA is served from Vercel's CDN and the Express API runs as a single serverless function via `api/index.ts`.
+
+**Required environment variables** (set in Vercel Dashboard → Project Settings → Environment Variables):
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `ANTHROPIC_API_KEY` | Anthropic API key for report generation |
+| `CENSUS_API_KEY` | U.S. Census API key |
+| `CORS_ORIGIN` | Production domain (e.g., `https://block-report-weld.vercel.app`) |
+
+`VERCEL` and `VERCEL_URL` are auto-set by Vercel. The app uses `VERCEL_URL` to allow CORS for preview deployments.
+
+**Known limitations in serverless:**
+- File-based report caching is disabled (each invocation generates fresh)
+- In-memory rate limiting resets per invocation (monitor API costs)
+- Claude report generation may timeout on Hobby plan (10s limit); Pro plan recommended (60s)
+- Health check available at `/api/health` to verify DB connectivity
+
 ## How It Works
 
 1. **Pick a neighborhood** from the dropdown or click a marker on the map

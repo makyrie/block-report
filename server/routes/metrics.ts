@@ -1,19 +1,22 @@
 import { Router } from 'express';
 import { getProcessedCommunityMetrics } from '../services/metrics.js';
-import { parseAndValidateCommunity } from './validate-community.js';
 import { logger } from '../logger.js';
+import { validateCommunityParam } from '../utils/community.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const normalized = await parseAndValidateCommunity(req, res);
-  if (!normalized) return;
+  const cleaned = validateCommunityParam(req.query.community as string | undefined);
+  if (!cleaned) {
+    res.status(400).json({ error: 'community query parameter is required' });
+    return;
+  }
 
   try {
-    const result = await getProcessedCommunityMetrics(normalized);
+    const result = await getProcessedCommunityMetrics(cleaned);
     res.json(result);
   } catch (err) {
-    logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community: normalized });
+    logger.error('Failed to fetch 311 metrics', { error: err instanceof Error ? err.message : String(err), community: cleaned });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

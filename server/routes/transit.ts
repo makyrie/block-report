@@ -1,25 +1,42 @@
 import { Router } from 'express';
-import { getTransitScore } from '../services/transit.js';
-import { parseAndValidateCommunity } from './validate-community.js';
 import { logger } from '../logger.js';
+import { getTransitScores, getCityAverage } from '../services/transit-scores.js';
+import { validateCommunityParam, communityKey } from '../utils/community.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const normalized = await parseAndValidateCommunity(req, res);
-  if (!normalized) return;
+  const cleaned = validateCommunityParam(req.query.community as string | undefined);
+  if (!cleaned) {
+    res.status(400).json({ error: 'community query parameter is required' });
+    return;
+  }
 
   try {
-    const result = await getTransitScore(normalized);
+    const scores = await getTransitScores();
+    const key = communityKey(cleaned);
+    const score = scores.get(key);
 
-    if (!result) {
-      res.status(404).json({ error: `No transit data available for "${normalized}".` });
+    if (!score) {
+      res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+      res.json({
+        stopCount: 0,
+        agencyCount: 0,
+        agencies: [],
+        transitScore: 0,
+        cityAverage: getCityAverage(scores),
+        travelTimeToCityHall: null,
+      });
       return;
     }
 
-    res.json(result);
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    res.json({
+      ...score,
+      cityAverage: getCityAverage(scores),
+    });
   } catch (err) {
-    logger.error('Failed to compute transit scores', { error: (err as Error).message });
+    logger.error('Failed to compute transit scores', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
