@@ -1,176 +1,22 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor } from '../../types';
-import { norm } from '../../utils/community';
-import { isSafeUrl } from '../../utils/url';
+import type { Block311Report, BlockMetrics, CommunityAnchor, Permit } from '../../types';
+import { norm, scoreToColor } from '../../utils/community';
 import { useLanguage } from '../../i18n/context';
-
-// ── Popup content components ─────────────────────────────────────────────────
-
-type TypeConfig = {
-  dot: string;   // Tailwind bg color — must match legend
-  label: string;
-  text: string;  // text color for label
-};
-
-const TYPE_CONFIG: Record<'library' | 'rec_center', TypeConfig> = {
-  library:    { dot: 'bg-blue-500',  label: 'Library',      text: 'text-blue-700'  },
-  rec_center: { dot: 'bg-green-500', label: 'Rec Center',   text: 'text-green-700' },
-};
-
-function TypeBadge({ type }: { type: keyof typeof TYPE_CONFIG }) {
-  const { dot, label, text } = TYPE_CONFIG[type];
-  return (
-    <div className="flex items-center gap-1.5 mb-2">
-      <span aria-hidden="true" className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
-      <span className={`text-xs font-semibold uppercase tracking-wide ${text}`}>{label}</span>
-    </div>
-  );
-}
-
-function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
-  const type = anchor.type === 'library' ? 'library' : 'rec_center';
-  return (
-    <div className="min-w-[200px] max-w-[260px]">
-      <TypeBadge type={type} />
-      <p className="font-semibold text-gray-900 text-sm leading-snug mb-1.5">{anchor.name}</p>
-      {anchor.address && (
-        <p className="text-xs text-gray-600 flex items-start gap-1 mb-1">
-          <span aria-hidden="true" className="mt-px shrink-0">📍</span>
-          <span>{anchor.address}</span>
-        </p>
-      )}
-      {anchor.community && (
-        <p className="text-xs text-gray-500 mb-1">
-          <span className="font-medium">Neighborhood:</span> {anchor.community}
-        </p>
-      )}
-      {anchor.phone && (
-        <p className="text-xs mt-1">
-          <a
-            href={`tel:${anchor.phone}`}
-            className="text-blue-600 hover:underline"
-            aria-label={`Call ${anchor.name} at ${anchor.phone}`}
-          >
-            📞 {anchor.phone}
-          </a>
-        </p>
-      )}
-      {anchor.website && isSafeUrl(anchor.website) && (
-        <p className="text-xs mt-0.5">
-          <a
-            href={anchor.website}
-            target="_blank"
-            rel="noreferrer"
-            className="text-blue-600 hover:underline"
-            aria-label={`Visit ${anchor.name} website (opens in new tab)`}
-          >
-            🌐 Website ↗
-          </a>
-        </p>
-      )}
-    </div>
-  );
-}
-
-function BlockPopupContent({
-  loading,
-  data,
-}: {
-  loading: boolean;
-  data: BlockMetrics | null;
-}) {
-  if (loading) {
-    return (
-      <div className="min-w-[200px] flex items-center gap-2 py-2">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-orange-500 shrink-0" />
-        <span className="text-sm text-gray-600">Loading block data…</span>
-      </div>
-    );
-  }
-  if (!data) {
-    return (
-      <div className="min-w-[200px] text-sm text-gray-500 py-1">No data available.</div>
-    );
-  }
-  const resRate = data.totalRequests > 0 ? data.resolutionRate : 0;
-  const resColor = resRate >= 0.75 ? 'text-green-700' : resRate >= 0.5 ? 'text-yellow-700' : 'text-red-700';
-
-  return (
-    <div className="min-w-[220px] max-w-[300px]">
-      <div className="flex items-center gap-1.5 mb-2">
-        <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0 bg-orange-500" />
-        <span className="text-xs font-semibold uppercase tracking-wide text-orange-700">
-          Your Block · {data.radiusMiles} mi radius
-        </span>
-      </div>
-      <div className="flex gap-3 mb-2">
-        <div className="text-center">
-          <p className="text-xl font-bold text-gray-900">{data.openCount}</p>
-          <p className="text-xs text-gray-500">open</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xl font-bold text-gray-900">{data.resolvedCount}</p>
-          <p className="text-xs text-gray-500">resolved</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xl font-bold text-gray-900">{data.totalRequests}</p>
-          <p className="text-xs text-gray-500">total</p>
-        </div>
-      </div>
-      <div className="flex gap-3 text-xs mb-3">
-        <span className={`font-medium ${resColor}`}>
-          {(resRate * 100).toFixed(0)}% resolved
-        </span>
-        {data.avgDaysToResolve != null && (
-          <span className="text-gray-500">
-            ~{data.avgDaysToResolve} days avg
-          </span>
-        )}
-      </div>
-      {data.topIssues.length > 0 && (
-        <div className="mb-2">
-          <p className="text-xs font-medium text-gray-700 mb-1">Top issues nearby</p>
-          <ul className="space-y-1">
-            {data.topIssues.slice(0, 4).map((issue) => (
-              <li key={issue.category} className="text-xs text-gray-600 flex justify-between gap-2">
-                <span className="truncate">{issue.category}</span>
-                <span className="shrink-0 text-gray-400 font-mono">{issue.count}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {data.recentlyResolved.length > 0 && (
-        <div className="mb-2">
-          <p className="text-xs font-medium text-gray-700 mb-1">Recently resolved</p>
-          <ul className="space-y-0.5">
-            {data.recentlyResolved.map((r, i) => (
-              <li key={`${r.category}-${r.date}-${i}`} className="text-xs text-gray-600 flex justify-between gap-2">
-                <span className="truncate">{r.category}</span>
-                <span className="shrink-0 text-gray-400">
-                  {new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={() => window.print()}
-        className="w-full mt-1 rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600"
-      >
-        Print flyer for this area
-      </button>
-    </div>
-  );
-}
+import {
+  AnchorPopupContent,
+  TransitPopupContent,
+  BlockPopupContent,
+  ReportPopupContent,
+  PermitPopupContent,
+  STATUS_COLORS,
+  reportStatus,
+} from './popup-content';
 
 // Fix Leaflet default icon paths for bundlers
 L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl });
@@ -198,6 +44,7 @@ const orangeIcon = makePinIcon('#f97316');
 interface SanDiegoMapProps {
   libraries: CommunityAnchor[];
   recCenters: CommunityAnchor[];
+  permits: Permit[];
   neighborhoodBoundaries: FeatureCollection | null;
   selectedCommunity: string | null;
   onAnchorClick: (anchor: CommunityAnchor) => void;
@@ -206,7 +53,13 @@ interface SanDiegoMapProps {
   blockData?: BlockMetrics | null;
   blockLoading?: boolean;
   blockRadius?: number;
+  accessGapScores?: Map<string, number>;
+  showChoropleth?: boolean;
+  onToggleChoropleth?: () => void;
+  onCommunitySelect?: (community: string) => void;
 }
+
+
 
 function findCommunityFeature(features: Feature[], community: string): Feature | null {
   const target = norm(community);
@@ -252,6 +105,7 @@ function PinnedMarker({
 // Child component — handles map click events with debounce
 function MapClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
   useMapEvents({
     click(e) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -297,9 +151,40 @@ const FILTER_ANNOUNCE_KEYS: Record<MarkerFilter, string> = {
   rec_center: 'map.filter.showRecCenters',
 };
 
+const EMPTY_REPORTS: Block311Report[] = [];
+
+const ReportMarkers = memo(function ReportMarkers({ reports }: { reports: Block311Report[] }) {
+  return (
+    <>
+      {reports.map((report) => {
+        const { color } = reportStatus(report.statusCategory);
+        return (
+          <CircleMarker
+            key={report.id}
+            center={[report.lat, report.lng]}
+            radius={6}
+            pathOptions={{
+              color: '#fff',
+              weight: 1.5,
+              fillColor: color,
+              fillOpacity: 0.85,
+            }}
+            bubblingMouseEvents={false}
+          >
+            <Popup>
+              <ReportPopupContent report={report} />
+            </Popup>
+          </CircleMarker>
+        );
+      })}
+    </>
+  );
+});
+
 function SanDiegoMap({
   libraries,
   recCenters,
+  permits,
   neighborhoodBoundaries,
   selectedCommunity,
   onAnchorClick,
@@ -308,17 +193,30 @@ function SanDiegoMap({
   blockData,
   blockLoading = false,
   blockRadius = 0.25,
+  accessGapScores,
+  showChoropleth = false,
+  onToggleChoropleth,
+  onCommunitySelect,
 }: SanDiegoMapProps) {
   const { t } = useLanguage();
   const [activeFilter, setActiveFilter] = useState<MarkerFilter>('all');
+  const [selectedPermit, setSelectedPermit] = useState<Permit | null>(null);
+  const permitPopupRef = useRef<L.Popup | null>(null);
 
-  // Memoize click handlers per marker to avoid creating new closures on every render
-  const markerClickHandlers = useMemo(() => {
-    const map = new Map<string, () => void>();
-    for (const lib of libraries) map.set(lib.id, () => onAnchorClick(lib));
-    for (const rc of recCenters) map.set(rc.id, () => onAnchorClick(rc));
-    return map;
-  }, [libraries, recCenters, onAnchorClick]);
+  // Ref keeps click handlers current — onEachFeature binds once at GeoJSON mount,
+  // so a direct closure would capture a stale onCommunitySelect.
+  const onCommunitySelectRef = useRef(onCommunitySelect);
+  onCommunitySelectRef.current = onCommunitySelect;
+
+  const reports = blockData?.reports ?? EMPTY_REPORTS;
+  const totalReports = blockData?.totalReports ?? 0;
+  const handleMarkerClick = useCallback(
+    (anchor: CommunityAnchor) => () => {
+      onAnchorClick(anchor);
+    },
+    [onAnchorClick],
+  );
+
 
   const selectedFeature = useMemo(
     () => selectedCommunity && neighborhoodBoundaries
@@ -356,6 +254,47 @@ function SanDiegoMap({
       ))}
     </div>
 
+    {/* Choropleth toggle */}
+    {onToggleChoropleth && accessGapScores && accessGapScores.size > 0 && (
+      <div className="absolute top-14 right-2 z-[999] print:hidden">
+        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2">
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input type="checkbox" checked={showChoropleth} onChange={onToggleChoropleth} className="accent-amber-600" />
+            Access Gap Layer
+          </label>
+        </div>
+      </div>
+    )}
+
+    {/* Choropleth legend */}
+    {showChoropleth && (
+      <div className="absolute bottom-8 right-2 z-[1000] print:hidden">
+        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md p-3 text-xs">
+          <div className="font-semibold mb-1.5 text-gray-700">Access Gap Score</div>
+          {[0, 20, 40, 60, 80].map((grade) => (
+            <div key={grade} className="flex items-center gap-1.5 mb-0.5">
+              <span
+                className="inline-block w-4 h-4 rounded-sm border border-gray-300"
+                style={{ backgroundColor: scoreToColor(grade) }}
+              />
+              <span className="text-gray-600">{grade}–{grade + 20}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="inline-block w-4 h-4 rounded-sm border border-gray-300 bg-gray-300" />
+            <span className="text-gray-600">No data</span>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Report count indicator — shown when results are capped */}
+    {pinnedLocation && totalReports > reports.length && (
+      <div className="absolute top-28 right-2 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-1.5 text-xs text-gray-600">
+        Showing <span className="font-semibold text-gray-900">{reports.length}</span> of{' '}
+        <span className="font-semibold text-gray-900">{totalReports}</span> reports
+      </div>
+    )}
     {/* Legend */}
     <nav aria-label="Map legend" className="absolute bottom-8 left-2 z-[1000] bg-white/90 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 text-xs print:hidden">
       <ul className="space-y-1.5">
@@ -367,6 +306,34 @@ function SanDiegoMap({
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
           <span className="text-gray-700">{t('map.legend.recCenter')}</span>
         </li>
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-amber-500 shrink-0" />
+          <span className="text-gray-700">Permit</span>
+        </li>
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
+          <span className="text-gray-700">Transit Stop</span>
+        </li>
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-orange-500 shrink-0" />
+          <span className="text-gray-700">Your Block</span>
+        </li>
+        {pinnedLocation && reports.length > 0 && (
+          <>
+            <li className="border-t border-gray-200 pt-1.5 mt-1 flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.open }} />
+              <span className="text-gray-700">311 Open</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.resolved }} />
+              <span className="text-gray-700">311 Resolved</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.referred }} />
+              <span className="text-gray-700">311 Referred</span>
+            </li>
+          </>
+        )}
       </ul>
     </nav>
     <MapContainer
@@ -379,6 +346,36 @@ function SanDiegoMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+
+      {/* Choropleth layer — renders below markers */}
+      {showChoropleth && neighborhoodBoundaries && (
+        <GeoJSON
+          key={`choropleth-${accessGapScores?.size ?? 0}`}
+          data={neighborhoodBoundaries}
+          style={(feature) => {
+            const name = norm(feature?.properties?.cpname || '');
+            const score = accessGapScores?.get(name) ?? null;
+            return {
+              fillColor: scoreToColor(score),
+              color: '#666',
+              weight: 1.5,
+              opacity: 0.8,
+              fillOpacity: 0.6,
+            };
+          }}
+          onEachFeature={(feature, layer) => {
+            const name = feature.properties?.cpname || 'Unknown';
+            const score = accessGapScores?.get(norm(name));
+            const el = document.createElement('span');
+            el.textContent = `${name}: ${score !== undefined ? score + '/100' : 'No data'}`;
+            layer.bindTooltip(el, { sticky: true });
+            layer.on('click', (e) => {
+              L.DomEvent.stopPropagation(e as L.LeafletEvent);
+              onCommunitySelectRef.current?.(name);
+            });
+          }}
+        />
+      )}
 
       {/* Click-to-explore handler */}
       {onMapClick && <MapClickHandler onClick={onMapClick} />}
@@ -409,6 +406,9 @@ function SanDiegoMap({
         />
       )}
 
+      {/* 311 report markers — color-coded by status */}
+      {pinnedLocation && <ReportMarkers reports={reports} />}
+
       {/* Zoom to selected community + highlight its boundary */}
       <MapController feature={selectedFeature} />
       {selectedFeature && (
@@ -425,6 +425,26 @@ function SanDiegoMap({
         />
       )}
 
+      {/* Permit markers — amber circles with shared popup */}
+      {permits.map((permit) => (
+        <CircleMarker
+          key={`permit-${permit.id}`}
+          center={[permit.lat, permit.lng]}
+          radius={5}
+          pathOptions={{ color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.8, weight: 1 }}
+          eventHandlers={{ click: () => setSelectedPermit(permit) }}
+        />
+      ))}
+      {selectedPermit && (
+        <Popup
+          ref={permitPopupRef}
+          position={[selectedPermit.lat, selectedPermit.lng]}
+          eventHandlers={{ remove: () => setSelectedPermit(null) }}
+        >
+          <PermitPopupContent permit={selectedPermit} />
+        </Popup>
+      )}
+
       {/* Library markers — blue (shown when filter is 'all' or 'library') */}
       {(activeFilter === 'all' || activeFilter === 'library') &&
         libraries.map((lib) => (
@@ -434,7 +454,7 @@ function SanDiegoMap({
             icon={blueIcon}
             title={`Library: ${lib.name}`}
             alt={`Library: ${lib.name}`}
-            eventHandlers={{ click: markerClickHandlers.get(lib.id)! }}
+            eventHandlers={{ click: handleMarkerClick(lib) }}
           >
             <Popup>
               <AnchorPopupContent anchor={lib} />
@@ -451,7 +471,7 @@ function SanDiegoMap({
             icon={greenIcon}
             title={`Rec Center: ${rc.name}`}
             alt={`Rec Center: ${rc.name}`}
-            eventHandlers={{ click: markerClickHandlers.get(rc.id)! }}
+            eventHandlers={{ click: handleMarkerClick(rc) }}
           >
             <Popup>
               <AnchorPopupContent anchor={rc} />
