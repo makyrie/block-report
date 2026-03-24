@@ -1,11 +1,13 @@
 // Single source of truth for transit score computation across all communities
 
+import { join } from 'node:path';
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
 import { fetchBoundaries } from './boundaries.js';
 import { pointInFeature, computeBBox, pointInBBox, haversineDistanceMiles, computeCentroid } from '../utils/geo.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
 import { communityKey } from '../utils/community.js';
+import { DISK_CACHE_DIR } from '../env.js';
 
 const CITY_HALL = { lat: 32.7157, lng: -117.1611 };
 const WALKING_SPEED_MPH = 3;
@@ -182,8 +184,9 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
 }
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
+const DISK_CACHE_PATH = join(DISK_CACHE_DIR, 'transit-scores.json');
 /** @internal Exported for test isolation — call invalidate() in beforeEach */
-export const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL);
+export const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL, { diskCachePath: DISK_CACHE_PATH });
 
 export function getTransitScores(): Promise<Map<string, TransitScore>> {
   return cachedScores.get();

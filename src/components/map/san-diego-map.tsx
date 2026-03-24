@@ -1,11 +1,11 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
+import type { BlockMetrics, CommunityAnchor } from '../../types';
 import { norm } from '../../utils/community';
 import { safeHref } from '../../utils/safe-href';
 
@@ -17,10 +17,9 @@ type TypeConfig = {
   text: string;  // text color for label
 };
 
-const TYPE_CONFIG: Record<'library' | 'rec_center' | 'transit', TypeConfig> = {
+const TYPE_CONFIG: Record<'library' | 'rec_center', TypeConfig> = {
   library:    { dot: 'bg-blue-500',  label: 'Library',      text: 'text-blue-700'  },
   rec_center: { dot: 'bg-green-500', label: 'Rec Center',   text: 'text-green-700' },
-  transit:    { dot: 'bg-violet-600', label: 'Transit Stop', text: 'text-violet-700' },
 };
 
 function TypeBadge({ type }: { type: keyof typeof TYPE_CONFIG }) {
@@ -74,15 +73,6 @@ function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
           </a>
         </p>
       )}
-    </div>
-  );
-}
-
-function TransitPopupContent({ name }: { name: string }) {
-  return (
-    <div className="min-w-[160px] max-w-[240px]">
-      <TypeBadge type="transit" />
-      <p className="font-semibold text-gray-900 text-sm leading-snug">{name}</p>
     </div>
   );
 }
@@ -207,7 +197,6 @@ const orangeIcon = makePinIcon('#f97316');
 interface SanDiegoMapProps {
   libraries: CommunityAnchor[];
   recCenters: CommunityAnchor[];
-  transitStops: TransitStop[];
   neighborhoodBoundaries: FeatureCollection | null;
   selectedCommunity: string | null;
   onAnchorClick: (anchor: CommunityAnchor) => void;
@@ -290,7 +279,6 @@ function MapController({ feature }: { feature: Feature | null }) {
 function SanDiegoMap({
   libraries,
   recCenters,
-  transitStops,
   neighborhoodBoundaries,
   selectedCommunity,
   onAnchorClick,
@@ -323,14 +311,6 @@ function SanDiegoMap({
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
           <span className="text-gray-700">Rec Center</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
-          <span className="text-gray-700">Transit Stop</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-orange-500 shrink-0" />
-          <span className="text-gray-700">Your Block</span>
         </li>
       </ul>
     </nav>
@@ -389,20 +369,6 @@ function SanDiegoMap({
           }}
         />
       )}
-
-      {/* Transit stops — violet circles */}
-      {transitStops.map((stop) => (
-        <CircleMarker
-          key={stop.id}
-          center={[stop.lat, stop.lng]}
-          radius={4}
-          pathOptions={{ color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.8, weight: 1 }}
-        >
-          <Popup>
-            <TransitPopupContent name={stop.name} />
-          </Popup>
-        </CircleMarker>
-      ))}
 
       {/* Library markers — blue */}
       {libraries.map((lib) => (

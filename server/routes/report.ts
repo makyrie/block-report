@@ -3,8 +3,11 @@ import type { Request, Response } from 'express';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited } from '../services/report-cache.js';
+import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited, recordGenerationAttempt } from '../services/report-cache.js';
 import { validateCommunityParam } from '../utils/community.js';
+
+/** Server-side language allowlist — prevents prompt injection via arbitrary language strings */
+const ALLOWED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
 
 /** Maximum serialized prompt size (bytes) to prevent cost amplification */
 const MAX_PROFILE_JSON_SIZE = 8_000;
@@ -152,13 +155,12 @@ const router = Router();
 const inflight = new Map<string, Promise<import('../../src/types/index.js').CommunityReport>>();
 
 // GET /api/report?community={name}&language={lang} — cached community report
-// GET /api/report?lat=X&lng=Y&radius=Z&language=L — cached block-level report (by anchor ID)
 router.get('/', async (req: Request, res: Response) => {
   try {
     // Validate language param (shared by both block and community lookups)
     const rawLang = (req.query.language as string) || 'en';
-    if (rawLang.length > 50 || /[\x00-\x1f\x7f]/.test(rawLang)) {
-      res.status(400).json({ error: 'language must be a printable string of 50 characters or fewer' });
+    if (!ALLOWED_LANGUAGES.has(rawLang)) {
+      res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
       return;
     }
     const language = rawLang;
@@ -205,6 +207,30 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/report/block?anchorId={id}&language={lang} — cached block-level report
+router.get('/block', async (req: Request, res: Response) => {
+  try {
+    const anchorId = req.query.anchorId as string;
+    const language = (req.query.language as string) || 'en';
+
+    if (!anchorId) {
+      res.status(400).json({ error: 'Missing required query parameter: anchorId' });
+      return;
+    }
+
+    const cached = await getCachedBlockReport(anchorId, language);
+    if (cached) {
+      res.json(cached);
+    } else {
+      res.status(404).json({ error: 'No cached block report found' });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Block report lookup error', { error: message, stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/generate', async (req: Request, res: Response) => {
   try {
     const { profile: rawProfile, language } = req.body as {
@@ -216,8 +242,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'profile must be an object with a communityName string' });
       return;
     }
-    if (typeof language !== 'string' || !language || language.length > 50) {
-      res.status(400).json({ error: 'language must be a non-empty string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !ALLOWED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
       return;
     }
 
@@ -245,6 +271,9 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
+
+    // Record attempt before calling Claude — counts toward rate limit even if generation fails
+    recordGenerationAttempt();
 
     // Fall back to on-demand generation with promise coalescing to prevent duplicate API calls
     const coalescingKey = `community:${profile.communityName}:${language}`;
@@ -294,8 +323,8 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     const blockMetrics = pickBlockMetricsFields(rawBlockMetrics as Record<string, unknown>);
     const demographics = rawDemographics ? pickDemographicsFields(rawDemographics as Record<string, unknown>) : undefined;
 
-    if (typeof language !== 'string' || language.length > 50) {
-      res.status(400).json({ error: 'language must be a string of 50 characters or fewer' });
+    if (typeof language !== 'string' || !ALLOWED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
       return;
     }
 
@@ -314,6 +343,9 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
+
+    // Record attempt before calling Claude — counts toward rate limit even if generation fails
+    recordGenerationAttempt();
 
     const blockCoalescingKey = `block:${anchorCacheId}:${language}`;
     let blockPromise = inflight.get(blockCoalescingKey);

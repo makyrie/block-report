@@ -25,8 +25,6 @@ export interface NeighborhoodProfile {
     goodNews: string[];
   };
   transit: {
-    nearbyStopCount: number;
-    nearestStopDistance: number;
     stopCount: number;
     agencyCount: number;
     agencies: string[];
@@ -47,13 +45,6 @@ export interface NeighborhoodProfile {
     rank: number;
     totalCommunities: number;
   } | null;
-}
-
-export interface TransitStop {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
 }
 
 export interface BlockMetrics {

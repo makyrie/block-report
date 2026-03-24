@@ -1,8 +1,10 @@
+import { join } from 'node:path';
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
 import { getTransitScoreValues } from './transit-scores.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
 import { communityKey } from '../utils/community.js';
+import { DISK_CACHE_DIR } from '../env.js';
 
 export interface AccessGapResult {
   accessGapScore: number;
@@ -219,8 +221,9 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
 // ── Public API ──────────────────────────────────────────────────────
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
+const DISK_CACHE_PATH = join(DISK_CACHE_DIR, 'gap-analysis.json');
 /** @internal Exported for test isolation — call invalidate() in beforeEach */
-export const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL);
+export const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL, { diskCachePath: DISK_CACHE_PATH });
 
 export function getAccessGapScores(): Promise<Map<string, AccessGapResult>> {
   return cachedScores.get();
