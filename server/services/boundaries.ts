@@ -3,6 +3,7 @@
 import { join } from 'node:path';
 import type { FeatureCollection, Feature, Polygon, MultiPolygon } from 'geojson';
 import { logger } from '../logger.js';
+import { isVercel } from '../env.js';
 import { createCachedComputation } from '../utils/cached-computation.js';
 import { DISK_CACHE_DIR } from '../env.js';
 

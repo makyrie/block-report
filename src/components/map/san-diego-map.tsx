@@ -7,6 +7,7 @@ import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { Block311Report, BlockMetrics, CommunityAnchor, Permit } from '../../types';
 import { norm, scoreToColor } from '../../utils/community';
+import { useLanguage } from '../../i18n/context';
 import {
   AnchorPopupContent,
   TransitPopupContent,
@@ -113,6 +114,12 @@ function MapClickHandler({ onClick }: { onClick: (lat: number, lng: number) => v
       }, 300);
     },
   });
+  // Clear debounce timer on unmount to prevent stale callbacks
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
   return null;
 }
 
@@ -129,6 +136,20 @@ function MapController({ feature }: { feature: Feature | null }) {
   }, [feature, map]);
   return null;
 }
+
+type MarkerFilter = 'all' | 'library' | 'rec_center';
+
+const FILTER_LABEL_KEYS: Record<MarkerFilter, string> = {
+  all: 'map.filter.all',
+  library: 'map.filter.libraries',
+  rec_center: 'map.filter.recCenters',
+};
+
+const FILTER_ANNOUNCE_KEYS: Record<MarkerFilter, string> = {
+  all: 'map.filter.showAll',
+  library: 'map.filter.showLibraries',
+  rec_center: 'map.filter.showRecCenters',
+};
 
 const EMPTY_REPORTS: Block311Report[] = [];
 
@@ -177,6 +198,8 @@ function SanDiegoMap({
   onToggleChoropleth,
   onCommunitySelect,
 }: SanDiegoMapProps) {
+  const { t } = useLanguage();
+  const [activeFilter, setActiveFilter] = useState<MarkerFilter>('all');
   const [selectedPermit, setSelectedPermit] = useState<Permit | null>(null);
   const permitPopupRef = useRef<L.Popup | null>(null);
 
@@ -194,6 +217,7 @@ function SanDiegoMap({
     [onAnchorClick],
   );
 
+
   const selectedFeature = useMemo(
     () => selectedCommunity && neighborhoodBoundaries
       ? findCommunityFeature(neighborhoodBoundaries.features, selectedCommunity)
@@ -203,6 +227,33 @@ function SanDiegoMap({
 
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
+    {/* Screen reader announcement for filter changes */}
+    <div aria-live="polite" className="sr-only">{t(FILTER_ANNOUNCE_KEYS[activeFilter])}</div>
+
+    {/* Layer filter — bottom-left, above legend */}
+    <div
+      role="radiogroup"
+      aria-label="Filter map markers by type"
+      className="absolute bottom-[7.5rem] left-2 z-[1000] flex rounded-lg overflow-hidden shadow-md print:hidden"
+    >
+      {(['all', 'library', 'rec_center'] as const).map((value) => (
+        <button
+          key={value}
+          type="button"
+          role="radio"
+          aria-checked={activeFilter === value}
+          onClick={() => setActiveFilter(value)}
+          className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+            activeFilter === value
+              ? 'bg-blue-600 text-white'
+              : 'bg-white/90 text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          {t(FILTER_LABEL_KEYS[value])}
+        </button>
+      ))}
+    </div>
+
     {/* Choropleth toggle */}
     {onToggleChoropleth && accessGapScores && accessGapScores.size > 0 && (
       <div className="absolute top-14 right-2 z-[999] print:hidden">
@@ -249,11 +300,11 @@ function SanDiegoMap({
       <ul className="space-y-1.5">
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-blue-500 shrink-0" />
-          <span className="text-gray-700">Library</span>
+          <span className="text-gray-700">{t('map.legend.library')}</span>
         </li>
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
-          <span className="text-gray-700">Rec Center</span>
+          <span className="text-gray-700">{t('map.legend.recCenter')}</span>
         </li>
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-amber-500 shrink-0" />
@@ -394,38 +445,39 @@ function SanDiegoMap({
         </Popup>
       )}
 
+      {/* Library markers — blue (shown when filter is 'all' or 'library') */}
+      {(activeFilter === 'all' || activeFilter === 'library') &&
+        libraries.map((lib) => (
+          <Marker
+            key={lib.id}
+            position={[lib.lat, lib.lng]}
+            icon={blueIcon}
+            title={`Library: ${lib.name}`}
+            alt={`Library: ${lib.name}`}
+            eventHandlers={{ click: handleMarkerClick(lib) }}
+          >
+            <Popup>
+              <AnchorPopupContent anchor={lib} />
+            </Popup>
+          </Marker>
+        ))}
 
-      {/* Library markers — blue */}
-      {libraries.map((lib) => (
-        <Marker
-          key={lib.id}
-          position={[lib.lat, lib.lng]}
-          icon={blueIcon}
-          title={`Library: ${lib.name}`}
-          alt={`Library: ${lib.name}`}
-          eventHandlers={{ click: handleMarkerClick(lib) }}
-        >
-          <Popup>
-            <AnchorPopupContent anchor={lib} />
-          </Popup>
-        </Marker>
-      ))}
-
-      {/* Rec center markers — green */}
-      {recCenters.map((rc) => (
-        <Marker
-          key={rc.id}
-          position={[rc.lat, rc.lng]}
-          icon={greenIcon}
-          title={`Rec Center: ${rc.name}`}
-          alt={`Rec Center: ${rc.name}`}
-          eventHandlers={{ click: handleMarkerClick(rc) }}
-        >
-          <Popup>
-            <AnchorPopupContent anchor={rc} />
-          </Popup>
-        </Marker>
-      ))}
+      {/* Rec center markers — green (shown when filter is 'all' or 'rec_center') */}
+      {(activeFilter === 'all' || activeFilter === 'rec_center') &&
+        recCenters.map((rc) => (
+          <Marker
+            key={rc.id}
+            position={[rc.lat, rc.lng]}
+            icon={greenIcon}
+            title={`Rec Center: ${rc.name}`}
+            alt={`Rec Center: ${rc.name}`}
+            eventHandlers={{ click: handleMarkerClick(rc) }}
+          >
+            <Popup>
+              <AnchorPopupContent anchor={rc} />
+            </Popup>
+          </Marker>
+        ))}
     </MapContainer>
     </div>
   );

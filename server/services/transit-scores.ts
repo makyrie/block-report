@@ -175,10 +175,13 @@ export function getTransitScores(): Promise<Map<string, TransitScore>> {
   return cachedScores.get();
 }
 
+let _cachedCityAverage: { key: Map<string, TransitScore>; value: number } | null = null;
 export function getCityAverage(scores: Map<string, TransitScore>): number {
+  if (_cachedCityAverage && _cachedCityAverage.key === scores) return _cachedCityAverage.value;
   const values = Array.from(scores.values());
-  if (values.length === 0) return 0;
-  return Math.round(values.reduce((sum, s) => sum + s.transitScore, 0) / values.length);
+  const avg = values.length === 0 ? 0 : Math.round(values.reduce((sum, s) => sum + s.transitScore, 0) / values.length);
+  _cachedCityAverage = { key: scores, value: avg };
+  return avg;
 }
 
 // Get just the normalized 0-100 scores (used by gap-analysis)

@@ -82,11 +82,11 @@ export async function getPreGeneratedReport(community: string, language: string)
   }
 }
 
-export function generateReport(profile: NeighborhoodProfile, language: string): Promise<CommunityReport> {
+export function generateReport(profile: NeighborhoodProfile, language: string, signal?: AbortSignal): Promise<CommunityReport> {
   return fetchJSON(`${BASE}/report/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile, language }),
+    signal,
   });
 }
-
