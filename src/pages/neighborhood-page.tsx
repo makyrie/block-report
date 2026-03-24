@@ -4,7 +4,7 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { generateReport, getPreGeneratedReport, getPermits } from '../api/client';
+import { generateReport, getPreGeneratedReport, getPermits, getCitywideGaps } from '../api/client';
 import type { CommunityAnchor, CommunityReport, NeighborhoodProfile, Permit } from '../types';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
@@ -14,6 +14,7 @@ import { useMapData } from '../hooks/use-map-data';
 import { useCommunityData } from '../hooks/use-community-data';
 import { useBlockData } from '../hooks/use-block-data';
 import { DEFAULT_TRANSIT } from '../utils/defaults';
+import { norm } from '../utils/community';
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -31,6 +32,9 @@ export default function NeighborhoodPage() {
 
   const { metrics, metricsLoading, topLanguages, transitScore, accessGap } = useCommunityData(selectedCommunity);
   const { pinnedLocation, setPinnedLocation, blockData, setBlockData, blockLoading, blockRadius, setBlockRadius } = useBlockData();
+
+  const [accessGapScores, setAccessGapScores] = useState<Map<string, number>>(new Map());
+  const [showChoropleth, setShowChoropleth] = useState(false);
 
   const [report, setReport] = useState<CommunityReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -57,6 +61,19 @@ export default function NeighborhoodPage() {
       .catch((err: unknown) => { if (err instanceof Error && err.name !== 'AbortError') console.error(err); });
     return () => controller.abort();
   }, [selectedCommunity]);
+
+  // Fetch access gap scores for choropleth on mount
+  useEffect(() => {
+    getCitywideGaps()
+      .then(({ ranking }) => {
+        const scoreMap = new Map<string, number>();
+        for (const r of ranking) {
+          scoreMap.set(norm(r.community), r.accessGapScore);
+        }
+        setAccessGapScores(scoreMap);
+      })
+      .catch(console.error);
+  }, []);
 
 
   // Clear report when community or language changes
@@ -147,6 +164,7 @@ export default function NeighborhoodPage() {
       setSelectedAnchor(anchor);
       setSelectedCommunity(anchor.community);
       navigate(`/neighborhood/${toSlug(anchor.community)}`);
+      setMobileView('info');
     },
     [navigate],
   );
@@ -166,6 +184,16 @@ export default function NeighborhoodPage() {
 
   const selectedCommunityRef = useRef(selectedCommunity);
   selectedCommunityRef.current = selectedCommunity;
+
+  const handleAnchorClickMobile = useCallback(
+    (anchor: CommunityAnchor) => { handleAnchorClick(anchor); setMobileView('info'); },
+    [handleAnchorClick],
+  );
+
+  const handleToggleChoropleth = useCallback(
+    () => setShowChoropleth(prev => !prev),
+    [],
+  );
 
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
@@ -300,12 +328,16 @@ export default function NeighborhoodPage() {
           permits={permits}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
-          onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}
+          onAnchorClick={handleAnchorClickMobile}
           onMapClick={handleMapClick}
           pinnedLocation={pinnedLocation}
           blockData={blockData}
           blockLoading={blockLoading}
           blockRadius={blockRadius}
+          accessGapScores={accessGapScores}
+          showChoropleth={showChoropleth}
+          onToggleChoropleth={handleToggleChoropleth}
+          onCommunitySelect={handleCommunityChange}
         />
       </main>
 
