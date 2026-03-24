@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { getLibraries, getRecCenters } from '../api/client';
 import { useLanguage } from '../i18n/context';
 import type { CommunityAnchor } from '../types';
+import { isSafeUrl } from '../utils/url';
 
 function safeWebsiteHref(url: string): string {
   try {
@@ -31,7 +32,7 @@ function ResourceCard({ resource }: { resource: CommunityAnchor }) {
           </a>
         </p>
       )}
-      {websiteHref && (
+      {websiteHref && isSafeUrl(websiteHref) && (
         <p className="text-sm mt-1">
           <a
             href={websiteHref}

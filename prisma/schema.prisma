@@ -37,6 +37,7 @@ model RecCenter {
   lat       Float?
   lng       Float?
 
+  @@index([neighborhd], name: "idx_rec_center_neighborhd")
   @@map("rec_centers")
 }
 
@@ -81,6 +82,23 @@ model Request311 {
   @@index([date_requested], name: "idx_311_date")
   @@index([lat, lng], name: "idx_311_lat_lng")
   @@map("requests_311")
+}
+
+model Permit {
+  id              Int       @id @default(autoincrement())
+  permit_number   String    @unique
+  permit_type     String?
+  description     String?
+  date_issued     DateTime?
+  status          String?
+  street_address  String?
+  community       String?
+  lat             Float?
+  lng             Float?
+
+  @@index([date_issued], name: "idx_permit_date")
+  @@index([community, date_issued], name: "idx_permit_community_date")
+  @@map("permits")
 }
 
 model CensusLanguage {

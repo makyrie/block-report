@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
 import { FlyerLayout } from './flyer-layout';
 import { toSlug } from '../../utils/slug';
+import { useDownloadPdf } from '../../hooks/use-download-pdf';
 import { useLanguage } from '../../i18n/context';
-import { downloadPdf } from '../../api/client';
 
 interface FlyerPreviewProps {
   report: CommunityReport;
@@ -19,8 +19,6 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
   const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [pdfState, setPdfState] = useState<'idle' | 'loading' | 'error'>('idle');
-  const abortRef = useRef<AbortController | null>(null);
 
   // Fade-in animation on mount
   useEffect(() => {
@@ -28,36 +26,8 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
     return () => clearTimeout(timer);
   }, []);
 
-  // Abort in-flight PDF download on unmount
-  useEffect(() => {
-    return () => { abortRef.current?.abort(); };
-  }, []);
-
   const slug = toSlug(report.neighborhoodName);
-
-  const handleDownloadPdf = async () => {
-    if (pdfState === 'loading') return;
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setPdfState('loading');
-    try {
-      const blob = await downloadPdf(report, slug, metrics, topLanguages, controller.signal);
-      if (controller.signal.aborted) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const langCode = report.language?.toLowerCase().slice(0, 10) || 'en';
-      a.download = `${slug}-${langCode}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setPdfState('idle');
-    } catch (err) {
-      if (!controller.signal.aborted) setPdfState('error');
-    }
-  };
+  const { downloading, downloadError, handleDownloadPdf } = useDownloadPdf(report, slug, metrics, topLanguages);
 
   return (
     <>
@@ -117,15 +87,11 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
           <button
             type="button"
             onClick={handleDownloadPdf}
-            disabled={pdfState === 'loading'}
-            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+            disabled={downloading}
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
           >
             <DownloadIcon />
-            {pdfState === 'loading'
-              ? t('flyer.downloading')
-              : pdfState === 'error'
-                ? t('flyer.downloadError')
-                : t('flyer.downloadPdf')}
+            {downloading ? t('flyer.generating') : t('flyer.download')}
           </button>
           <button
             type="button"
@@ -136,6 +102,9 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
             {t('flyer.fullSize')}
           </button>
         </div>
+        {downloadError && (
+          <p className="mt-2 text-sm text-red-600">{downloadError}</p>
+        )}
       </div>
 
       {/* Full-size modal */}
@@ -146,6 +115,9 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
           metrics={metrics}
           topLanguages={topLanguages}
           onClose={() => setModalOpen(false)}
+          downloading={downloading}
+          downloadError={downloadError}
+          handleDownloadPdf={handleDownloadPdf}
         />
       )}
     </>
@@ -158,12 +130,18 @@ function FlyerModal({
   metrics,
   topLanguages,
   onClose,
+  downloading,
+  downloadError,
+  handleDownloadPdf,
 }: {
   report: CommunityReport;
   slug: string;
   metrics?: NeighborhoodProfile['metrics'] | null;
   topLanguages?: { language: string; percentage: number }[];
   onClose: () => void;
+  downloading: boolean;
+  downloadError: string | null;
+  handleDownloadPdf: () => void;
 }) {
   const { t } = useLanguage();
 
@@ -212,6 +190,15 @@ function FlyerModal({
             </button>
             <button
               type="button"
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-wait transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+            >
+              <DownloadIcon />
+              {downloading ? t('flyer.generating') : t('flyer.download')}
+            </button>
+            <button
+              type="button"
               onClick={onClose}
               className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label="Close"
@@ -222,6 +209,10 @@ function FlyerModal({
             </button>
           </div>
         </div>
+
+        {downloadError && (
+          <p className="px-4 py-2 text-sm text-red-600">{downloadError}</p>
+        )}
 
         {/* Full-size flyer */}
         <div className="p-6 md:p-8">

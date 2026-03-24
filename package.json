@@ -17,6 +17,8 @@
     "generate-reports": "node --env-file=.env --import=tsx server/scripts/generate-reports.ts",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
+    "mcp": "node --env-file=.env --import=tsx server/mcp/index.ts",
+    "mcp:http": "node --env-file=.env --import=tsx server/mcp/http.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -26,6 +28,7 @@
   "packageManager": "pnpm@10.20.0",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "@neondatabase/serverless": "~0.10.4",
     "@prisma/adapter-neon": "^5.22.0",
     "@prisma/client": "^5.22.0",
@@ -40,11 +43,14 @@
     "react-dom": "^19.2.4",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.13.1",
+    "puppeteer-core": "^24.9.0",
+    "qrcode": "^1.5.4",
     "@sparticuz/chromium": "^133.0.0",
-    "puppeteer-core": "^24.2.0",
-    "ws": "^8.19.0"
+    "ws": "^8.19.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@axe-core/react": "^4.11.1",
     "@eslint/js": "^9.39.4",
     "@tailwindcss/vite": "^4.2.1",
@@ -66,6 +72,6 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^7.3.1",
-    "vitest": "^3.2.1"
+    "vitest": "^3.2.4"
   }
 }

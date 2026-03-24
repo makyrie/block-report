@@ -1,3 +1,7 @@
+/**
+ * SYNC WARNING: The PDF HTML template in server/services/pdf/template.ts mirrors this
+ * component. Any visual change here MUST be reflected there and vice-versa.
+ */
 import { QRCodeSVG } from 'qrcode.react';
 import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
 import {
@@ -7,6 +11,7 @@ import {
   MapPinIcon,
   GlobeIcon,
 } from './flyer-icons';
+import { truncateSentences } from '../../utils/text';
 
 interface FlyerLayoutProps {
   report: CommunityReport;
@@ -17,13 +22,6 @@ interface FlyerLayoutProps {
   inline?: boolean;
   /** Base URL for links and QR codes. Defaults to window.location.origin in browser. Required for SSR. */
   baseUrl?: string;
-}
-
-/** Truncate text to roughly N sentences. */
-function truncateSentences(text: string, max: number): string {
-  const sentences = text.match(/[^.!?]+[.!?]+/g);
-  if (!sentences || sentences.length <= max) return text;
-  return sentences.slice(0, max).join('').trim();
 }
 
 /** Map report language names to BCP 47 locale codes for date formatting. */

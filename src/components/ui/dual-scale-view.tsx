@@ -33,14 +33,14 @@ const calloutDot: Record<ScaleComparison['type'], string> = {
 
 export default function DualScaleView({ blockData, blockRadius, communityName, metrics }: DualScaleViewProps) {
   const { t } = useLanguage();
-  const comparisons = generateComparisons(blockData, metrics, communityName);
+  const comparisons = generateComparisons(blockData, metrics, communityName, t);
 
   return (
     <section aria-labelledby="dual-scale-heading" className="space-y-3">
       {/* Block-level header */}
       <div>
         <h2 id="dual-scale-heading" className="text-sm font-semibold text-orange-800">
-          {t('dualScale.aroundYourPin')}
+          {t('dualScale.heading')}
         </h2>
         <p className="text-xs text-orange-600">{blockRadius} mi radius</p>
       </div>

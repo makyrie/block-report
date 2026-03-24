@@ -5,6 +5,8 @@ export interface ScaleComparison {
   type: 'insight' | 'good-news' | 'concern';
 }
 
+type TranslateFn = (key: string, vars?: Record<string, string>) => string;
+
 /**
  * Generate plain-language comparison callouts between block-level and
  * neighborhood-level 311 data. Returns up to 3 most relevant comparisons.
@@ -13,6 +15,7 @@ export function generateComparisons(
   block: BlockMetrics,
   neighborhood: NeighborhoodProfile['metrics'],
   communityName: string,
+  t: TranslateFn,
 ): ScaleComparison[] {
   // Guard: no neighborhood data
   if (neighborhood.totalRequests311 === 0) return [];
@@ -20,7 +23,7 @@ export function generateComparisons(
   // No block reports at all
   if (block.totalRequests === 0) {
     return [{
-      text: `No reports found near your pin within ${block.radiusMiles} mi. Try a larger radius.`,
+      text: t('dualScale.noReports', { radius: String(block.radiusMiles) }),
       type: 'insight',
     }];
   }
@@ -30,7 +33,11 @@ export function generateComparisons(
   // 1. Open count comparison
   const neighborhoodOpenCount = Math.max(0, neighborhood.totalRequests311 - neighborhood.resolvedCount);
   comparisons.push({
-    text: `Your block has ${block.openCount} open report${block.openCount !== 1 ? 's' : ''}. Across ${communityName}, there are ${neighborhoodOpenCount.toLocaleString()} unresolved issues.`,
+    text: t('dualScale.cmpOpen', {
+      blockOpen: String(block.openCount),
+      community: communityName,
+      neighborhoodOpen: neighborhoodOpenCount.toLocaleString(),
+    }),
     type: 'insight',
   });
 
@@ -45,12 +52,17 @@ export function generateComparisons(
       const direction = blockRate > neighborhoodRate ? 'higher' : 'lower';
       const compType = blockRate > neighborhoodRate ? 'good-news' : 'concern';
       comparisons.push({
-        text: `Around your pin, ${Math.round(blockRate)}% of issues are resolved — ${direction} than the ${Math.round(neighborhoodRate)}% rate across ${communityName}.`,
+        text: t('dualScale.cmpResolution', {
+          blockRate: String(Math.round(blockRate)),
+          direction: t(`dualScale.${direction}`),
+          neighborhoodRate: String(Math.round(neighborhoodRate)),
+          community: communityName,
+        }),
         type: compType as ScaleComparison['type'],
       });
     } else if (rateDiff <= 5) {
       comparisons.push({
-        text: `Your block's resolution rate mirrors the ${communityName} average.`,
+        text: t('dualScale.cmpResolutionSame', { community: communityName }),
         type: 'insight',
       });
     }
@@ -61,7 +73,12 @@ export function generateComparisons(
       if (daysDiff > 2) {
         const faster = block.avgDaysToResolve < neighborhood.avgDaysToResolve;
         comparisons.push({
-          text: `Issues near you take about ${Math.round(block.avgDaysToResolve)} days to resolve — ${faster ? 'faster' : 'slower'} than the ${communityName} average of ${Math.round(neighborhood.avgDaysToResolve)} days.`,
+          text: t('dualScale.cmpResponseTime', {
+            blockDays: String(Math.round(block.avgDaysToResolve)),
+            speed: t(faster ? 'dualScale.faster' : 'dualScale.slower'),
+            community: communityName,
+            neighborhoodDays: String(Math.round(neighborhood.avgDaysToResolve)),
+          }),
           type: faster ? 'good-news' : 'concern',
         });
       }
@@ -73,12 +90,12 @@ export function generateComparisons(
       const neighborhoodTop = neighborhood.topIssues[0].category;
       if (blockTop === neighborhoodTop) {
         comparisons.push({
-          text: `"${blockTop}" is the top issue both near you and across ${communityName}.`,
+          text: t('dualScale.cmpTopIssueSame', { issue: blockTop, community: communityName }),
           type: 'insight',
         });
       } else {
         comparisons.push({
-          text: `Near you it's "${blockTop}", but neighborhood-wide the top issue is "${neighborhoodTop}".`,
+          text: t('dualScale.cmpTopIssueDiff', { blockIssue: blockTop, neighborhoodIssue: neighborhoodTop }),
           type: 'insight',
         });
       }
