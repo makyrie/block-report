@@ -72,9 +72,13 @@ router.get('/', async (req, res) => {
 
   const QUERY_SAFETY_CAP = 10_000;
 
-  let data;
+  // Use Haversine formula in SQL to filter by exact distance and aggregate in the database.
+  // This avoids fetching thousands of rows into Node.js.
+  const R = 3958.8; // Earth radius in miles
+
   try {
-    data = await prisma.request311.findMany({
+    // Fetch individual reports for the area (branch feature: show 311 reports on map)
+    const data = await prisma.request311.findMany({
       select: {
         service_request_id: true,
         service_name: true,
@@ -99,102 +103,102 @@ router.get('/', async (req, res) => {
         lat, lng, radius: snappedRadius, resultCount: data.length, cap: QUERY_SAFETY_CAP,
       });
     }
-  } catch (err) {
-    logger.error('Failed to fetch block data', { error: (err as Error).message });
-    res.status(500).json({ error: 'Internal server error' });
-    return;
-  }
 
-  // Refine with exact Haversine distance
-  const nearby = data.filter(
-    (r) => r.lat != null && r.lng != null &&
-      haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= snappedRadius,
-  );
+    // Refine with exact Haversine distance
+    const nearby = data.filter(
+      (r) => r.lat != null && r.lng != null &&
+        haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= snappedRadius,
+    );
 
-  // Single pass: compute all aggregate stats + collect resolved-with-dates
-  const issueCounts: Record<string, number> = {};
-  let openCount = 0;
-  let resolvedCount = 0;
-  let referredCount = 0;
-  let resolveDaysSum = 0;
-  let resolvedWithDatesCount = 0;
-  const resolvedWithClosed: typeof nearby = [];
-  // Cache statusCategory per record to avoid recomputing in the reports mapping
-  const statusCategoryMap = new Map<string, 'open' | 'resolved' | 'referred'>();
+    // Single pass: compute all aggregate stats + collect resolved-with-dates
+    const issueCounts: Record<string, number> = {};
+    let openCount = 0;
+    let resolvedCount = 0;
+    let referredCount = 0;
+    let resolveDaysSum = 0;
+    let resolvedWithDatesCount = 0;
+    const resolvedWithClosed: typeof nearby = [];
+    // Cache statusCategory per record to avoid recomputing in the reports mapping
+    const statusCategoryMap = new Map<string, 'open' | 'resolved' | 'referred'>();
 
-  for (const r of nearby) {
-    const statusCat = classifyStatus(r.status, r.date_closed);
-    statusCategoryMap.set(r.service_request_id, statusCat);
-    if (statusCat === 'resolved') {
-      resolvedCount++;
-      if (r.date_closed) {
-        resolvedWithClosed.push(r);
-        if (r.date_requested) {
-          resolveDaysSum += (r.date_closed.getTime() - r.date_requested.getTime()) / (1000 * 60 * 60 * 24);
-          resolvedWithDatesCount++;
+    for (const r of nearby) {
+      const statusCat = classifyStatus(r.status, r.date_closed);
+      statusCategoryMap.set(r.service_request_id, statusCat);
+      if (statusCat === 'resolved') {
+        resolvedCount++;
+        if (r.date_closed) {
+          resolvedWithClosed.push(r);
+          if (r.date_requested) {
+            resolveDaysSum += (r.date_closed.getTime() - r.date_requested.getTime()) / (1000 * 60 * 60 * 24);
+            resolvedWithDatesCount++;
+          }
         }
+      } else if (statusCat === 'referred') {
+        referredCount++;
+      } else {
+        openCount++;
       }
-    } else if (statusCat === 'referred') {
-      referredCount++;
-    } else {
-      openCount++;
+
+      // Issue counts
+      const issueName = r.service_name || 'Unknown';
+      issueCounts[issueName] = (issueCounts[issueName] || 0) + 1;
     }
 
-    // Issue counts
-    const issueName = r.service_name || 'Unknown';
-    issueCounts[issueName] = (issueCounts[issueName] || 0) + 1;
+    const resolutionRate = nearby.length > 0 ? resolvedCount / nearby.length : 0;
+    const avgDaysToResolve = resolvedWithDatesCount > 0
+      ? Math.round((resolveDaysSum / resolvedWithDatesCount) * 10) / 10
+      : null;
+
+    const topIssues = Object.entries(issueCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 6)
+      .map(([category, count]) => ({ category, count }));
+
+    const recentlyResolved = [...resolvedWithClosed]
+      .sort((a, b) => b.date_closed!.getTime() - a.date_closed!.getTime())
+      .slice(0, 5)
+      .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
+
+    // Cap individual reports — nearby preserves Prisma's date_requested DESC order
+    const MAX_REPORTS = 500;
+    const reports = nearby
+      .slice(0, MAX_REPORTS)
+      .map((r) => {
+        const statusCategory = statusCategoryMap.get(r.service_request_id) ?? classifyStatus(r.status, r.date_closed);
+        return {
+          id: r.service_request_id,
+          lat: Number(r.lat),
+          lng: Number(r.lng),
+          category: r.service_name || 'Unknown',
+          categoryDetail: r.service_name_detail || null,
+          status: r.status || 'Unknown',
+          statusCategory,
+          dateRequested: r.date_requested?.toISOString() ?? '',
+          dateClosed: r.date_closed?.toISOString() ?? null,
+          address: r.street_address || null,
+        };
+      });
+
+    const result: BlockMetrics = {
+      totalReports: nearby.length,
+      openCount,
+      resolvedCount,
+      referredCount,
+      resolutionRate,
+      avgDaysToResolve,
+      topIssues,
+      recentlyResolved,
+      radiusMiles: snappedRadius,
+      reports,
+    };
+
+    setCachedBlock(cacheKey, result);
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+    res.json(result);
+  } catch (err) {
+    logger.error('Failed to fetch block data', { error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  const resolutionRate = nearby.length > 0 ? resolvedCount / nearby.length : 0;
-  const avgDaysToResolve = resolvedWithDatesCount > 0
-    ? Math.round((resolveDaysSum / resolvedWithDatesCount) * 10) / 10
-    : null;
-
-  const topIssues = Object.entries(issueCounts)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 6)
-    .map(([category, count]) => ({ category, count }));
-
-  const recentlyResolved = [...resolvedWithClosed]
-    .sort((a, b) => b.date_closed!.getTime() - a.date_closed!.getTime())
-    .slice(0, 5)
-    .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
-
-  // Cap individual reports — nearby preserves Prisma's date_requested DESC order
-  const MAX_REPORTS = 500;
-  const reports = nearby
-    .slice(0, MAX_REPORTS)
-    .map((r) => {
-      const statusCategory = statusCategoryMap.get(r.service_request_id) ?? classifyStatus(r.status, r.date_closed);
-      return {
-        id: r.service_request_id,
-        lat: Number(r.lat),
-        lng: Number(r.lng),
-        category: r.service_name || 'Unknown',
-        categoryDetail: r.service_name_detail || null,
-        status: r.status || 'Unknown',
-        statusCategory,
-        dateRequested: r.date_requested?.toISOString() ?? '',
-        dateClosed: r.date_closed?.toISOString() ?? null,
-        address: r.street_address || null,
-      };
-    });
-
-  const result = {
-    totalReports: nearby.length,
-    openCount,
-    resolvedCount,
-    referredCount,
-    resolutionRate,
-    avgDaysToResolve,
-    topIssues,
-    recentlyResolved,
-    radiusMiles: snappedRadius,
-    reports,
-  };
-
-  setCachedBlock(cacheKey, result);
-  res.json(result);
 });
 
 export default router;

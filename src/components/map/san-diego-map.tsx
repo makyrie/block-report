@@ -5,7 +5,8 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { Block311Report, BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
+import type { Block311Report, BlockMetrics, CommunityAnchor } from '../../types';
+import { norm } from '../../utils/community';
 import {
   AnchorPopupContent,
   TransitPopupContent,
@@ -41,7 +42,6 @@ const orangeIcon = makePinIcon('#f97316');
 interface SanDiegoMapProps {
   libraries: CommunityAnchor[];
   recCenters: CommunityAnchor[];
-  transitStops: TransitStop[];
   neighborhoodBoundaries: FeatureCollection | null;
   selectedCommunity: string | null;
   onAnchorClick: (anchor: CommunityAnchor) => void;
@@ -50,11 +50,6 @@ interface SanDiegoMapProps {
   blockData?: BlockMetrics | null;
   blockLoading?: boolean;
   blockRadius?: number;
-}
-
-// Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
-function norm(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function findCommunityFeature(features: Feature[], community: string): Feature | null {
@@ -159,7 +154,6 @@ const ReportMarkers = memo(function ReportMarkers({ reports }: { reports: Block3
 function SanDiegoMap({
   libraries,
   recCenters,
-  transitStops,
   neighborhoodBoundaries,
   selectedCommunity,
   onAnchorClick,
@@ -289,20 +283,6 @@ function SanDiegoMap({
           }}
         />
       )}
-
-      {/* Transit stops — violet circles */}
-      {transitStops.map((stop) => (
-        <CircleMarker
-          key={stop.id}
-          center={[stop.lat, stop.lng]}
-          radius={4}
-          pathOptions={{ color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.8, weight: 1 }}
-        >
-          <Popup>
-            <TransitPopupContent name={stop.name} />
-          </Popup>
-        </CircleMarker>
-      ))}
 
       {/* Library markers — blue */}
       {libraries.map((lib) => (

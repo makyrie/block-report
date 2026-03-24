@@ -8,6 +8,7 @@ import WelcomePage from './pages/welcome-page';
 import NeighborhoodPage from './pages/neighborhood-page';
 import ResourcesPage from './pages/resources-page';
 import FlyerPage from './pages/flyer-page';
+import CitywidePage from './pages/citywide-page';
 import { LanguageProvider } from './i18n/context';
 import './app.css';
 import './print.css';
@@ -25,6 +26,7 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<WelcomePage />} />
+            <Route path="/citywide" element={<CitywidePage />} />
             <Route path="/neighborhood/:slug" element={<NeighborhoodPage />} />
             <Route path="/flyer" element={<FlyerPage />} />
             <Route path="/flyer/:slug" element={<FlyerPage />} />
