@@ -60,6 +60,17 @@ export default function CitywideChoropleth({
     return map;
   }, [ranking]);
 
+  // Build tooltip HTML for a feature — single source of truth for both render and language update
+  const buildTooltip = useCallback(
+    (displayName: string, entry: CitywideCommunity | null): string => {
+      const safeName = escapeHtml(displayName);
+      if (!entry) return `<strong>${safeName}</strong><br/>${escapeHtml(t('citywide.noScore'))}`;
+      const factors = entry.topFactors.filter((f) => VALID_FACTORS.has(f));
+      return `<strong>${safeName}</strong><br/>Score: ${entry.accessGapScore}/100${factors.length > 0 ? '<br/>' + factors.map(escapeHtml).join(', ') : ''}`;
+    },
+    [t],
+  );
+
   // Find score for a GeoJSON feature
   const getScore = useCallback(
     (feature: Feature): CitywideCommunity | null => {
@@ -93,12 +104,7 @@ export default function CitywideChoropleth({
       const entry = getScore(feature);
       const displayName = feature.properties?.cpname ?? 'Unknown';
 
-      // Tooltip — escape external data to prevent XSS
-      const safeName = escapeHtml(displayName);
-      const tooltipContent = entry
-        ? `<strong>${safeName}</strong><br/>Score: ${entry.accessGapScore}/100${entry.topFactors.filter((f) => VALID_FACTORS.has(f)).length > 0 ? '<br/>' + entry.topFactors.filter((f) => VALID_FACTORS.has(f)).map(escapeHtml).join(', ') : ''}`
-        : `<strong>${safeName}</strong><br/>${escapeHtml(t('citywide.noScore'))}`;
-      layer.bindTooltip(tooltipContent, { sticky: true, direction: 'top' });
+      layer.bindTooltip(buildTooltip(displayName, entry), { sticky: true, direction: 'top' });
 
       layer.on({
         mouseover: () => {
@@ -113,7 +119,7 @@ export default function CitywideChoropleth({
         click: () => onClickCommunity(displayName),
       });
     },
-    [getScore, onHoverCommunity, onClickCommunity, t],
+    [getScore, buildTooltip, onHoverCommunity, onClickCommunity],
   );
 
   // Update only the hovered/unhovered layers instead of restyling all ~100 polygons
@@ -133,27 +139,21 @@ export default function CitywideChoropleth({
     prevHoveredLayerRef.current = curr;
   }, [hoveredCommunity, style]);
 
-  // Use a stable key based on ranking data — exclude lang to avoid full remount on language change
-  const geoJsonKey = useMemo(() => ranking.map((r) => r.community).join(','), [ranking]);
-
-  // Update tooltip content imperatively when language changes (avoids destroying/recreating all polygon layers)
+  // Update tooltips when language changes without remounting GeoJSON
   useEffect(() => {
     if (!geoJsonRef.current) return;
-    geoJsonRef.current.eachLayer((layer: L.Layer) => {
-      if (!('feature' in layer)) return;
-      const feature = (layer as unknown as { feature: Feature }).feature;
+    geoJsonRef.current.eachLayer((layer) => {
+      const feature = (layer as L.GeoJSON & { feature?: Feature }).feature;
+      if (!feature) return;
       const entry = getScore(feature);
       const displayName = feature.properties?.cpname ?? 'Unknown';
-      const safeName = escapeHtml(displayName);
-      const tooltipContent = entry
-        ? `<strong>${safeName}</strong><br/>Score: ${entry.accessGapScore}/100${entry.topFactors.filter((f) => VALID_FACTORS.has(f)).length > 0 ? '<br/>' + entry.topFactors.filter((f) => VALID_FACTORS.has(f)).map(escapeHtml).join(', ') : ''}`
-        : `<strong>${safeName}</strong><br/>${escapeHtml(t('citywide.noScore'))}`;
-      if ('getTooltip' in layer) {
-        const tooltip = (layer as L.Path).getTooltip();
-        if (tooltip) tooltip.setContent(tooltipContent);
-      }
+      layer.unbindTooltip();
+      layer.bindTooltip(buildTooltip(displayName, entry), { sticky: true, direction: 'top' });
     });
-  }, [lang, getScore, t]);
+  }, [lang, getScore, buildTooltip]);
+
+  // Use a stable key based on ranking data to avoid remounting on hover or language switch
+  const geoJsonKey = useMemo(() => ranking.map((r) => r.community).join(','), [ranking]);
 
   return (
     <div className="relative h-full w-full" role="region" aria-label={t('citywide.title')}>

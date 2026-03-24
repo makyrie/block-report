@@ -4,7 +4,21 @@ import { useLanguage } from '../i18n/context';
 import type { CommunityAnchor } from '../types';
 import { isSafeUrl } from '../utils/url';
 
+function safeWebsiteHref(url: string): string {
+  try {
+    const parsed = new URL(url, 'https://placeholder.invalid');
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      // If original had no scheme, prepend https://
+      return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    }
+  } catch {
+    // malformed URL
+  }
+  return '';
+}
+
 function ResourceCard({ resource }: { resource: CommunityAnchor }) {
+  const websiteHref = resource.website ? safeWebsiteHref(resource.website) : '';
   return (
     <div className="p-4 bg-white border border-gray-200 rounded-lg">
       <p className="font-medium text-gray-900">{resource.name}</p>
@@ -18,10 +32,10 @@ function ResourceCard({ resource }: { resource: CommunityAnchor }) {
           </a>
         </p>
       )}
-      {resource.website && isSafeUrl(resource.website) && (
+      {websiteHref && isSafeUrl(websiteHref) && (
         <p className="text-sm mt-1">
           <a
-            href={resource.website}
+            href={websiteHref}
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 hover:underline"
@@ -45,13 +59,17 @@ export default function ResourcesPage() {
   const [filter, setFilter] = useState('');
 
   useEffect(() => {
-    Promise.all([getLibraries(), getRecCenters()])
+    const controller = new AbortController();
+    Promise.all([getLibraries(controller.signal), getRecCenters(controller.signal)])
       .then(([libs, recs]) => {
-        setLibraries(libs);
-        setRecCenters(recs);
+        if (!controller.signal.aborted) {
+          setLibraries(libs);
+          setRecCenters(recs);
+        }
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch((err) => { if (err?.name !== 'AbortError') console.error(err); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, []);
 
   const neighborhoods = useMemo(() => {

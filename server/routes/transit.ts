@@ -20,6 +20,7 @@ router.get('/', async (req, res) => {
     res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
 
     if (!score) {
+      res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
       res.json({
         stopCount: 0,
         agencyCount: 0,
@@ -31,6 +32,7 @@ router.get('/', async (req, res) => {
       return;
     }
 
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json({
       ...score,
       cityAverage: getCityAverage(scores),

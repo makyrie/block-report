@@ -5,9 +5,10 @@ import { FlyerLayout } from '../components/flyer/flyer-layout';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
-import { get311, getDemographics, getPreGeneratedReport, generateReport } from '../api/client';
+import { getPreGeneratedReport, generateReport } from '../api/client';
+import { useCommunityData } from '../hooks/use-community-data';
 import type { CommunityReport, NeighborhoodProfile } from '../types';
-import { DEFAULT_TRANSIT } from '../types';
+import { DEFAULT_TRANSIT } from '../utils/defaults';
 
 export default function FlyerPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -15,28 +16,11 @@ export default function FlyerPage() {
   const { lang, setLang, t, reportLang } = useLanguage();
 
   const community = slug ? fromSlug(slug) : null;
+  const { metrics, topLanguages } = useCommunityData(community);
 
-  const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
-  const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
   const [report, setReport] = useState<CommunityReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch metrics and demographics when community is set
-  useEffect(() => {
-    if (!community) return;
-    const controller = new AbortController();
-    const { signal } = controller;
-    setMetrics(null);
-    setTopLanguages([]);
-    get311(community, signal)
-      .then(setMetrics)
-      .catch((e) => { if (!signal.aborted) console.error(e); });
-    getDemographics(community, signal)
-      .then((data) => { if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages); })
-      .catch(() => {});
-    return () => { controller.abort(); };
-  }, [community]);
 
   // Auto-fetch report when community and language are ready
   useEffect(() => {
@@ -84,8 +68,7 @@ export default function FlyerPage() {
     })();
 
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [community, reportLang, metrics]);
+  }, [community, reportLang, metrics, topLanguages]);
 
   function handlePrint() {
     window.print();

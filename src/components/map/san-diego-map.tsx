@@ -5,8 +5,8 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
-import { norm, escapeHtml } from '../../utils/community';
+import type { BlockMetrics, CommunityAnchor } from '../../types';
+import { norm } from '../../utils/community';
 import { isSafeUrl } from '../../utils/url';
 import { useLanguage } from '../../i18n/context';
 
@@ -18,10 +18,9 @@ type TypeConfig = {
   text: string;  // text color for label
 };
 
-const TYPE_CONFIG: Record<'library' | 'rec_center' | 'transit', TypeConfig> = {
+const TYPE_CONFIG: Record<'library' | 'rec_center', TypeConfig> = {
   library:    { dot: 'bg-blue-500',  label: 'Library',      text: 'text-blue-700'  },
   rec_center: { dot: 'bg-green-500', label: 'Rec Center',   text: 'text-green-700' },
-  transit:    { dot: 'bg-violet-600', label: 'Transit Stop', text: 'text-violet-700' },
 };
 
 function TypeBadge({ type }: { type: keyof typeof TYPE_CONFIG }) {
@@ -78,7 +77,6 @@ function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
     </div>
   );
 }
-
 
 function BlockPopupContent({
   loading,
@@ -200,7 +198,6 @@ const orangeIcon = makePinIcon('#f97316');
 interface SanDiegoMapProps {
   libraries: CommunityAnchor[];
   recCenters: CommunityAnchor[];
-  transitStops: TransitStop[];
   neighborhoodBoundaries: FeatureCollection | null;
   selectedCommunity: string | null;
   onAnchorClick: (anchor: CommunityAnchor) => void;
@@ -303,7 +300,6 @@ const FILTER_ANNOUNCE_KEYS: Record<MarkerFilter, string> = {
 function SanDiegoMap({
   libraries,
   recCenters,
-  transitStops,
   neighborhoodBoundaries,
   selectedCommunity,
   onAnchorClick,
@@ -330,26 +326,6 @@ function SanDiegoMap({
       : null,
     [selectedCommunity, neighborhoodBoundaries],
   );
-
-  // Convert transit stops to a single GeoJSON layer for performance
-  // (~5800 stops rendered as one canvas layer instead of individual React components)
-  const transitGeoJSON = useMemo<FeatureCollection>(() => ({
-    type: 'FeatureCollection',
-    features: transitStops.map((stop) => ({
-      type: 'Feature' as const,
-      geometry: { type: 'Point' as const, coordinates: [stop.lng, stop.lat] },
-      properties: { name: stop.name },
-    })),
-  }), [transitStops]);
-
-  const transitPointToLayer = useCallback((_feature: Feature, latlng: L.LatLng) => {
-    return L.circleMarker(latlng, { radius: 4, color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.8, weight: 1 });
-  }, []);
-
-  const transitOnEachFeature = useCallback((feature: Feature, layer: L.Layer) => {
-    const name = feature.properties?.name ?? 'Transit Stop';
-    layer.bindPopup(`<div class="min-w-[160px] max-w-[240px]"><div class="flex items-center gap-1.5 mb-2"><span aria-hidden="true" class="w-2.5 h-2.5 rounded-full shrink-0 bg-violet-600"></span><span class="text-xs font-semibold uppercase tracking-wide text-violet-700">Transit Stop</span></div><p class="font-semibold text-gray-900 text-sm leading-snug">${escapeHtml(name)}</p></div>`);
-  }, []);
 
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
@@ -390,14 +366,6 @@ function SanDiegoMap({
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
           <span className="text-gray-700">{t('map.legend.recCenter')}</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
-          <span className="text-gray-700">{t('map.legend.transitStop')}</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-orange-500 shrink-0" />
-          <span className="text-gray-700">{t('map.legend.yourBlock')}</span>
         </li>
       </ul>
     </nav>
@@ -454,16 +422,6 @@ function SanDiegoMap({
             fillColor: '#3b82f6',
             fillOpacity: 0.12,
           }}
-        />
-      )}
-
-      {/* Transit stops — single GeoJSON canvas layer for performance */}
-      {transitStops.length > 0 && (
-        <GeoJSON
-          key="transit-stops"
-          data={transitGeoJSON}
-          pointToLayer={transitPointToLayer}
-          onEachFeature={transitOnEachFeature}
         />
       )}
 
