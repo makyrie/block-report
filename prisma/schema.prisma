@@ -79,6 +79,7 @@ model Request311 {
 
   @@index([comm_plan_name], name: "idx_311_comm_plan")
   @@index([date_requested], name: "idx_311_date")
+  @@index([lat, lng], name: "idx_311_lat_lng")
   @@map("requests_311")
 }
 
@@ -117,4 +118,16 @@ model CensusLanguage {
 
   @@index([community], name: "idx_census_community")
   @@map("census_language")
+}
+
+model ReportCache {
+  id        Int      @id @default(autoincrement())
+  community String
+  language  String
+  report    Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([community, language])
+  @@index([createdAt], name: "idx_report_cache_created_at")
+  @@map("report_cache")
 }

@@ -5,7 +5,8 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, Permit, TransitStop } from '../../types';
+import type { BlockMetrics, CommunityAnchor, Permit } from '../../types';
+import { norm } from '../../utils/community';
 
 // ── Popup content components ─────────────────────────────────────────────────
 
@@ -15,10 +16,9 @@ type TypeConfig = {
   text: string;  // text color for label
 };
 
-const TYPE_CONFIG: Record<'library' | 'rec_center' | 'transit' | 'permit', TypeConfig> = {
+const TYPE_CONFIG: Record<'library' | 'rec_center' | 'permit', TypeConfig> = {
   library:    { dot: 'bg-blue-500',  label: 'Library',      text: 'text-blue-700'  },
   rec_center: { dot: 'bg-green-500', label: 'Rec Center',   text: 'text-green-700' },
-  transit:    { dot: 'bg-violet-600', label: 'Transit Stop', text: 'text-violet-700' },
   permit:     { dot: 'bg-amber-500', label: 'Permit',       text: 'text-amber-700' },
 };
 
@@ -77,15 +77,6 @@ function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
   );
 }
 
-function TransitPopupContent({ name }: { name: string }) {
-  return (
-    <div className="min-w-[160px] max-w-[240px]">
-      <TypeBadge type="transit" />
-      <p className="font-semibold text-gray-900 text-sm leading-snug">{name}</p>
-    </div>
-  );
-}
-
 function PermitPopupContent({ permit }: { permit: Permit }) {
   return (
     <div className="min-w-[200px] max-w-[260px]">
@@ -115,6 +106,7 @@ function PermitPopupContent({ permit }: { permit: Permit }) {
     </div>
   );
 }
+
 
 function BlockPopupContent({
   loading,
@@ -236,7 +228,6 @@ const orangeIcon = makePinIcon('#f97316');
 interface SanDiegoMapProps {
   libraries: CommunityAnchor[];
   recCenters: CommunityAnchor[];
-  transitStops: TransitStop[];
   permits: Permit[];
   neighborhoodBoundaries: FeatureCollection | null;
   selectedCommunity: string | null;
@@ -246,11 +237,6 @@ interface SanDiegoMapProps {
   blockData?: BlockMetrics | null;
   blockLoading?: boolean;
   blockRadius?: number;
-}
-
-// Normalize strings for fuzzy matching (e.g. "City Heights" matches "Mid-City:City Heights")
-function norm(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function findCommunityFeature(features: Feature[], community: string): Feature | null {
@@ -325,7 +311,6 @@ function MapController({ feature }: { feature: Feature | null }) {
 function SanDiegoMap({
   libraries,
   recCenters,
-  transitStops,
   permits,
   neighborhoodBoundaries,
   selectedCommunity,
@@ -364,16 +349,8 @@ function SanDiegoMap({
           <span className="text-gray-700">Rec Center</span>
         </li>
         <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
-          <span className="text-gray-700">Transit Stop</span>
-        </li>
-        <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-amber-500 shrink-0" />
           <span className="text-gray-700">Permit</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-orange-500 shrink-0" />
-          <span className="text-gray-700">Your Block</span>
         </li>
       </ul>
     </nav>
@@ -433,20 +410,6 @@ function SanDiegoMap({
         />
       )}
 
-      {/* Transit stops — violet circles (rendered first so permits appear on top) */}
-      {transitStops.map((stop) => (
-        <CircleMarker
-          key={stop.id}
-          center={[stop.lat, stop.lng]}
-          radius={4}
-          pathOptions={{ color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.8, weight: 1 }}
-        >
-          <Popup>
-            <TransitPopupContent name={stop.name} />
-          </Popup>
-        </CircleMarker>
-      ))}
-
       {/* Permit markers — amber circles with shared popup */}
       {permits.map((permit) => (
         <CircleMarker
@@ -466,6 +429,7 @@ function SanDiegoMap({
           <PermitPopupContent permit={selectedPermit} />
         </Popup>
       )}
+
 
       {/* Library markers — blue */}
       {libraries.map((lib) => (

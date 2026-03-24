@@ -1,5 +1,7 @@
 import { prisma } from '../server/services/db.js';
 import { parse } from 'csv-parse/sync';
+import { toTitleCase, findCommunity, parseCommunityFeatures } from './geo-helpers.js';
+import type { CommunityFeature } from './geo-helpers.js';
 
 // --- Helpers ---
 
@@ -9,12 +11,6 @@ async function fetchCsv(url: string): Promise<Record<string, string>[]> {
   if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
   const text = await res.text();
   return parse(text, { columns: true, skip_empty_lines: true, relax_column_count: true });
-}
-
-function toTitleCase(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function parseFloat_(val: string | undefined): number | null {
@@ -27,40 +23,6 @@ function parseInt_(val: string | undefined): number | null {
   if (!val || val.trim() === '') return null;
   const n = parseInt(val, 10);
   return isNaN(n) ? null : n;
-}
-
-// --- Geo helpers ---
-
-type Polygon = number[][][]; // [ring][point][lng, lat]
-
-// Ray-casting point-in-polygon test
-function pointInPolygon(lat: number, lng: number, polygon: Polygon): boolean {
-  for (const ring of polygon) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i][1], yi = ring[i][0]; // GeoJSON is [lng, lat]
-      const xj = ring[j][1], yj = ring[j][0];
-      if ((yi > lng) !== (yj > lng) && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi) {
-        inside = !inside;
-      }
-    }
-    if (inside) return true;
-  }
-  return false;
-}
-
-interface CommunityFeature {
-  name: string;
-  polygons: Polygon[];
-}
-
-function findCommunity(lat: number, lng: number, communities: CommunityFeature[]): string | null {
-  for (const c of communities) {
-    for (const poly of c.polygons) {
-      if (pointInPolygon(lat, lng, poly)) return c.name;
-    }
-  }
-  return null;
 }
 
 // --- Seeders ---
@@ -79,7 +41,7 @@ async function seedLibraries() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const result = await prisma.library.createMany({ data: mapped });
+  const result = await prisma.library.createMany({ data: mapped, skipDuplicates: true });
   console.log(`  ✓ ${result.count} libraries`);
 }
 
@@ -101,7 +63,7 @@ async function seedRecCenters() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const result = await prisma.recCenter.createMany({ data: mapped });
+  const result = await prisma.recCenter.createMany({ data: mapped, skipDuplicates: true });
   console.log(`  ✓ ${result.count} rec centers`);
 }
 
@@ -124,7 +86,7 @@ async function seedTransitStops() {
     lat: parseFloat_(r.lat),
     lng: parseFloat_(r.lng),
   }));
-  const result = await prisma.transitStop.createMany({ data: mapped });
+  const result = await prisma.transitStop.createMany({ data: mapped, skipDuplicates: true });
   console.log(`  ✓ ${result.count} transit stops`);
 }
 
@@ -182,7 +144,7 @@ async function seed311() {
   let inserted = 0;
   for (let i = 0; i < allRows.length; i += batchSize) {
     const batch = allRows.slice(i, i + batchSize);
-    const result = await prisma.request311.createMany({ data: batch });
+    const result = await prisma.request311.createMany({ data: batch, skipDuplicates: true });
     inserted += result.count;
   }
   console.log(`  ✓ ${inserted} total 311 requests`);
@@ -248,7 +210,7 @@ async function seedCensusLanguage() {
     other_unspecified: parseInt_(row[11]),
   }));
 
-  const result = await prisma.censusLanguage.createMany({ data: mapped });
+  const result = await prisma.censusLanguage.createMany({ data: mapped, skipDuplicates: true });
   console.log(`  ✓ ${result.count} Census tracts`);
 
   // Map tracts to communities using centroids + community boundaries
@@ -270,15 +232,7 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
   const boundaries = await boundaryRes.json();
 
   // Parse community features
-  const communities: CommunityFeature[] = [];
-  for (const feature of boundaries.features) {
-    const name = toTitleCase((feature.properties.cpname || feature.properties.name || '').trim());
-    if (!name) continue;
-    const geom = feature.geometry;
-    const polygons: Polygon[] =
-      geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
-    communities.push({ name, polygons });
-  }
+  const communities = parseCommunityFeatures(boundaries);
   console.log(`  ${communities.length} community boundaries loaded`);
 
   // Fetch tract centroids from TIGERweb

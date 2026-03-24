@@ -1,22 +1,16 @@
 import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
-import { sanitizeCommunity } from '../utils/validation.js';
+import { validateCommunityParam } from '../utils/community.js';
 
 const PERMIT_GOOD_NEWS_WINDOW_DAYS = 180;
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const community = req.query.community as string | undefined;
-  if (!community) {
+  const cleaned = validateCommunityParam(req.query.community as string | undefined);
+  if (!cleaned) {
     res.status(400).json({ error: 'community query parameter is required' });
-    return;
-  }
-
-  const cleaned = sanitizeCommunity(community);
-  if (cleaned === null) {
-    res.status(400).json({ error: 'Invalid community name' });
     return;
   }
 
@@ -53,7 +47,7 @@ router.get('/', async (req, res) => {
     metrics = metricsResult[0].get_community_metrics;
     recentPermits = permitCount;
   } catch (err) {
-    logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community: cleaned });
+    logger.error('Failed to fetch 311 metrics', { error: err instanceof Error ? err.message : String(err), community: cleaned });
     res.status(500).json({ error: 'Internal server error' });
     return;
   }
