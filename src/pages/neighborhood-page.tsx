@@ -150,6 +150,7 @@ export default function NeighborhoodPage() {
       setSelectedAnchor(anchor);
       setSelectedCommunity(anchor.community);
       navigate(`/neighborhood/${toSlug(anchor.community)}`);
+      setMobileView('info');
     },
     [navigate],
   );
