@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
 import type { CommunityTrends } from '../../src/types/index.js';
+import { validateCommunityParam } from '../utils/community.js';
 import { validateCommunity } from '../utils/validation.js';
 
 const router = Router();
@@ -23,8 +24,11 @@ setInterval(() => {
 }, TRENDS_SWEEP_INTERVAL).unref();
 
 router.get('/', async (req, res) => {
-  const cleaned = validateCommunity(req, res);
-  if (!cleaned) return;
+  const cleaned = validateCommunityParam(req.query.community as string | undefined);
+  if (!cleaned) {
+    res.status(400).json({ error: 'community query parameter is required' });
+    return;
+  }
 
   interface CommunityMetrics {
     total_requests: number;
@@ -46,7 +50,7 @@ router.get('/', async (req, res) => {
     `;
     metrics = result[0].get_community_metrics;
   } catch (err) {
-    logger.error('Failed to fetch 311 metrics', { error: (err as Error).message, community: cleaned });
+    logger.error('Failed to fetch 311 metrics', { error: err instanceof Error ? err.message : String(err), community: cleaned });
     res.status(500).json({ error: 'Internal server error' });
     return;
   }
@@ -139,7 +143,7 @@ router.get('/trends', async (req, res) => {
     trendsCache.set(cacheKey, { data, cachedAt: Date.now() });
     res.json(data);
   } catch (err) {
-    logger.error('Failed to fetch 311 trends', { error: (err as Error).message, community: cleaned });
+    logger.error('Failed to fetch 311 trends', { error: err instanceof Error ? err.message : String(err), community: cleaned });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

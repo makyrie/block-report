@@ -5,8 +5,9 @@ import { FlyerLayout } from '../components/flyer/flyer-layout';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
-import { get311, get311Trends, getDemographics } from '../api/client';
-import type { CommunityTrends, NeighborhoodProfile } from '../types';
+import { get311Trends } from '../api/client';
+import { useCommunityData } from '../hooks/use-community-data';
+import type { CommunityTrends } from '../types';
 import { useReport } from '../hooks/use-report';
 
 export default function FlyerPage() {
@@ -15,31 +16,26 @@ export default function FlyerPage() {
   const { lang, setLang, t, reportLang } = useLanguage();
 
   const community = slug ? fromSlug(slug) : null;
+  const { metrics, topLanguages } = useCommunityData(community);
 
-  const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
-  const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
   const [trends, setTrends] = useState<CommunityTrends | null>(null);
   const [trendsSettled, setTrendsSettled] = useState(false);
 
-  // Fetch metrics and demographics when community is set
+  // Fetch trends when community changes
   useEffect(() => {
-    if (!community) return;
+    if (!community) {
+      setTrends(null);
+      setTrendsSettled(false);
+      return;
+    }
     const controller = new AbortController();
-    const { signal } = controller;
-
-    setMetrics(null);
-    setTopLanguages([]);
     setTrends(null);
     setTrendsSettled(false);
 
-    get311(community, signal).then(setMetrics).catch((err) => { if (!signal.aborted) console.error(err); });
-    get311Trends(community, signal)
+    get311Trends(community, controller.signal)
       .then(setTrends)
       .catch(() => { /* trends may not be available */ })
-      .finally(() => { if (!signal.aborted) setTrendsSettled(true); });
-    getDemographics(community, signal)
-      .then((data) => { if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages); })
-      .catch(() => {});
+      .finally(() => { if (!controller.signal.aborted) setTrendsSettled(true); });
 
     return () => { controller.abort(); };
   }, [community]);

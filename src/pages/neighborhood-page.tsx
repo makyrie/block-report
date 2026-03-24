@@ -1,15 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { getLibraries, getRecCenters, getTransitStops, get311, get311Trends, getDemographics, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData } from '../api/client';
-import type { BlockMetrics, CommunityAnchor, CommunityTrends, NeighborhoodProfile, TransitStop } from '../types';
-import type { FeatureCollection } from 'geojson';
+import { get311Trends } from '../api/client';
+import type { CommunityAnchor, CommunityTrends } from '../types';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
+import { findCommunityAtPoint } from '../utils/point-in-polygon';
+import { useMapData } from '../hooks/use-map-data';
+import { useCommunityData } from '../hooks/use-community-data';
+import { useBlockData } from '../hooks/use-block-data';
 import { useReport } from '../hooks/use-report';
 
 export default function NeighborhoodPage() {
@@ -18,29 +21,38 @@ export default function NeighborhoodPage() {
   const { lang, setLang, t, reportLang } = useLanguage();
   const [mobileView, setMobileView] = useState<'map' | 'info'>('map');
 
-  const [libraries, setLibraries] = useState<CommunityAnchor[]>([]);
-  const [recCenters, setRecCenters] = useState<CommunityAnchor[]>([]);
-  const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
-  const [neighborhoodBoundaries, setNeighborhoodBoundaries] = useState<FeatureCollection | null>(null);
+  const { libraries, recCenters, neighborhoodBoundaries, dataError } = useMapData();
 
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
     slug ? fromSlug(slug) : null,
   );
   const [selectedAnchor, setSelectedAnchor] = useState<CommunityAnchor | null>(null);
-  const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
-  const [metricsLoading, setMetricsLoading] = useState(false);
-  const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
 
-  const [transitScore, setTransitScore] = useState<NeighborhoodProfile['transit'] | null>(null);
-  const [accessGap, setAccessGap] = useState<NeighborhoodProfile['accessGap']>(null);
+  const { metrics, metricsLoading, topLanguages, transitScore, accessGap } = useCommunityData(selectedCommunity);
+  const { pinnedLocation, setPinnedLocation, blockData, setBlockData, blockLoading, blockRadius, setBlockRadius } = useBlockData();
+
+  // Fetch trends data
   const [trends, setTrends] = useState<CommunityTrends | null>(null);
   const [trendsSettled, setTrendsSettled] = useState(false);
-  const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [blockData, setBlockData] = useState<BlockMetrics | null>(null);
-  const [blockLoading, setBlockLoading] = useState(false);
-  const [blockRadius, setBlockRadius] = useState(0.25);
 
-  const [dataError, setDataError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectedCommunity) {
+      setTrends(null);
+      setTrendsSettled(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setTrends(null);
+    setTrendsSettled(false);
+
+    get311Trends(selectedCommunity, controller.signal)
+      .then(setTrends)
+      .catch(() => { /* trends may not be available for all communities */ })
+      .finally(() => { if (!controller.signal.aborted) setTrendsSettled(true); });
+
+    return () => { controller.abort(); };
+  }, [selectedCommunity]);
 
   // Sync URL -> state when slug changes (e.g. browser back/forward)
   useEffect(() => {
@@ -50,69 +62,6 @@ export default function NeighborhoodPage() {
       setSelectedAnchor(null);
     }
   }, [slug]);
-
-  // Fetch map data on mount
-  useEffect(() => {
-    getLibraries().then(setLibraries).catch((err) => { console.error(err); setDataError('Failed to load map data'); });
-    getRecCenters().then(setRecCenters).catch(console.error);
-    getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch(console.error);
-    getTransitStops()
-      .then(setTransitStops)
-      .catch(console.error);
-  }, []);
-
-  // Fetch 311 metrics and demographics when community changes
-  useEffect(() => {
-    if (!selectedCommunity) {
-      setMetrics(null);
-      setReport(null);
-      setTopLanguages([]);
-      setTransitScore(null);
-      setAccessGap(null);
-      setTrends(null);
-      setTrendsSettled(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    const { signal } = controller;
-
-    setMetricsLoading(true);
-    setMetrics(null);
-    setTopLanguages([]);
-    setTransitScore(null);
-    setAccessGap(null);
-    setTrends(null);
-    setTrendsSettled(false);
-
-    get311(selectedCommunity, signal)
-      .then(setMetrics)
-      .catch((err) => { if (!signal.aborted) console.error(err); })
-      .finally(() => { if (!signal.aborted) setMetricsLoading(false); });
-
-    getTransitScore(selectedCommunity, signal)
-      .then(setTransitScore)
-      .catch(() => { /* transit score may not be available */ });
-
-    getAccessGap(selectedCommunity, signal)
-      .then((data) => { if (!signal.aborted && data?.accessGapScore != null) setAccessGap(data); })
-      .catch(() => { /* access gap score may not be available */ });
-
-    get311Trends(selectedCommunity, signal)
-      .then(setTrends)
-      .catch(() => { /* trends may not be available for all communities */ })
-      .finally(() => { if (!signal.aborted) setTrendsSettled(true); });
-
-    getDemographics(selectedCommunity, signal)
-      .then((data) => {
-        if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages);
-      })
-      .catch(() => {
-        // Demographics may not be available for all communities
-      });
-
-    return () => { controller.abort(); };
-  }, [selectedCommunity]);
 
   const { report, reportLoading, reportError, regenerate: handleGenerateReport } = useReport({
     community: selectedCommunity,
@@ -135,8 +84,10 @@ export default function NeighborhoodPage() {
       }
       setSelectedCommunity(community || null);
       setSelectedAnchor(null);
+      setPinnedLocation(null);
+      setBlockData(null);
     },
-    [navigate],
+    [navigate, setPinnedLocation, setBlockData],
   );
 
   const handleAnchorClick = useCallback(
@@ -148,42 +99,18 @@ export default function NeighborhoodPage() {
     [navigate],
   );
 
-  const blockAbortRef = useRef<AbortController | null>(null);
-
-  const handleMapClick = useCallback(async (lat: number, lng: number) => {
-    blockAbortRef.current?.abort();
-    const controller = new AbortController();
-    blockAbortRef.current = controller;
-
+  const handleMapClick = useCallback((lat: number, lng: number) => {
     setPinnedLocation({ lat, lng });
     setBlockData(null);
-    setBlockLoading(true);
-    try {
-      const data = await getBlockData(lat, lng, blockRadius, controller.signal);
-      if (!controller.signal.aborted) setBlockData(data);
-    } catch (err) {
-      if (!controller.signal.aborted) console.error('Failed to fetch block data', err);
-    } finally {
-      if (!controller.signal.aborted) setBlockLoading(false);
+
+    if (neighborhoodBoundaries) {
+      const detected = findCommunityAtPoint(lat, lng, neighborhoodBoundaries);
+      if (detected && detected !== selectedCommunity) {
+        setSelectedAnchor(null);
+        navigate(`/neighborhood/${toSlug(detected)}`);
+      }
     }
-  }, [blockRadius]);
-
-  // Re-fetch block data when radius changes
-  useEffect(() => {
-    if (!pinnedLocation) return;
-
-    blockAbortRef.current?.abort();
-    const controller = new AbortController();
-    blockAbortRef.current = controller;
-
-    setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
-      .then((data) => { if (!controller.signal.aborted) setBlockData(data); })
-      .catch((err) => { if (!controller.signal.aborted) console.error('Failed to fetch block data', err); })
-      .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
-
-    return () => { controller.abort(); };
-  }, [blockRadius, pinnedLocation]);
+  }, [neighborhoodBoundaries, selectedCommunity, navigate, setPinnedLocation, setBlockData]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">
@@ -203,6 +130,19 @@ export default function NeighborhoodPage() {
           ${mobileView === 'info' ? 'flex' : 'hidden md:flex'}
         `}
       >
+        {/* Back to citywide link */}
+        <div className="px-4 pt-3 pb-0 shrink-0">
+          <Link
+            to="/citywide"
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+            {t('citywide.backToCitywide')}
+          </Link>
+        </div>
+
         {/* Sidebar header with neighborhood selector + language buttons */}
         <div className="p-4 border-b border-gray-100 shrink-0">
           <div className="flex flex-wrap gap-1 mb-3">
@@ -240,6 +180,9 @@ export default function NeighborhoodPage() {
             transitScore={transitScore}
             accessGap={accessGap}
             trends={trends}
+            blockData={blockData}
+            blockRadius={blockRadius}
+            blockLoading={blockLoading}
           />
         </div>
       </aside>
@@ -277,7 +220,6 @@ export default function NeighborhoodPage() {
         <SanDiegoMap
           libraries={libraries}
           recCenters={recCenters}
-          transitStops={transitStops}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
           onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}

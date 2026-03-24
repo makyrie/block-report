@@ -25,8 +25,6 @@ export interface NeighborhoodProfile {
     goodNews: string[];
   };
   transit: {
-    nearbyStopCount: number;
-    nearestStopDistance: number;
     stopCount: number;
     agencyCount: number;
     agencies: string[];
@@ -101,6 +99,19 @@ export interface CommunityReport {
     phone311: string;
     anchorLocation: string;
   };
+}
+
+export interface CitywideCommunity {
+  community: string;
+  accessGapScore: number;
+  signals: {
+    lowEngagement: number | null;
+    lowTransit: number | null;
+    highNonEnglish: number | null;
+  };
+  topFactors: string[];
+  rank: number;
+  totalCommunities: number;
 }
 
 export interface StoredBlockReport {

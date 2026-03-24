@@ -169,6 +169,26 @@ export default function WelcomePage() {
           )}
         </section>
 
+        {/* Citywide comparison card */}
+        <section aria-labelledby="citywide-heading" className="mb-4">
+          <Link
+            to="/citywide"
+            className="block rounded-xl border-2 border-indigo-200 bg-indigo-50 p-5 hover:border-indigo-400 hover:bg-indigo-100 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <div className="flex items-start gap-4">
+              <span className="text-3xl shrink-0" aria-hidden="true">{'\uD83D\uDDFA\uFE0F'}</span>
+              <div>
+                <h2 id="citywide-heading" className="text-base font-bold text-gray-900 mb-1 group-hover:text-indigo-800">
+                  {t('citywide.cardTitle')}
+                </h2>
+                <p className="text-sm text-gray-600">
+                  {t('citywide.cardDescription')}
+                </p>
+              </div>
+            </div>
+          </Link>
+        </section>
+
         {/* Flyer shortcut card */}
         <section aria-labelledby="flyer-heading" className="mb-8">
           <Link

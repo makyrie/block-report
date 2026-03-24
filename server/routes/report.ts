@@ -1,124 +1,21 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { generateReport, generateBlockReport } from '../services/claude.js';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile, StoredBlockReport } from '../../src/types/index.js';
-import { getCachedReport, saveCachedReport } from '../services/report-cache.js';
-import { COMMUNITIES_LOWER, LANGUAGE_CODES, VALID_LANGUAGES, VALID_LANGUAGE_CODES } from '../utils/validation.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
-const BLOCK_REPORTS_DIR = path.join(REPORTS_DIR, 'blocks');
-
-function sanitizeFilename(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-}
-
-interface StoredReport {
-  communityName: string;
-  language: string;
-  languageCode: string;
-  generatedAt: string;
-  dataAsOf: string;
-  report: {
-    neighborhoodName: string;
-    language: string;
-    generatedAt: string;
-    summary: string;
-    goodNews: string[];
-    topIssues: string[];
-    howToParticipate: string[];
-    contactInfo: {
-      councilDistrict: string;
-      phone311: string;
-      anchorLocation: string;
-    };
-  };
-}
-
-async function getPreGeneratedReport(
-  communityName: string,
-  language: string,
-): Promise<StoredReport | null> {
-  const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
-  const filename = `${sanitizeFilename(communityName)}_${langCode}.json`;
-  const filePath = path.join(REPORTS_DIR, filename);
-
-  try {
-    const content = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(content) as StoredReport;
-  } catch {
-    return null;
-  }
-}
+import type { NeighborhoodProfile } from '../../src/types/index.js';
+import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited, recordGenerationAttempt } from '../services/report-cache.js';
+import { COMMUNITIES_LOWER, VALID_LANGUAGES } from '../utils/validation.js';
 
 const router = Router();
 
-// GET /api/report?community={name}&language={lang} — pre-generated community report
-// GET /api/report?lat=X&lng=Y&radius=Z&language=L — pre-generated block-level report
+/** Server-side language allowlist — prevents prompt injection via arbitrary language strings */
+const ALLOWED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
+
+// GET /api/report?community={name}&language={lang} — cached community report
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Block-level lookup by coordinates
-    if (req.query.lat && req.query.lng) {
-      const lat = parseFloat(req.query.lat as string);
-      const lng = parseFloat(req.query.lng as string);
-      const radius = parseFloat(req.query.radius as string) || 0.25;
-      const language = (req.query.language as string) || 'en';
-
-      if (isNaN(lat) || isNaN(lng)) {
-        res.status(400).json({ error: 'lat and lng must be valid numbers' });
-        return;
-      }
-
-      // Validate language code — only allow known short codes for block lookups
-      if (!VALID_LANGUAGE_CODES.has(language)) {
-        res.status(400).json({ error: 'Unsupported language code' });
-        return;
-      }
-
-      const files = await fs.readdir(BLOCK_REPORTS_DIR).catch(() => [] as string[]);
-      const langSuffix = `_${language}.json`;
-      const COORD_TOLERANCE = 0.0002; // ~0.01 miles in degrees
-
-      for (const file of files) {
-        if (!file.endsWith(langSuffix)) continue;
-
-        try {
-          const content = await fs.readFile(path.join(BLOCK_REPORTS_DIR, file), 'utf-8');
-          const stored = JSON.parse(content) as StoredBlockReport;
-
-          if (
-            Math.abs(stored.lat - lat) < COORD_TOLERANCE &&
-            Math.abs(stored.lng - lng) < COORD_TOLERANCE &&
-            stored.radiusMiles === radius
-          ) {
-            logger.info('Serving pre-generated block report', {
-              anchor: stored.anchorName,
-              language,
-            });
-            res.json({
-              ...stored.report,
-              preGenerated: true,
-              anchorName: stored.anchorName,
-              anchorType: stored.anchorType,
-            });
-            return;
-          }
-        } catch {
-          // Skip malformed files
-        }
-      }
-
-      res.status(404).json({ error: 'No pre-generated block report found for this location' });
-      return;
-    }
-
-    // Community-level lookup by name
     const community = req.query.community as string;
-    const language = req.query.language as string || 'English';
+    const language = req.query.language as string || 'en';
 
     if (!community) {
       res.status(400).json({ error: 'Missing required query parameter: community' });
@@ -141,11 +38,35 @@ router.get('/', async (req: Request, res: Response) => {
     if (cached) {
       res.json(cached);
     } else {
-      res.status(404).json({ error: 'No pre-generated report available' });
+      res.status(404).json({ error: 'No cached report available' });
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Report lookup error', { error: message });
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Report lookup error', { error: message, stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/report/block?anchorId={id}&language={lang} — cached block-level report
+router.get('/block', async (req: Request, res: Response) => {
+  try {
+    const anchorId = req.query.anchorId as string;
+    const language = (req.query.language as string) || 'en';
+
+    if (!anchorId) {
+      res.status(400).json({ error: 'Missing required query parameter: anchorId' });
+      return;
+    }
+
+    const cached = await getCachedBlockReport(anchorId, language);
+    if (cached) {
+      res.json(cached);
+    } else {
+      res.status(404).json({ error: 'No cached block report found' });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Block report lookup error', { error: message, stack: error instanceof Error ? error.stack : undefined });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -157,8 +78,12 @@ router.post('/generate', async (req: Request, res: Response) => {
       language: string;
     };
 
-    if (!profile || !language) {
-      res.status(400).json({ error: 'Missing required fields: profile, language' });
+    if (typeof profile !== 'object' || profile === null || typeof profile.communityName !== 'string') {
+      res.status(400).json({ error: 'profile must be an object with a communityName string' });
+      return;
+    }
+    if (typeof language !== 'string' || !ALLOWED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
       return;
     }
 
@@ -174,21 +99,23 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // Check for a pre-generated report first
-    const preGenerated = await getPreGeneratedReport(profile.communityName, language);
-    if (preGenerated) {
-      logger.info('Serving pre-generated report', {
-        community: profile.communityName,
-        language,
-        generatedAt: preGenerated.generatedAt,
-      });
-      res.json({
-        ...preGenerated.report,
-        preGenerated: true,
-        dataAsOf: preGenerated.dataAsOf,
-      });
+    // Run cache lookup and rate limit check in parallel to save a DB round trip
+    const [cached, rateLimited] = await Promise.all([
+      getCachedReport(profile.communityName, language),
+      isGenerationRateLimited(),
+    ]);
+    if (cached) {
+      logger.info('Serving cached report', { community: profile.communityName, language });
+      res.json(cached);
       return;
     }
+    if (rateLimited) {
+      res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
+      return;
+    }
+
+    // Record attempt before calling Claude — counts toward rate limit even if generation fails
+    recordGenerationAttempt();
 
     // Fall back to on-demand generation
     logger.info('No pre-generated report found, generating on-demand', {
@@ -197,16 +124,12 @@ router.post('/generate', async (req: Request, res: Response) => {
     });
     const report = await generateReport(profile, language);
 
-    // Cache the generated report for future instant access
-    try {
-      await saveCachedReport(profile.communityName, language, report);
-    } catch (err) {
-      logger.error('Failed to cache report', { error: err instanceof Error ? err.message : String(err) });
-    }
+    // Cache the generated report for future instant access (saveCachedReport handles its own errors)
+    await saveCachedReport(profile.communityName, language, report);
 
     res.json(report);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error generating report';
+    const message = error instanceof Error ? error.message : String(error);
     logger.error('Report generation error', {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
@@ -218,59 +141,63 @@ router.post('/generate', async (req: Request, res: Response) => {
 // POST /api/report/generate-block — Generate a block-level report for an anchor location
 router.post('/generate-block', async (req: Request, res: Response) => {
   try {
-    const { anchor, blockMetrics, language, demographics } = req.body;
+    const { anchor: rawAnchor, blockMetrics, language, demographics } = req.body;
 
-    if (!anchor || !blockMetrics || !language) {
+    if (!rawAnchor || !blockMetrics || !language) {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;
     }
 
-    // Validate anchor.community against allowlist
-    if (anchor.community && !COMMUNITIES_LOWER.has(anchor.community.toLowerCase())) {
-      res.status(400).json({ error: 'Unknown community name' });
+    // Validate anchor fields to prevent prompt injection via user-controlled strings
+    // Work on a copy to avoid mutating req.body
+    const anchor = { ...rawAnchor };
+    const MAX_FIELD_LEN = 200;
+    const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
+    for (const field of ['id', 'name', 'address', 'community', 'type'] as const) {
+      if (anchor[field] !== undefined) {
+        if (typeof anchor[field] !== 'string') {
+          res.status(400).json({ error: `anchor.${field} must be a string` });
+          return;
+        }
+        if (anchor[field].length > MAX_FIELD_LEN) {
+          res.status(400).json({ error: `anchor.${field} must be ${MAX_FIELD_LEN} characters or fewer` });
+          return;
+        }
+        anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
+      }
+    }
+    if (typeof language !== 'string' || !ALLOWED_LANGUAGES.has(language)) {
+      res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
       return;
     }
 
-    // Sanitize anchor fields: length limits and control character stripping
-    if (anchor.name && (typeof anchor.name !== 'string' || anchor.name.length > 200)) {
-      res.status(400).json({ error: 'Invalid anchor name' });
+    // Validate blockMetrics shape to prevent malformed input from reaching Claude
+    if (typeof blockMetrics !== 'object' || blockMetrics === null) {
+      res.status(400).json({ error: 'blockMetrics must be an object' });
       return;
     }
-    if (anchor.address && (typeof anchor.address !== 'string' || anchor.address.length > 300)) {
-      res.status(400).json({ error: 'Invalid anchor address' });
-      return;
-    }
-    if (anchor.name) anchor.name = anchor.name.replace(/[\x00-\x1f\x7f]/g, '');
-    if (anchor.address) anchor.address = anchor.address.replace(/[\x00-\x1f\x7f]/g, '');
-
-    // Validate language
-    if (!VALID_LANGUAGES.has(language)) {
-      res.status(400).json({ error: 'Unsupported language' });
+    if (typeof blockMetrics.totalRequests !== 'number' || typeof blockMetrics.openCount !== 'number') {
+      res.status(400).json({ error: 'blockMetrics must contain numeric totalRequests and openCount fields' });
       return;
     }
 
-    // Check for a pre-generated block report first
-    const langCode = LANGUAGE_CODES[language] || language.toLowerCase().slice(0, 2);
-    const filename = `${sanitizeFilename(anchor.id || anchor.name)}_${langCode}.json`;
-    const filePath = path.join(BLOCK_REPORTS_DIR, filename);
-
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const stored = JSON.parse(content) as StoredBlockReport;
-      logger.info('Serving pre-generated block report', {
-        anchor: stored.anchorName,
-        language,
-      });
-      res.json({
-        ...stored.report,
-        preGenerated: true,
-        anchorName: stored.anchorName,
-        anchorType: stored.anchorType,
-      });
+    // Run cache lookup and rate limit check in parallel to save a DB round trip
+    const anchorCacheId = anchor.id || anchor.name;
+    const [cached, rateLimited] = await Promise.all([
+      getCachedBlockReport(anchorCacheId, language),
+      isGenerationRateLimited(),
+    ]);
+    if (cached) {
+      logger.info('Serving cached block report', { anchor: anchor.name, language });
+      res.json(cached);
       return;
-    } catch {
-      // No cached version — generate on-demand
     }
+    if (rateLimited) {
+      res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
+      return;
+    }
+
+    recordGenerationAttempt();
 
     logger.info('Generating block report on-demand', {
       anchor: anchor.name,
@@ -278,9 +205,13 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     });
 
     const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
+
+    // Cache the generated block report for future requests (saveCachedBlockReport handles its own errors)
+    await saveCachedBlockReport(anchorCacheId, language, report);
+
     res.json(report);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error generating block report';
+    const message = error instanceof Error ? error.message : String(error);
     logger.error('Block report generation error', {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
