@@ -4,6 +4,11 @@ import type { Polygon, MultiPolygon } from 'geojson';
 
 type PolygonLike = Polygon | MultiPolygon;
 
+// 1 degree of latitude ~ 69 miles; longitude varies by latitude
+export const MILES_PER_LAT_DEG = 69;
+// At San Diego (~32.7°N): 1 deg longitude ~ 58.8 miles
+export const MILES_PER_LNG_DEG = 58.8;
+
 // Ray-casting point-in-polygon test.
 // Point: (lat, lng). Polygon ring: GeoJSON [lng, lat] pairs.
 // Internally maps to (x=lng, y=lat) for the ray-cast comparison.

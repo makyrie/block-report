@@ -5,6 +5,7 @@ import { validateCommunityParam, communityKey } from '../utils/community.js';
 
 const router = Router();
 
+
 router.get('/', async (req, res) => {
   const cleaned = validateCommunityParam(req.query.community as string | undefined);
   if (!cleaned) {

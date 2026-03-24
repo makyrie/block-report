@@ -79,7 +79,16 @@ const reportLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many report generation requests, please try again later' },
 });
+const blockLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many block data requests, please try again later' },
+});
+// Note: /api/report and /api/block requests hit both their dedicated limiter
+// AND the general apiLimiter (intentional defense-in-depth — the dedicated
+// limiters are stricter, while apiLimiter caps total API usage per client).
 app.use('/api/report', reportLimiter);
+app.use('/api/block', blockLimiter);
 app.use('/api', apiLimiter);
 
 app.use((req, res, next) => {

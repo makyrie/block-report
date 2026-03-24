@@ -132,6 +132,7 @@ export default function NeighborhoodPage() {
       setSelectedAnchor(anchor);
       setSelectedCommunity(anchor.community);
       navigate(`/neighborhood/${toSlug(anchor.community)}`);
+      setMobileView('info');
     },
     [navigate],
   );
@@ -284,7 +285,7 @@ export default function NeighborhoodPage() {
           recCenters={recCenters}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
-          onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}
+          onAnchorClick={handleAnchorClick}
           onMapClick={handleMapClick}
           pinnedLocation={pinnedLocation}
           blockData={blockData}
