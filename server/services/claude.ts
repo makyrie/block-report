@@ -240,20 +240,31 @@ export async function generateReport(
   const safeLang = sanitizeLanguage(language);
   const safeProfile = sanitizeProfile(profile);
 
-  const prompt = `You are generating a community report for the ${safeProfile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
+  // Build trend context if available
+  const trendContext = safeProfile.trends?.summary
+    ? `\n311 Trend: Resolution rate is ${safeProfile.trends.summary.direction} ` +
+      `(${Math.round(safeProfile.trends.summary.previousResolutionRate * 100)}% \u2192 ` +
+      `${Math.round(safeProfile.trends.summary.currentResolutionRate * 100)}%). ` +
+      `Request volume changed ${safeProfile.trends.summary.volumeChange}% vs prior period.`
+    : '';
+
+  // Omit raw monthly trend data from the profile sent to Claude to save tokens
+  const { trends: _trends, ...profileWithoutTrends } = safeProfile;
+
+  const prompt = `You are generating a community report for the ${safeProfile.communityName} neighborhood of San Diego. The report will be printed and posted in the community \u2014 at a library, rec center, laundromat, or wherever neighbors gather.
 
 Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the data for this neighborhood:
-${JSON.stringify(safeProfile)}
+${JSON.stringify(profileWithoutTrends)}${trendContext}
 
 Generate a report with these sections:
-1. **Welcome** — A 2-sentence greeting that names the neighborhood.
-2. **Good News** — 2-3 positive things happening based on the data (resolved issues, investments, improvements).
-3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311, framed constructively (not as complaints, but as things the community is working on).
-4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report, how to attend council meetings, how to contact their council representative, where to find more info.
-5. **Nearby Resources** — List the closest libraries and rec centers with addresses, if available in the data.
-6. **Transit Info** — How many transit stops and routes serve the area, and the estimated transit travel time to City Hall if available.
+1. **Welcome** \u2014 A 2-sentence greeting that names the neighborhood.
+2. **Good News** \u2014 2-3 positive things happening based on the data (resolved issues, investments, improvements).
+3. **What Your Neighbors Are Reporting** \u2014 Top 3 issues being reported via 311, framed constructively (not as complaints, but as things the community is working on).
+4. **How to Get Involved** \u2014 3-4 concrete actions: how to file a 311 report, how to attend council meetings, how to contact their council representative, where to find more info.
+5. **Nearby Resources** \u2014 List the closest libraries and rec centers with addresses, if available in the data.
+6. **Transit Info** \u2014 How many transit stops and routes serve the area, and the estimated transit travel time to City Hall if available.
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 

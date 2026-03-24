@@ -3,7 +3,7 @@
  * component. Any visual change here MUST be reflected there and vice-versa.
  */
 import { QRCodeSVG } from 'qrcode.react';
-import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
+import type { CommunityReport, CommunityTrends, NeighborhoodProfile } from '../../types/index';
 import {
   CheckCircleIcon,
   SmartphoneIcon,
@@ -18,6 +18,7 @@ interface FlyerLayoutProps {
   neighborhoodSlug: string;
   metrics?: NeighborhoodProfile['metrics'] | null;
   topLanguages?: { language: string; percentage: number }[];
+  trends?: CommunityTrends | null;
   /** When true, the flyer is visible on screen (used in preview). Default: hidden (print-only). */
   inline?: boolean;
   /** Base URL for links and QR codes. Defaults to window.location.origin in browser. Required for SSR. */
@@ -158,7 +159,7 @@ const FLYER_LABELS: Record<string, FlyerLabels> = {
   },
 };
 
-export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, inline = false, baseUrl }: FlyerLayoutProps) {
+export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, trends, inline = false, baseUrl }: FlyerLayoutProps) {
   const labels = FLYER_LABELS[report.language] ?? FLYER_LABELS.English;
   const locale = LANGUAGE_TO_LOCALE[report.language] ?? 'en-US';
   const formattedDate = new Date(report.generatedAt).toLocaleDateString(locale, {
@@ -212,6 +213,15 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, i
           <div className="border-2 border-black rounded-lg p-4 text-center">
             <div className="text-[36px] font-black leading-none">
               {resolutionPct}%
+              {trends?.summary && (
+                <span className={`text-sm ml-1 ${
+                  trends.summary.direction === 'improving' ? 'text-green-600' :
+                  trends.summary.direction === 'declining' ? 'text-red-600' : 'text-gray-500'
+                }`}>
+                  {trends.summary.direction === 'improving' ? '\u2191' :
+                   trends.summary.direction === 'declining' ? '\u2193' : '\u2192'}
+                </span>
+              )}
             </div>
             <div className="text-[12px] mt-1.5 font-semibold uppercase tracking-wide">
               {labels.resolved}

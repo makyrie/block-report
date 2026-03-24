@@ -35,6 +35,7 @@ export interface NeighborhoodProfile {
   demographics: {
     topLanguages: { language: string; percentage: number }[];
   };
+  trends?: CommunityTrends;
   accessGap?: {
     accessGapScore: number;
     signals: {
@@ -45,6 +46,26 @@ export interface NeighborhoodProfile {
     rank: number;
     totalCommunities: number;
   } | null;
+}
+
+export interface TrendDataPoint {
+  period: string;          // "YYYY-MM" format
+  totalRequests: number;
+  resolvedCount: number;
+  resolutionRate: number;  // 0-1
+}
+
+export interface TrendSummary {
+  currentResolutionRate: number;
+  previousResolutionRate: number;
+  direction: 'improving' | 'declining' | 'stable';
+  volumeChange: number;   // percentage change
+  volumeDirection: 'improving' | 'declining' | 'stable';
+}
+
+export interface CommunityTrends {
+  monthly: TrendDataPoint[];
+  summary: TrendSummary;
 }
 
 export interface Permit {

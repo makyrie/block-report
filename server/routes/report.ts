@@ -5,6 +5,7 @@ import { generatePdf } from '../services/pdf/index.js';
 import { logger } from '../logger.js';
 import type { CommunityReport, NeighborhoodProfile } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited, recordGenerationAttempt } from '../services/report-cache.js';
+import { COMMUNITIES_LOWER, VALID_LANGUAGES } from '../utils/validation.js';
 import { LANGUAGE_CODES } from '../../src/constants/languages.js';
 
 function sanitizeFilename(name: string): string {
@@ -74,6 +75,18 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate community against allowlist
+    if (!COMMUNITIES_LOWER.has(community.toLowerCase())) {
+      res.status(400).json({ error: 'Unknown community name' });
+      return;
+    }
+
+    // Validate language against known languages
+    if (!VALID_LANGUAGES.has(language)) {
+      res.status(400).json({ error: 'Unsupported language' });
+      return;
+    }
+
     const cached = await getCachedReport(community, language);
     if (cached) {
       res.json(cached);
@@ -138,6 +151,18 @@ router.post('/generate', async (req: Request, res: Response) => {
     }
     if (JSON.stringify(profile).length > MAX_PROFILE_SIZE) {
       res.status(400).json({ error: `profile payload too large (max ${MAX_PROFILE_SIZE} bytes)` });
+      return;
+    }
+
+    // Validate community against allowlist
+    if (!profile.communityName || !COMMUNITIES_LOWER.has(profile.communityName.toLowerCase())) {
+      res.status(400).json({ error: 'Unknown community name' });
+      return;
+    }
+
+    // Validate language against known languages
+    if (!VALID_LANGUAGES.has(language)) {
+      res.status(400).json({ error: 'Unsupported language' });
       return;
     }
 

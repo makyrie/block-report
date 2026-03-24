@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { COMMUNITIES } from '../components/ui/neighborhood-selector';
+import { COMMUNITIES } from '../types/communities';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
-import { getPreGeneratedReport, generateReport } from '../api/client';
+import { get311Trends } from '../api/client';
 import { useCommunityData } from '../hooks/use-community-data';
-import type { CommunityReport, NeighborhoodProfile } from '../types';
-import { DEFAULT_TRANSIT } from '../utils/defaults';
+import type { CommunityTrends } from '../types';
+import { useReport } from '../hooks/use-report';
 
 export default function FlyerPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -18,57 +18,36 @@ export default function FlyerPage() {
   const community = slug ? fromSlug(slug) : null;
   const { metrics, topLanguages } = useCommunityData(community);
 
-  const [report, setReport] = useState<CommunityReport | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [trends, setTrends] = useState<CommunityTrends | null>(null);
+  const [trendsSettled, setTrendsSettled] = useState(false);
 
-  // Auto-fetch report when community and language are ready
+  // Fetch trends when community changes
   useEffect(() => {
-    if (!community) return;
+    if (!community) {
+      setTrends(null);
+      setTrendsSettled(false);
+      return;
+    }
+    const controller = new AbortController();
+    setTrends(null);
+    setTrendsSettled(false);
 
-    let cancelled = false;
-    setReport(null);
-    setError(null);
-    setLoading(true);
+    get311Trends(community, controller.signal)
+      .then(setTrends)
+      .catch(() => { /* trends may not be available */ })
+      .finally(() => { if (!controller.signal.aborted) setTrendsSettled(true); });
 
-    (async () => {
-      // Try pre-generated first
-      const cached = await getPreGeneratedReport(community, reportLang);
-      if (cancelled) return;
+    return () => { controller.abort(); };
+  }, [community]);
 
-      if (cached) {
-        setReport(cached);
-        setLoading(false);
-        return;
-      }
-
-      // Fall back to on-demand generation if metrics are ready
-      if (!metrics) {
-        setLoading(false);
-        return;
-      }
-
-      const profile: NeighborhoodProfile = {
-        communityName: community,
-        anchor: { id: '', name: community, type: 'library', lat: 0, lng: 0, address: '', community },
-        metrics,
-        transit: DEFAULT_TRANSIT,
-        demographics: { topLanguages },
-        accessGap: null,
-      };
-
-      try {
-        const result = await generateReport(profile, reportLang);
-        if (!cancelled) setReport(result);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to generate report');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [community, reportLang, metrics, topLanguages]);
+  const { report, reportLoading: loading, reportError: error } = useReport({
+    community,
+    reportLang,
+    metrics,
+    trends,
+    trendsSettled,
+    topLanguages,
+  });
 
   function handlePrint() {
     window.print();
@@ -219,6 +198,7 @@ export default function FlyerPage() {
                 neighborhoodSlug={slug!}
                 metrics={metrics}
                 topLanguages={topLanguages}
+                trends={trends}
                 inline
               />
             </div>

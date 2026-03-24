@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile, Permit } from '../types';
+import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, CommunityTrends, NeighborhoodProfile, Permit } from '../types';
 
 const BASE = '/api';
 
@@ -91,6 +91,9 @@ export function generateReport(profile: NeighborhoodProfile, language: string, s
   });
 }
 
+export function get311Trends(community: string, signal?: AbortSignal): Promise<CommunityTrends> {
+  return fetchJSON(`${BASE}/311/trends?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
+}
 
 export async function downloadPdf(
   report: CommunityReport,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
+import type { CommunityReport, CommunityTrends, NeighborhoodProfile } from '../../types/index';
 import { FlyerLayout } from './flyer-layout';
 import { toSlug } from '../../utils/slug';
 import { useDownloadPdf } from '../../hooks/use-download-pdf';
@@ -9,13 +9,14 @@ interface FlyerPreviewProps {
   report: CommunityReport;
   metrics?: NeighborhoodProfile['metrics'] | null;
   topLanguages?: { language: string; percentage: number }[];
+  trends?: CommunityTrends | null;
 }
 
 const PREVIEW_SCALE = 0.52;
 const FLYER_WIDTH = 612; // letter width in px at 72dpi ~= 8.5in
 const FLYER_HEIGHT = 792; // letter height in px at 72dpi ~= 11in
 
-export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProps) {
+export function FlyerPreview({ report, metrics, topLanguages, trends }: FlyerPreviewProps) {
   const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -61,6 +62,7 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
                 neighborhoodSlug={slug}
                 metrics={metrics}
                 topLanguages={topLanguages}
+                trends={trends}
                 inline
               />
             </div>
@@ -114,6 +116,7 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
           slug={slug}
           metrics={metrics}
           topLanguages={topLanguages}
+          trends={trends}
           onClose={() => setModalOpen(false)}
           downloading={downloading}
           downloadError={downloadError}
@@ -129,6 +132,7 @@ function FlyerModal({
   slug,
   metrics,
   topLanguages,
+  trends,
   onClose,
   downloading,
   downloadError,
@@ -138,6 +142,7 @@ function FlyerModal({
   slug: string;
   metrics?: NeighborhoodProfile['metrics'] | null;
   topLanguages?: { language: string; percentage: number }[];
+  trends?: CommunityTrends | null;
   onClose: () => void;
   downloading: boolean;
   downloadError: string | null;
@@ -221,6 +226,7 @@ function FlyerModal({
             neighborhoodSlug={slug}
             metrics={metrics}
             topLanguages={topLanguages}
+            trends={trends}
             inline
           />
         </div>
