@@ -1,7 +1,5 @@
-// Client-side point-in-polygon utilities using (x=lng, y=lat) convention.
-// NOTE: A parallel server-side implementation exists in server/utils/geo.ts
-// using (lat, lng) parameter order but the same ray-casting algorithm.
-// Changes to this algorithm should be mirrored there (and vice versa).
+// Client-side point-in-polygon utilities for detecting which community
+// a clicked point falls within.
 
 import type { FeatureCollection, Geometry, Position } from 'geojson';
 

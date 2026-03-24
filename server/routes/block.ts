@@ -1,139 +1,199 @@
 import { Router } from 'express';
-import { prisma } from '../services/db.js';
 import { logger } from '../logger.js';
+import { prisma } from '../services/db.js';
+import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG } from '../utils/geo.js';
+import { classifyStatus } from '../utils/status.js';
+import type { BlockMetrics } from '../../src/types/index.js';
 
-const router = Router();
+// ── In-memory LRU cache for block queries (keyed by rounded lat/lng/radius) ─
 
-// In-memory cache for block results — coordinates are rounded to 4 decimal places
-// (~11m precision) so nearby requests share cache entries.
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const MAX_CACHE_SIZE = 200;
-const blockCache = new Map<string, { data: Record<string, unknown>; expires: number }>();
+const BLOCK_CACHE_TTL = 5 * 60 * 1000; // 5 minutes — block data changes infrequently
+const MAX_BLOCK_CACHE_SIZE = 200;
+const blockCache = new Map<string, { data: BlockMetrics; cachedAt: number }>();
 
-function cacheKey(lat: number, lng: number, radius: number): string {
+function blockCacheKey(lat: number, lng: number, radius: number): string {
+  // Round to ~55 m precision so nearby clicks share a cache entry
   return `${lat.toFixed(4)},${lng.toFixed(4)},${radius}`;
 }
 
+function getCachedBlock(key: string): BlockMetrics | null {
+  const entry = blockCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > BLOCK_CACHE_TTL) {
+    blockCache.delete(key);
+    return null;
+  }
+  // LRU: move to end so least-recently-used entries are evicted first
+  blockCache.delete(key);
+  blockCache.set(key, entry);
+  return entry.data;
+}
+
+function setCachedBlock(key: string, data: BlockMetrics): void {
+  if (blockCache.size >= MAX_BLOCK_CACHE_SIZE) {
+    const oldestKey = blockCache.keys().next().value;
+    if (oldestKey) blockCache.delete(oldestKey);
+  }
+  blockCache.set(key, { data, cachedAt: Date.now() });
+}
+
+const router = Router();
+
 router.get('/', async (req, res) => {
-  const lat = parseFloat(req.query.lat as string);
-  const lng = parseFloat(req.query.lng as string);
-  const radius = parseFloat(req.query.radius as string) || 0.25;
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  const radius = Number(req.query.radius) || 0.25;
 
   if (isNaN(lat) || isNaN(lng)) {
     res.status(400).json({ error: 'lat and lng query parameters are required' });
     return;
   }
 
-  // Rough San Diego bounding box check
   if (lat < 32.5 || lat > 33.2 || lng < -117.6 || lng > -116.8) {
     res.status(400).json({ error: 'Coordinates are outside the San Diego area' });
     return;
   }
 
-  if (radius < 0.1 || radius > 2) {
-    res.status(400).json({ error: 'Radius must be between 0.1 and 2 miles' });
+  const ALLOWED_RADII = [0.1, 0.25, 0.5, 1, 2];
+  const snappedRadius = ALLOWED_RADII.reduce((best, r) =>
+    Math.abs(r - radius) < Math.abs(best - radius) ? r : best,
+  );
+
+  const cacheKey = blockCacheKey(lat, lng, snappedRadius);
+  const cached = getCachedBlock(cacheKey);
+  if (cached) {
+    res.json(cached);
     return;
   }
 
-  // Check cache (re-insert on hit to maintain LRU order)
-  const key = cacheKey(lat, lng, radius);
-  const cached = blockCache.get(key);
-  if (cached && cached.expires > Date.now()) {
-    // Move to end of Map iteration order (most-recently-used)
-    blockCache.delete(key);
-    blockCache.set(key, cached);
-    res.json(cached.data);
-    return;
-  }
+  const latDelta = snappedRadius / MILES_PER_LAT_DEG;
+  const lngDelta = snappedRadius / MILES_PER_LNG_DEG;
+
+  const QUERY_SAFETY_CAP = 10_000;
 
   // Use Haversine formula in SQL to filter by exact distance and aggregate in the database.
   // This avoids fetching thousands of rows into Node.js.
   const R = 3958.8; // Earth radius in miles
 
-  // Pre-filter with a lat/lng bounding box to let Postgres use indexes before the expensive Haversine
-  const latDelta = radius / 69.0; // ~69 miles per degree of latitude
-  const lngDelta = radius / (69.0 * Math.cos((lat * Math.PI) / 180));
-
   try {
-    // Aggregate counts and avg resolution time in SQL
-    const [stats] = await prisma.$queryRaw<Array<{
-      total: bigint;
-      open_count: bigint;
-      resolved_count: bigint;
-      avg_days_to_resolve: number | null;
-    }>>`
-      SELECT
-        COUNT(*)::bigint AS total,
-        COUNT(*) FILTER (WHERE status != 'Closed' AND date_closed IS NULL)::bigint AS open_count,
-        COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::bigint AS resolved_count,
-        ROUND(AVG(EXTRACT(EPOCH FROM (date_closed - date_requested)) / 86400)
-          FILTER (WHERE date_requested IS NOT NULL AND date_closed IS NOT NULL)::numeric, 1)
-          AS avg_days_to_resolve
-      FROM request311
-      WHERE lat BETWEEN ${lat - latDelta} AND ${lat + latDelta}
-        AND lng BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}
-        AND (${R} * 2 * ASIN(SQRT(
-            POWER(SIN(RADIANS(lat - ${lat}) / 2), 2) +
-            COS(RADIANS(${lat})) * COS(RADIANS(lat)) * POWER(SIN(RADIANS(lng - ${lng}) / 2), 2)
-          ))) <= ${radius}
-    `;
+    // Fetch individual reports for the area (branch feature: show 311 reports on map)
+    const data = await prisma.request311.findMany({
+      select: {
+        service_request_id: true,
+        service_name: true,
+        service_name_detail: true,
+        status: true,
+        date_requested: true,
+        date_closed: true,
+        lat: true,
+        lng: true,
+        street_address: true,
+      },
+      where: {
+        lat: { gte: lat - latDelta, lte: lat + latDelta },
+        lng: { gte: lng - lngDelta, lte: lng + lngDelta },
+      },
+      orderBy: { date_requested: 'desc' },
+      take: QUERY_SAFETY_CAP,
+    });
 
-    // Top issues — grouped in SQL, limited to top 6
-    const topIssues = await prisma.$queryRaw<Array<{ category: string; count: bigint }>>`
-      SELECT COALESCE(service_name, 'Unknown') AS category, COUNT(*)::bigint AS count
-      FROM request311
-      WHERE lat BETWEEN ${lat - latDelta} AND ${lat + latDelta}
-        AND lng BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}
-        AND (${R} * 2 * ASIN(SQRT(
-            POWER(SIN(RADIANS(lat - ${lat}) / 2), 2) +
-            COS(RADIANS(${lat})) * COS(RADIANS(lat)) * POWER(SIN(RADIANS(lng - ${lng}) / 2), 2)
-          ))) <= ${radius}
-      GROUP BY service_name
-      ORDER BY count DESC
-      LIMIT 6
-    `;
+    if (data.length >= QUERY_SAFETY_CAP) {
+      logger.warn('Block query hit safety cap — aggregates may be incomplete', {
+        lat, lng, radius: snappedRadius, resultCount: data.length, cap: QUERY_SAFETY_CAP,
+      });
+    }
 
-    // Recently resolved — only fetch 5 rows
-    const recentlyResolved = await prisma.$queryRaw<Array<{ category: string; date: Date }>>`
-      SELECT COALESCE(service_name, 'Unknown') AS category, date_closed AS date
-      FROM request311
-      WHERE lat BETWEEN ${lat - latDelta} AND ${lat + latDelta}
-        AND lng BETWEEN ${lng - lngDelta} AND ${lng + lngDelta}
-        AND (${R} * 2 * ASIN(SQRT(
-            POWER(SIN(RADIANS(lat - ${lat}) / 2), 2) +
-            COS(RADIANS(${lat})) * COS(RADIANS(lat)) * POWER(SIN(RADIANS(lng - ${lng}) / 2), 2)
-          ))) <= ${radius}
-        AND date_closed IS NOT NULL
-        AND (status = 'Closed' OR date_closed IS NOT NULL)
-      ORDER BY date_closed DESC
-      LIMIT 5
-    `;
+    // Refine with exact Haversine distance
+    const nearby = data.filter(
+      (r) => r.lat != null && r.lng != null &&
+        haversineDistanceMiles(lat, lng, Number(r.lat), Number(r.lng)) <= snappedRadius,
+    );
 
-    const totalRequests = Number(stats.total);
-    const openCount = Number(stats.open_count);
-    const resolvedCount = Number(stats.resolved_count);
-    const resolutionRate = totalRequests > 0 ? resolvedCount / totalRequests : 0;
+    // Single pass: compute all aggregate stats + collect resolved-with-dates
+    const issueCounts: Record<string, number> = {};
+    let openCount = 0;
+    let resolvedCount = 0;
+    let referredCount = 0;
+    let resolveDaysSum = 0;
+    let resolvedWithDatesCount = 0;
+    const resolvedWithClosed: typeof nearby = [];
+    // Cache statusCategory per record to avoid recomputing in the reports mapping
+    const statusCategoryMap = new Map<string, 'open' | 'resolved' | 'referred'>();
 
-    const data = {
-      totalRequests,
+    for (const r of nearby) {
+      const statusCat = classifyStatus(r.status, r.date_closed);
+      statusCategoryMap.set(r.service_request_id, statusCat);
+      if (statusCat === 'resolved') {
+        resolvedCount++;
+        if (r.date_closed) {
+          resolvedWithClosed.push(r);
+          if (r.date_requested) {
+            resolveDaysSum += (r.date_closed.getTime() - r.date_requested.getTime()) / (1000 * 60 * 60 * 24);
+            resolvedWithDatesCount++;
+          }
+        }
+      } else if (statusCat === 'referred') {
+        referredCount++;
+      } else {
+        openCount++;
+      }
+
+      // Issue counts
+      const issueName = r.service_name || 'Unknown';
+      issueCounts[issueName] = (issueCounts[issueName] || 0) + 1;
+    }
+
+    const resolutionRate = nearby.length > 0 ? resolvedCount / nearby.length : 0;
+    const avgDaysToResolve = resolvedWithDatesCount > 0
+      ? Math.round((resolveDaysSum / resolvedWithDatesCount) * 10) / 10
+      : null;
+
+    const topIssues = Object.entries(issueCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 6)
+      .map(([category, count]) => ({ category, count }));
+
+    const recentlyResolved = [...resolvedWithClosed]
+      .sort((a, b) => b.date_closed!.getTime() - a.date_closed!.getTime())
+      .slice(0, 5)
+      .map((r) => ({ category: r.service_name || 'Unknown', date: r.date_closed!.toISOString() }));
+
+    // Cap individual reports — nearby preserves Prisma's date_requested DESC order
+    const MAX_REPORTS = 500;
+    const reports = nearby
+      .slice(0, MAX_REPORTS)
+      .map((r) => {
+        const statusCategory = statusCategoryMap.get(r.service_request_id) ?? classifyStatus(r.status, r.date_closed);
+        return {
+          id: r.service_request_id,
+          lat: Number(r.lat),
+          lng: Number(r.lng),
+          category: r.service_name || 'Unknown',
+          categoryDetail: r.service_name_detail || null,
+          status: r.status || 'Unknown',
+          statusCategory,
+          dateRequested: r.date_requested?.toISOString() ?? '',
+          dateClosed: r.date_closed?.toISOString() ?? null,
+          address: r.street_address || null,
+        };
+      });
+
+    const result: BlockMetrics = {
+      totalReports: nearby.length,
       openCount,
       resolvedCount,
+      referredCount,
       resolutionRate,
-      avgDaysToResolve: stats.avg_days_to_resolve != null ? Number(stats.avg_days_to_resolve) : null,
-      topIssues: topIssues.map((r) => ({ category: r.category, count: Number(r.count) })),
-      recentlyResolved: recentlyResolved.map((r) => ({ category: r.category, date: r.date.toISOString() })),
-      radiusMiles: radius,
+      avgDaysToResolve,
+      topIssues,
+      recentlyResolved,
+      radiusMiles: snappedRadius,
+      reports,
     };
 
-    // Store in cache, evicting least-recently-used entry if over limit
-    if (blockCache.size >= MAX_CACHE_SIZE) {
-      const lruKey = blockCache.keys().next().value;
-      if (lruKey !== undefined) blockCache.delete(lruKey);
-    }
-    blockCache.set(key, { data, expires: Date.now() + CACHE_TTL });
-
+    setCachedBlock(cacheKey, result);
     res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
-    res.json(data);
+    res.json(result);
   } catch (err) {
     logger.error('Failed to fetch block data', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });

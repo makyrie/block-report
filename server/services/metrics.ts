@@ -1,7 +1,6 @@
 import { prisma } from './db.js';
-import { deriveGoodNews } from './good-news.js';
 
-interface CommunityMetrics {
+export interface CommunityMetrics {
   total_requests: number;
   resolved_count: number;
   avg_days_to_resolve: number;
@@ -14,7 +13,7 @@ interface CommunityMetrics {
   population: number;
 }
 
-export interface CommunityMetricsResult {
+export interface ProcessedMetrics {
   totalRequests311: number;
   resolvedCount: number;
   resolutionRate: number;
@@ -26,16 +25,14 @@ export interface CommunityMetricsResult {
   goodNews: string[];
 }
 
-/** Fetch raw community metrics from the database via the stored function */
-export async function fetchCommunityMetrics(community: string): Promise<CommunityMetrics> {
+export async function getCommunityMetrics(communityName: string): Promise<CommunityMetrics> {
   const result = await prisma.$queryRaw<{ get_community_metrics: CommunityMetrics }[]>`
-    SELECT get_community_metrics(${community})
+    SELECT get_community_metrics(${communityName})
   `;
   return result[0].get_community_metrics;
 }
 
-/** Transform raw DB metrics into the API response shape */
-export function buildCommunityMetricsResponse(metrics: CommunityMetrics): CommunityMetricsResult {
+export function processMetrics(metrics: CommunityMetrics): ProcessedMetrics {
   const total = metrics.total_requests;
   const resolvedCount = metrics.resolved_count;
   const resolutionRate = total > 0 ? resolvedCount / total : 0;
@@ -45,7 +42,32 @@ export function buildCommunityMetricsResponse(metrics: CommunityMetrics): Commun
       ? Math.round((total / population) * 1000 * 10) / 10
       : null;
 
-  const goodNews = deriveGoodNews(metrics, resolutionRate, requestsPer1000Residents);
+  const goodNews: string[] = [];
+
+  if (metrics.recent_resolved_90d > 0 && metrics.top_recent_category) {
+    goodNews.push(
+      `${metrics.recent_resolved_90d} issues were resolved in the last 90 days. The most common fix: ${metrics.top_recent_category} (${metrics.top_recent_category_count} resolved).`
+    );
+  }
+
+  if (metrics.high_res_categories.length > 0) {
+    const top = metrics.high_res_categories[0];
+    goodNews.push(
+      `${top.category} reports are resolved ${top.resolution_rate}% of the time in this neighborhood.`
+    );
+  }
+
+  if (resolutionRate >= 0.7) {
+    goodNews.push(
+      `The city has resolved ${Math.round(resolutionRate * 100)}% of all reported issues here — a strong track record.`
+    );
+  }
+
+  if (requestsPer1000Residents !== null && requestsPer1000Residents >= 50) {
+    goodNews.push(
+      `Residents here are active advocates, reporting about ${requestsPer1000Residents} issues per 1,000 people — one of the higher civic engagement rates in the city.`
+    );
+  }
 
   return {
     totalRequests311: total,
@@ -58,4 +80,9 @@ export function buildCommunityMetricsResponse(metrics: CommunityMetrics): Commun
     requestsPer1000Residents,
     goodNews,
   };
+}
+
+export async function getProcessedCommunityMetrics(communityName: string): Promise<ProcessedMetrics> {
+  const metrics = await getCommunityMetrics(communityName);
+  return processMetrics(metrics);
 }

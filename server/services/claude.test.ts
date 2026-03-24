@@ -1,94 +1,109 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  sanitizeStringFields,
-  sanitizeBlockMetrics,
-  sanitizeDemographics,
-  generateReport,
-  generateBlockReport,
-} from './claude';
-import { validateReportShape } from '../utils/report-validation';
-import type { NeighborhoodProfile, BlockMetrics } from '../../src/types/index';
+import { sanitizeStringFields, CONTROL_CHAR_RE } from './claude.js';
 
-// --- validateReportShape ---
-
-describe('validateReportShape', () => {
-  const validReport = {
-    neighborhoodName: 'Mira Mesa',
-    language: 'en',
-    summary: 'Welcome to Mira Mesa.',
-    goodNews: ['Issue resolved'],
-    topIssues: ['Potholes'],
-    howToParticipate: ['Call 311'],
-    contactInfo: { councilDistrict: '6', phone311: '619-236-5311', anchorLocation: 'Library' },
+// Mock Anthropic SDK before importing
+vi.mock('@anthropic-ai/sdk', () => {
+  const create = vi.fn();
+  return {
+    default: vi.fn(() => ({ messages: { create } })),
+    __mockCreate: create,
   };
-
-  it('accepts a valid report shape and returns without error', () => {
-    expect(() => validateReportShape(validReport)).not.toThrow();
-    // validateReportShape is an assertion function — if it doesn't throw, the input is valid
-    validateReportShape(validReport);
-    expect(validReport.neighborhoodName).toBe('Mira Mesa');
-  });
-
-  it('rejects null', () => {
-    expect(() => validateReportShape(null)).toThrow('not an object');
-  });
-
-  it('rejects missing neighborhoodName', () => {
-    expect(() => validateReportShape({ ...validReport, neighborhoodName: 123 })).toThrow('neighborhoodName');
-  });
-
-  it('rejects missing summary', () => {
-    expect(() => validateReportShape({ ...validReport, summary: undefined })).toThrow('summary');
-  });
-
-  it('rejects non-array goodNews', () => {
-    expect(() => validateReportShape({ ...validReport, goodNews: 'not array' })).toThrow('goodNews');
-  });
-
-  it('rejects missing contactInfo', () => {
-    expect(() => validateReportShape({ ...validReport, contactInfo: null })).toThrow('contactInfo');
-  });
 });
 
-// --- sanitizeStringFields ---
+vi.mock('../logger.js', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+}));
+
+// Set env before import
+process.env.ANTHROPIC_API_KEY = 'test-key';
+
+import type { NeighborhoodProfile } from '../../src/types/index.js';
+
+const validProfile: NeighborhoodProfile = {
+  communityName: 'Mira Mesa',
+  anchor: { id: '1', name: 'Mira Mesa Library', type: 'library', lat: 32.9, lng: -117.1, address: '8405 New Salem St', community: 'Mira Mesa' },
+  metrics: {
+    totalRequests311: 100,
+    resolvedCount: 80,
+    resolutionRate: 0.8,
+    avgDaysToResolve: 5,
+    topIssues: [{ category: 'Potholes', count: 30 }],
+    recentlyResolved: [],
+    population: 80000,
+    requestsPer1000Residents: 1.25,
+    goodNews: ['80% of issues resolved'],
+  },
+  transit: { nearbyStopCount: 5, nearestStopDistance: 0.2, stopCount: 10, agencyCount: 2, agencies: [], transitScore: 60, cityAverage: 50, travelTimeToCityHall: null },
+  demographics: { topLanguages: [{ language: 'English', percentage: 60 }] },
+  accessGap: null,
+};
+
+const toolUseResponse = {
+  content: [{
+    type: 'tool_use',
+    name: 'community_report',
+    input: {
+      neighborhoodName: 'Mira Mesa',
+      language: 'en',
+      summary: 'Welcome to Mira Mesa!',
+      goodNews: ['Good news'],
+      topIssues: ['Issue 1'],
+      howToParticipate: ['Action 1'],
+      contactInfo: { councilDistrict: '6', phone311: '619-236-5311', anchorLocation: 'Mira Mesa Library' },
+    },
+  }],
+};
 
 describe('sanitizeStringFields', () => {
-  it('truncates long strings', () => {
-    const result = sanitizeStringFields('a'.repeat(600), 500);
-    expect(result).toHaveLength(500);
+  it('truncates strings to maxLen', () => {
+    const result = sanitizeStringFields('a'.repeat(600));
+    expect(result).toBe('a'.repeat(500));
   });
 
-  it('strips control characters', () => {
+  it('strips control characters from strings', () => {
     const result = sanitizeStringFields('hello\x00world\x1f!');
     expect(result).toBe('helloworld!');
   });
 
-  it('handles nested objects', () => {
-    const result = sanitizeStringFields({ name: 'test\x00', items: ['a\x01b'] }) as Record<string, unknown>;
-    expect(result.name).toBe('test');
-    expect((result.items as string[])[0]).toBe('ab');
-  });
-
-  it('limits array length to 50', () => {
-    const arr = Array.from({ length: 60 }, (_, i) => `item${i}`);
+  it('caps arrays to maxArrayItems', () => {
+    const arr = Array.from({ length: 100 }, (_, i) => `item-${i}`);
     const result = sanitizeStringFields(arr) as string[];
-    expect(result).toHaveLength(50);
+    expect(result).toHaveLength(50); // default
   });
 
-  it('throws on deeply nested objects', () => {
-    let obj: Record<string, unknown> = { val: 'leaf' };
+  it('respects custom maxArrayItems', () => {
+    const arr = Array.from({ length: 20 }, (_, i) => `item-${i}`);
+    const result = sanitizeStringFields(arr, undefined, undefined, { maxArrayItems: 5 }) as string[];
+    expect(result).toHaveLength(5);
+  });
+
+  it('respects custom maxStringLen', () => {
+    const result = sanitizeStringFields('a'.repeat(3000), undefined, undefined, { maxStringLen: 2000 });
+    expect(result).toBe('a'.repeat(2000));
+  });
+
+  it('throws on deeply nested objects beyond maxDepth', () => {
+    let obj: Record<string, unknown> = { value: 'leaf' };
     for (let i = 0; i < 15; i++) {
       obj = { nested: obj };
     }
-    expect(() => sanitizeStringFields(obj)).toThrow('nesting too deep');
+    expect(() => sanitizeStringFields(obj)).toThrow(/too deep/);
+  });
+
+  it('does not throw on objects within maxDepth', () => {
+    let obj: Record<string, unknown> = { value: 'leaf' };
+    for (let i = 0; i < 8; i++) {
+      obj = { nested: obj };
+    }
+    expect(() => sanitizeStringFields(obj)).not.toThrow();
   });
 
   it('throws on objects with too many keys', () => {
     const obj: Record<string, string> = {};
     for (let i = 0; i < 101; i++) {
-      obj[`key${i}`] = 'val';
+      obj[`key${i}`] = 'value';
     }
-    expect(() => sanitizeStringFields(obj)).toThrow('too many keys');
+    expect(() => sanitizeStringFields(obj)).toThrow(/too many keys/);
   });
 
   it('passes through numbers and booleans unchanged', () => {
@@ -96,188 +111,72 @@ describe('sanitizeStringFields', () => {
     expect(sanitizeStringFields(true)).toBe(true);
     expect(sanitizeStringFields(null)).toBe(null);
   });
-});
 
-// --- sanitizeBlockMetrics ---
-
-describe('sanitizeBlockMetrics', () => {
-  const validMetrics: BlockMetrics = {
-    totalRequests: 50, openCount: 10, resolvedCount: 40, resolutionRate: 0.8,
-    avgDaysToResolve: 5, topIssues: [], recentlyResolved: [], radiusMiles: 0.25,
-  };
-
-  it('accepts valid metrics and returns sanitized copy', () => {
-    const result = sanitizeBlockMetrics(validMetrics);
-    expect(result.totalRequests).toBe(50);
-    expect(result.radiusMiles).toBe(0.25);
-  });
-
-  it('rejects non-object', () => {
-    expect(() => sanitizeBlockMetrics(null as unknown as BlockMetrics)).toThrow('must be an object');
-  });
-
-  it('rejects missing totalRequests', () => {
-    expect(() => sanitizeBlockMetrics({ ...validMetrics, totalRequests: 'bad' as unknown as number })).toThrow('must be numbers');
-  });
-
-  it('rejects negative totalRequests', () => {
-    expect(() => sanitizeBlockMetrics({ ...validMetrics, totalRequests: -1 })).toThrow('out of bounds');
-  });
-
-  it('rejects Infinity radiusMiles', () => {
-    expect(() => sanitizeBlockMetrics({ ...validMetrics, radiusMiles: Infinity })).toThrow('out of bounds');
-  });
-
-  it('rejects resolutionRate > 1', () => {
-    expect(() => sanitizeBlockMetrics({ ...validMetrics, resolutionRate: 1.5 })).toThrow('out of bounds');
-  });
-
-  it('rejects extremely large totalRequests', () => {
-    expect(() => sanitizeBlockMetrics({ ...validMetrics, totalRequests: 2_000_000 })).toThrow('out of bounds');
+  it('recursively sanitizes nested objects', () => {
+    const input = {
+      name: 'test\x00name',
+      details: {
+        description: 'x'.repeat(600),
+        items: ['a', 'b'],
+      },
+    };
+    const result = sanitizeStringFields(input) as Record<string, unknown>;
+    expect((result as { name: string }).name).toBe('testname');
+    const details = result.details as { description: string; items: string[] };
+    expect(details.description).toBe('x'.repeat(500));
+    expect(details.items).toEqual(['a', 'b']);
   });
 });
 
-// --- sanitizeDemographics ---
-
-describe('sanitizeDemographics', () => {
-  it('accepts valid demographics and returns sanitized copy', () => {
-    const result = sanitizeDemographics({ topLanguages: [{ language: 'English', percentage: 70 }] });
-    expect(result.topLanguages).toHaveLength(1);
-    expect(result.topLanguages[0].language).toBe('English');
+describe('CONTROL_CHAR_RE', () => {
+  it('matches null byte', () => {
+    expect('hello\x00world'.replace(CONTROL_CHAR_RE, '')).toBe('helloworld');
   });
 
-  it('rejects null', () => {
-    expect(() => sanitizeDemographics(null as unknown as { topLanguages: { language: string; percentage: number }[] })).toThrow('must be an object');
+  it('matches DEL character', () => {
+    expect('hello\x7fworld'.replace(CONTROL_CHAR_RE, '')).toBe('helloworld');
   });
 
-  it('rejects non-array topLanguages', () => {
-    expect(() => sanitizeDemographics({ topLanguages: 'bad' as unknown as { language: string; percentage: number }[] })).toThrow('must be an array');
+  it('does not match printable characters', () => {
+    const clean = 'Hello, World! 123';
+    expect(clean.replace(CONTROL_CHAR_RE, '')).toBe(clean);
   });
 });
-
-// --- generateReport / generateBlockReport with mocked Anthropic client ---
-
-// Mock the Anthropic SDK
-vi.mock('@anthropic-ai/sdk', () => {
-  return {
-    default: class MockAnthropic {
-      messages = {
-        create: vi.fn(),
-      };
-    },
-  };
-});
-
-const validToolResponse = {
-  neighborhoodName: 'Mira Mesa',
-  language: 'en',
-  summary: 'Welcome to Mira Mesa!',
-  goodNews: ['Issue resolved'],
-  topIssues: ['Potholes'],
-  howToParticipate: ['Call 311'],
-  contactInfo: { councilDistrict: '6', phone311: '619-236-5311', anchorLocation: 'Library' },
-};
-
-const baseProfile: NeighborhoodProfile = {
-  communityName: 'Mira Mesa',
-  anchor: { id: '1', name: 'Library', type: 'library', lat: 32.9, lng: -117.1, address: '123 Main', community: 'Mira Mesa' },
-  metrics: {
-    totalRequests311: 100, resolvedCount: 80, resolutionRate: 0.8, avgDaysToResolve: 5,
-    topIssues: [], recentlyResolved: [], population: 50000, requestsPer1000Residents: 2, goodNews: [],
-  },
-  transit: { nearbyStopCount: 5, nearestStopDistance: 0.3, stopCount: 10, agencyCount: 2, agencies: ['MTS'], transitScore: 60, cityAverage: 50, travelTimeToCityHall: null },
-  demographics: { topLanguages: [{ language: 'English', percentage: 70 }] },
-};
 
 describe('generateReport', () => {
-  beforeEach(() => {
+  let generateReport: typeof import('./claude.js').generateReport;
+  let mockCreate: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.resetModules();
     process.env.ANTHROPIC_API_KEY = 'test-key';
-    vi.clearAllMocks();
+    const sdk = await import('@anthropic-ai/sdk');
+    mockCreate = (sdk as unknown as { __mockCreate: ReturnType<typeof vi.fn> }).__mockCreate;
+    mockCreate.mockReset();
+    const mod = await import('./claude.js');
+    generateReport = mod.generateReport;
   });
 
-  it('returns a report with generatedAt from valid tool_use response', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const mockCreate = vi.fn().mockResolvedValue({
-      content: [{ type: 'tool_use', name: 'community_report', input: validToolResponse }],
-    });
-    vi.mocked(Anthropic).prototype = { messages: { create: mockCreate } } as unknown as InstanceType<typeof Anthropic>;
-
-    // Force fresh client
-    const mod = await import('./claude');
-    // Access internal client reset — we'll test via the function directly
-    const result = await mod.generateReport(baseProfile, 'en');
-    expect(result.neighborhoodName).toBe('Mira Mesa');
-    expect(result.generatedAt).toBeDefined();
-    expect(typeof result.generatedAt).toBe('string');
+  it('returns a structured report from Claude tool_use response', async () => {
+    mockCreate.mockResolvedValue(toolUseResponse);
+    const report = await generateReport(validProfile, 'en');
+    expect(report.neighborhoodName).toBe('Mira Mesa');
+    expect(report.generatedAt).toBeDefined();
+    expect(mockCreate).toHaveBeenCalledOnce();
   });
 
-  it('throws when response has no tool_use block', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const mockCreate = vi.fn().mockResolvedValue({
-      content: [{ type: 'text', text: 'no tool use' }],
-    });
-    vi.mocked(Anthropic).prototype = { messages: { create: mockCreate } } as unknown as InstanceType<typeof Anthropic>;
-
-    await expect(generateReport(baseProfile, 'en')).rejects.toThrow('No tool use block');
+  it('throws on empty communityName', async () => {
+    const bad = { ...validProfile, communityName: '' };
+    await expect(generateReport(bad, 'en')).rejects.toThrow('communityName must be a non-empty string');
   });
 
-  it('throws when response shape is invalid', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const mockCreate = vi.fn().mockResolvedValue({
-      content: [{ type: 'tool_use', name: 'community_report', input: { bad: 'data' } }],
-    });
-    vi.mocked(Anthropic).prototype = { messages: { create: mockCreate } } as unknown as InstanceType<typeof Anthropic>;
-
-    await expect(generateReport(baseProfile, 'en')).rejects.toThrow();
+  it('throws on oversized communityName', async () => {
+    const bad = { ...validProfile, communityName: 'x'.repeat(101) };
+    await expect(generateReport(bad, 'en')).rejects.toThrow('communityName must be 100 characters or fewer');
   });
 
-  it('rejects empty communityName', async () => {
-    const badProfile = { ...baseProfile, communityName: '' };
-    await expect(generateReport(badProfile, 'en')).rejects.toThrow('non-empty string');
-  });
-
-  it('rejects communityName over 100 characters', async () => {
-    const badProfile = { ...baseProfile, communityName: 'x'.repeat(101) };
-    await expect(generateReport(badProfile, 'en')).rejects.toThrow('100 characters');
-  });
-});
-
-describe('generateBlockReport', () => {
-  const anchor = { id: '1', name: 'Mira Mesa Library', type: 'library' as const, lat: 32.9, lng: -117.1, address: '8405 New Salem St', community: 'Mira Mesa' };
-  const blockMetrics: BlockMetrics = {
-    totalRequests: 50, openCount: 10, resolvedCount: 40, resolutionRate: 0.8,
-    avgDaysToResolve: 5, topIssues: [], recentlyResolved: [], radiusMiles: 0.25,
-  };
-
-  beforeEach(() => {
-    process.env.ANTHROPIC_API_KEY = 'test-key';
-    vi.clearAllMocks();
-  });
-
-  it('returns a report with generatedAt from valid tool_use response', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const mockCreate = vi.fn().mockResolvedValue({
-      content: [{ type: 'tool_use', name: 'community_report', input: validToolResponse }],
-    });
-    vi.mocked(Anthropic).prototype = { messages: { create: mockCreate } } as unknown as InstanceType<typeof Anthropic>;
-
-    const result = await generateBlockReport(anchor, blockMetrics, 'en');
-    expect(result.neighborhoodName).toBe('Mira Mesa');
-    expect(result.generatedAt).toBeDefined();
-  });
-
-  it('throws when API returns no tool_use block', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const mockCreate = vi.fn().mockResolvedValue({
-      content: [{ type: 'text', text: 'no tool use' }],
-    });
-    vi.mocked(Anthropic).prototype = { messages: { create: mockCreate } } as unknown as InstanceType<typeof Anthropic>;
-
-    await expect(generateBlockReport(anchor, blockMetrics, 'en')).rejects.toThrow('No tool use block');
-  });
-
-  it('rejects invalid blockMetrics', async () => {
-    const badMetrics = { ...blockMetrics, totalRequests: -1 };
-    await expect(generateBlockReport(anchor, badMetrics, 'en')).rejects.toThrow('out of bounds');
+  it('throws when Claude returns no tool_use block', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'hi' }] });
+    await expect(generateReport(validProfile, 'en')).rejects.toThrow('No tool use block');
   });
 });

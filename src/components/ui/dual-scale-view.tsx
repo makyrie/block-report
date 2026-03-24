@@ -33,7 +33,7 @@ const calloutDot: Record<ScaleComparison['type'], string> = {
 
 export default function DualScaleView({ blockData, blockRadius, communityName, metrics }: DualScaleViewProps) {
   const { t } = useLanguage();
-  const comparisons = generateComparisons(blockData, metrics, communityName);
+  const comparisons = generateComparisons(blockData, metrics, communityName, t);
 
   return (
     <section aria-labelledby="dual-scale-heading" className="space-y-3">
@@ -88,7 +88,7 @@ export default function DualScaleView({ blockData, blockRadius, communityName, m
                   aria-hidden="true"
                   className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${calloutDot[comparison.type]}`}
                 />
-                <span>{t(comparison.key, comparison.vars)}</span>
+                <span>{comparison.text}</span>
               </li>
             ))}
           </ul>

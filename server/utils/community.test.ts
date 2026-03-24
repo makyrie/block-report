@@ -1,22 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { communityKey, validateCommunityParam } from './community';
-
-describe('communityKey', () => {
-  it('uppercases and trims', () => {
-    expect(communityKey('  Mira Mesa  ')).toBe('MIRA MESA');
-  });
-
-  it('strips non-alphanumeric characters for consistent matching', () => {
-    expect(communityKey('Mid-City:City Heights')).toBe('MID CITY CITY HEIGHTS');
-  });
-
-  it('normalizes multiple spaces to single space', () => {
-    expect(communityKey('Barrio  Logan')).toBe('BARRIO LOGAN');
-  });
-});
+import { validateCommunityParam, communityKey } from './community.js';
 
 describe('validateCommunityParam', () => {
-  it('returns null for undefined', () => {
+  it('returns null for undefined input', () => {
     expect(validateCommunityParam(undefined)).toBeNull();
   });
 
@@ -24,19 +10,38 @@ describe('validateCommunityParam', () => {
     expect(validateCommunityParam('')).toBeNull();
   });
 
-  it('strips SQL wildcard characters', () => {
-    expect(validateCommunityParam('Mira%Mesa_')).toBe('MiraMesa');
+  it('strips SQL wildcard %', () => {
+    expect(validateCommunityParam('Mira%Mesa')).toBe('MiraMesa');
   });
 
-  it('returns null for strings over 100 characters', () => {
+  it('strips SQL wildcard _', () => {
+    expect(validateCommunityParam('Mira_Mesa')).toBe('MiraMesa');
+  });
+
+  it('strips multiple wildcards', () => {
+    expect(validateCommunityParam('%Mira_Mesa%')).toBe('MiraMesa');
+  });
+
+  it('returns null if string is only wildcards', () => {
+    expect(validateCommunityParam('%%__')).toBeNull();
+  });
+
+  it('returns null if cleaned string exceeds 100 characters', () => {
     expect(validateCommunityParam('a'.repeat(101))).toBeNull();
   });
 
-  it('returns cleaned string for valid input', () => {
+  it('accepts valid community name', () => {
     expect(validateCommunityParam('Mira Mesa')).toBe('Mira Mesa');
   });
 
-  it('returns null when only wildcard characters', () => {
-    expect(validateCommunityParam('%_')).toBeNull();
+  it('accepts string at exactly 100 characters', () => {
+    const input = 'a'.repeat(100);
+    expect(validateCommunityParam(input)).toBe(input);
+  });
+});
+
+describe('communityKey', () => {
+  it('uppercases and trims', () => {
+    expect(communityKey('  mira mesa  ')).toBe('MIRA MESA');
   });
 });

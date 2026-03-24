@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { BlockMetrics, NeighborhoodProfile, CommunityReport } from '../../types';
+import type { BlockMetrics, NeighborhoodProfile, CommunityReport, CommunityTrends } from '../../types';
 import ReportView from '../report/report-view';
+import TrendIndicator from './trend-indicator';
 import DualScaleView from './dual-scale-view';
 import { useLanguage } from '../../i18n/context';
 import { SUPPORTED_LANGUAGES, DEMOGRAPHICS_TO_LANG } from '../../i18n/translations';
@@ -16,6 +17,7 @@ interface SidebarProps {
   topLanguages?: { language: string; percentage: number }[];
   transitScore?: NeighborhoodProfile['transit'] | null;
   accessGap?: NeighborhoodProfile['accessGap'];
+  trends?: CommunityTrends | null;
   blockData?: BlockMetrics | null;
   blockRadius?: number;
   blockLoading?: boolean;
@@ -44,16 +46,16 @@ function Badge({ children, color }: { children: string; color: 'green' | 'yellow
   );
 }
 
-function resolutionBadge(rate: number, t: (key: string) => string) {
-  if (rate >= 0.75) return <Badge color="green">{t('sidebar.mostResolved')}</Badge>;
-  if (rate >= 0.5)  return <Badge color="yellow">{t('sidebar.halfResolved')}</Badge>;
-  return <Badge color="red">{t('sidebar.manyOpen')}</Badge>;
+function resolutionBadge(rate: number) {
+  if (rate >= 0.75) return <Badge color="green">Most issues resolved</Badge>;
+  if (rate >= 0.5)  return <Badge color="yellow">About half resolved</Badge>;
+  return <Badge color="red">Many issues still open</Badge>;
 }
 
-function responseBadge(days: number, t: (key: string) => string) {
-  if (days <= 7)  return <Badge color="green">{t('sidebar.underWeek')}</Badge>;
-  if (days <= 21) return <Badge color="yellow">{t('sidebar.fewWeeks')}</Badge>;
-  return <Badge color="orange">{t('sidebar.overMonth')}</Badge>;
+function responseBadge(days: number) {
+  if (days <= 7)  return <Badge color="green">Usually fixed in under a week</Badge>;
+  if (days <= 21) return <Badge color="yellow">Typically takes a few weeks</Badge>;
+  return <Badge color="orange">Can take over a month</Badge>;
 }
 
 function formatDate(iso: string): string {
@@ -75,6 +77,7 @@ export default function Sidebar({
   topLanguages,
   transitScore,
   accessGap,
+  trends,
   blockData,
   blockRadius,
   blockLoading,
@@ -110,14 +113,14 @@ export default function Sidebar({
   }
 
   return (
-    <div className="p-4 space-y-5" aria-live="polite" aria-atomic="false">
+    <div className="p-4 space-y-5">
       <h1 className="text-lg font-semibold">{community}</h1>
 
       {/* Dual-scale view: block + neighborhood comparison */}
       {blockLoading && (
-        <div role="status" aria-label={t('sidebar.loadingBlock')} className="flex items-center gap-2 py-3">
+        <div role="status" aria-label="Loading block data" className="flex items-center gap-2 py-3">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-orange-300 border-t-orange-600" />
-          <span className="text-xs text-orange-600">{t('sidebar.loadingBlock')}</span>
+          <span className="text-xs text-orange-600">Loading block data...</span>
         </div>
       )}
       {blockData && metrics && community && blockRadius != null && (
@@ -139,12 +142,12 @@ export default function Sidebar({
             </p>
             {metrics.requestsPer1000Residents != null && metrics.population > 0 && (
               <p className="text-sm text-gray-600 mb-3">
-                {t('sidebar.perCapita', { count: String(metrics.requestsPer1000Residents) })}
+                Residents here report about <span className="font-semibold">{metrics.requestsPer1000Residents}</span> issues per 1,000 people.
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              {resolutionBadge(metrics.resolutionRate, t)}
-              {responseBadge(metrics.avgDaysToResolve, t)}
+              {resolutionBadge(metrics.resolutionRate)}
+              {responseBadge(metrics.avgDaysToResolve)}
             </div>
 
             {/* Progressive disclosure — raw numbers */}
@@ -173,24 +176,24 @@ export default function Sidebar({
                 </div>
                 {metrics.population > 0 && (
                   <div className="flex justify-between">
-                    <dt className="text-gray-500">{t('sidebar.population')}</dt>
+                    <dt className="text-gray-500">Est. population</dt>
                     <dd className="font-mono font-medium">{metrics.population.toLocaleString()}</dd>
                   </div>
                 )}
                 {metrics.requestsPer1000Residents != null && (
                   <div className="flex justify-between">
-                    <dt className="text-gray-500">{t('sidebar.requestsPer1000')}</dt>
+                    <dt className="text-gray-500">Requests per 1,000</dt>
                     <dd className="font-mono font-medium">{metrics.requestsPer1000Residents}</dd>
                   </div>
                 )}
                 {transitScore && transitScore.stopCount > 0 && (
                   <>
                     <div className="flex justify-between">
-                      <dt className="text-gray-500">{t('sidebar.transitStops')}</dt>
+                      <dt className="text-gray-500">Transit stops</dt>
                       <dd className="font-mono font-medium">{transitScore.stopCount}</dd>
                     </div>
                     <div className="flex justify-between">
-                      <dt className="text-gray-500">{t('sidebar.transitScoreLabel')}</dt>
+                      <dt className="text-gray-500">Transit score</dt>
                       <dd className="font-mono font-medium">{transitScore.transitScore}/100</dd>
                     </div>
                   </>
@@ -199,11 +202,36 @@ export default function Sidebar({
             )}
           </section>
 
+          {/* Historical trends */}
+          {trends && trends.monthly.length >= 3 && (
+            <section aria-labelledby="trends-heading" className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <h2 id="trends-heading" className="text-sm font-medium text-blue-800 mb-2">
+                12-Month Trends
+              </h2>
+              <TrendIndicator
+                direction={trends.summary.direction}
+                label="Resolution rate"
+                sparklineData={trends.monthly.map(d => d.resolutionRate)}
+              />
+              <div className="mt-1.5">
+                <TrendIndicator
+                  direction={trends.summary.volumeDirection}
+                  label="Neighborhood activity"
+                  sparklineData={trends.monthly.map(d => d.totalRequests)}
+                />
+              </div>
+              <p className="text-xs text-blue-600 mt-2">
+                Resolution rate: {Math.round(trends.summary.previousResolutionRate * 100)}%
+                {' \u2192 '}{Math.round(trends.summary.currentResolutionRate * 100)}%
+              </p>
+            </section>
+          )}
+
           {/* Transit accessibility */}
           {transitScore && transitScore.stopCount > 0 && (
             <section aria-labelledby="transit-heading" className="rounded-lg bg-indigo-50 border border-indigo-200 p-3">
               <h2 id="transit-heading" className="text-sm font-medium text-indigo-800 mb-2">
-                {t('sidebar.transitAccess')}
+                Transit Access
               </h2>
               <div className="flex items-center gap-3 mb-2">
                 <div className="text-2xl font-bold text-indigo-700">{transitScore.transitScore}</div>
@@ -211,23 +239,24 @@ export default function Sidebar({
                   <span className="block">/ 100</span>
                   <span className="block">
                     {transitScore.transitScore > transitScore.cityAverage
-                      ? t('sidebar.aboveCityAvg')
+                      ? 'Above city average'
                       : transitScore.transitScore === transitScore.cityAverage
-                        ? t('sidebar.atCityAvg')
-                        : t('sidebar.belowCityAvg')}
+                        ? 'At city average'
+                        : 'Below city average'}
                     {' '}({transitScore.cityAverage})
                   </span>
                 </div>
               </div>
               <p className="text-sm text-indigo-700">
-                {t('sidebar.transitDescription', { stopCount: String(transitScore.stopCount), agencyCount: String(transitScore.agencyCount) })}
+                Your neighborhood has <span className="font-semibold">{transitScore.stopCount}</span> transit stop{transitScore.stopCount !== 1 ? 's' : ''} served
+                by <span className="font-semibold">{transitScore.agencyCount}</span> transit agenc{transitScore.agencyCount !== 1 ? 'ies' : 'y'}
                 {transitScore.agencies.length > 0 && (
                   <> ({transitScore.agencies.join(', ')})</>
                 )}.
               </p>
               {transitScore.travelTimeToCityHall != null && transitScore.travelTimeToCityHall > 0 && (
                 <p className="text-sm text-indigo-700 mt-1">
-                  {t('sidebar.travelTime')}{' '}
+                  Estimated travel time to City Hall:{' '}
                   <span className="font-semibold">~{transitScore.travelTimeToCityHall} min</span>
                 </p>
               )}
@@ -238,46 +267,46 @@ export default function Sidebar({
           {accessGap && accessGap.accessGapScore != null && (
             <section aria-labelledby="access-gap-heading" className="rounded-lg bg-amber-50 border border-amber-200 p-3">
               <h2 id="access-gap-heading" className="text-sm font-medium text-amber-800 mb-2">
-                {t('sidebar.accessGap')}
+                Access Gap Assessment
               </h2>
               <div className="flex items-center gap-3 mb-2">
                 <div className="text-2xl font-bold text-amber-700">{accessGap.accessGapScore}</div>
                 <div className="text-xs text-amber-600">
                   <span className="block">/ 100</span>
                   <span className="block">
-                    {t('sidebar.rankOf', { rank: String(accessGap.rank), totalCommunities: String(accessGap.totalCommunities) })}
+                    Rank {accessGap.rank} of {accessGap.totalCommunities} communities
                   </span>
                 </div>
               </div>
               <p className="text-sm text-amber-700 mb-2">
                 {accessGap.accessGapScore >= 65
-                  ? t('sidebar.accessGapHigh')
+                  ? 'Data patterns suggest this neighborhood may face significant access barriers to civic services.'
                   : accessGap.accessGapScore >= 40
-                    ? t('sidebar.accessGapMedium')
-                    : t('sidebar.accessGapLow')}
+                    ? 'Some indicators suggest potential access gaps in this neighborhood.'
+                    : 'This neighborhood shows relatively fewer signs of access barriers.'}
               </p>
               <div className="space-y-1.5 text-xs text-amber-600">
                 {accessGap.signals.lowEngagement != null && (
                   <div className="flex justify-between">
-                    <span>{t('sidebar.lowEngagement')}</span>
+                    <span>Low civic engagement signal</span>
                     <span className="font-mono">{Math.round(accessGap.signals.lowEngagement * 100)}%</span>
                   </div>
                 )}
                 {accessGap.signals.lowTransit != null && (
                   <div className="flex justify-between">
-                    <span>{t('sidebar.lowTransit')}</span>
+                    <span>Limited transit access signal</span>
                     <span className="font-mono">{Math.round(accessGap.signals.lowTransit * 100)}%</span>
                   </div>
                 )}
                 {accessGap.signals.highNonEnglish != null && (
                   <div className="flex justify-between">
-                    <span>{t('sidebar.langBarrier')}</span>
+                    <span>Language barrier signal</span>
                     <span className="font-mono">{Math.round(accessGap.signals.highNonEnglish * 100)}%</span>
                   </div>
                 )}
               </div>
               <p className="text-xs text-amber-500 mt-2 italic">
-                {t('sidebar.accessGapDisclaimer')}
+                This score identifies potential access gaps based on available data. It does not prove a neighborhood is underserved.
               </p>
             </section>
           )}
@@ -286,7 +315,7 @@ export default function Sidebar({
           {metrics.goodNews.length > 0 && (
             <section aria-labelledby="good-news-heading" className="rounded-lg bg-green-50 border border-green-200 p-3">
               <h2 id="good-news-heading" className="text-sm font-medium text-green-800 mb-2">
-                {t('sidebar.goodNews')}
+                Good News
               </h2>
               <ul className="space-y-1.5 text-sm text-green-700">
                 {metrics.goodNews.map((item, i) => (
@@ -344,18 +373,18 @@ export default function Sidebar({
           )}
 
           {/* Language suggestion based on demographics */}
-          {suggestedLangMeta && reportLang === 'English' && (
+          {suggestedLangCode && reportLang === 'en' && (
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
               <p className="text-sm text-blue-800 mb-2">
                 {t('sidebar.languageSuggestion', { language: suggestedLang!.language })}
               </p>
               <button
                 type="button"
-                onClick={() => setReportLang(suggestedLangMeta.label)}
+                onClick={() => setReportLang(suggestedLangCode)}
                 disabled={reportLoading}
                 className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
-                {t('sidebar.switchReportLang', { language: suggestedLangMeta.nativeLabel })}
+                {t('sidebar.switchReportLang', { language: suggestedLangMeta?.nativeLabel ?? '' }) ?? `Switch report to ${suggestedLangMeta?.nativeLabel ?? ''}`}
               </button>
             </div>
           )}
@@ -369,10 +398,10 @@ export default function Sidebar({
                   key={l.code}
                   type="button"
                   role="radio"
-                  aria-checked={reportLang === l.label}
-                  onClick={() => setReportLang(l.label)}
+                  aria-checked={reportLang === l.code}
+                  onClick={() => setReportLang(l.code)}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                    reportLang === l.label
+                    reportLang === l.code
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
@@ -390,7 +419,7 @@ export default function Sidebar({
               onClick={() => onGenerateReport(reportLang)}
               className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
-              {t('sidebar.regenerateReport')}
+              {t('sidebar.regenerateReport') ?? 'Regenerate Report'}
             </button>
           )}
         </>
@@ -402,7 +431,7 @@ export default function Sidebar({
         </div>
       )}
 
-      <ReportView report={report} loading={reportLoading} metrics={metrics} topLanguages={topLanguages} />
+      <ReportView report={report} loading={reportLoading} metrics={metrics} topLanguages={topLanguages} trends={trends} />
     </div>
   );
 }

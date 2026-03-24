@@ -1,31 +1,17 @@
 import type { FeatureCollection } from 'geojson';
-import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile } from '../types';
+import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, CommunityTrends, NeighborhoodProfile, Permit } from '../types';
 
 const BASE = '/api';
-
-class ApiError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 
 async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;
     try {
-      const ct = res.headers.get('content-type') ?? '';
-      if (ct.includes('application/json')) {
-        const body = await res.json();
-        if (body.error) message = body.error;
-      } else {
-        const text = await res.text();
-        if (text) message = text.slice(0, 200);
-      }
+      const body = await res.json();
+      if (body.error) message = body.error;
     } catch { /* use default message */ }
-    throw new ApiError(res.status, message);
+    throw new Error(message);
   }
   return res.json() as Promise<T>;
 }
@@ -41,6 +27,11 @@ export function getRecCenters(signal?: AbortSignal): Promise<CommunityAnchor[]> 
 let boundaryPromise: Promise<FeatureCollection> | null = null;
 let boundaryCachedAt = 0;
 const BOUNDARY_CLIENT_TTL = 60 * 60 * 1000; // 1 hour
+
+export function getPermits(community?: string, init?: RequestInit): Promise<Permit[]> {
+  const params = community ? `?community=${encodeURIComponent(community)}` : '';
+  return fetchJSON(`${BASE}/locations/permits${params}`, init);
+}
 
 export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
   if (boundaryPromise && Date.now() - boundaryCachedAt < BOUNDARY_CLIENT_TTL) {
@@ -85,15 +76,9 @@ export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: A
 
 export async function getPreGeneratedReport(community: string, language: string): Promise<CommunityReport | null> {
   try {
-    return await fetchJSON(`${BASE}/report?community=${encodeURIComponent(community)}&language=${encodeURIComponent(language)}`);
-  } catch (err) {
-    // Only treat 404 (no cached report) as a null result.
-    // Re-throw 500s and other errors so callers can decide whether to
-    // fall back to on-demand generation or surface the failure.
-    if (err instanceof ApiError && err.status === 404) {
-      return null;
-    }
-    throw err;
+    return await fetchJSON(`${BASE}/report/community?community=${encodeURIComponent(community)}&language=${encodeURIComponent(language)}`);
+  } catch {
+    return null; // 404 or error — no pre-generated report available
   }
 }
 
@@ -102,7 +87,50 @@ export function generateReport(profile: NeighborhoodProfile, language: string, s
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile, language }),
-    ...(signal && { signal }),
+    signal,
   });
 }
 
+export function generateAddressBlockReport(
+  address: string,
+  lat: number,
+  lng: number,
+  communityName: string,
+  radiusMiles: number,
+  language: string,
+  communityMetrics?: { resolutionRate: number; totalRequests: number } | null,
+): Promise<CommunityReport> {
+  return fetchJSON(`${BASE}/report/generate-address-block`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address, lat, lng, communityName, radiusMiles, language, communityMetrics }),
+  });
+}
+
+export function get311Trends(community: string, signal?: AbortSignal): Promise<CommunityTrends> {
+  return fetchJSON(`${BASE}/311/trends?community=${encodeURIComponent(community)}`, signal ? { signal } : undefined);
+}
+
+export async function downloadPdf(
+  report: CommunityReport,
+  neighborhoodSlug: string,
+  metrics?: NeighborhoodProfile['metrics'] | null,
+  topLanguages?: { language: string; percentage: number }[],
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const res = await fetch(`${BASE}/report/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report, neighborhoodSlug, metrics, topLanguages }),
+    signal,
+  });
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body.error) message = body.error;
+    } catch { /* use default message */ }
+    throw new Error(message);
+  }
+  return res.blob();
+}

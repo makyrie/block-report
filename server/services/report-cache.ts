@@ -10,7 +10,7 @@ import { communityKey } from '../utils/community.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /** Check whether a cached value has a valid CommunityReport shape */
 function isValidReportShape(data: unknown): data is CommunityReport {
@@ -31,6 +31,15 @@ function normalizeKey(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+/** Build a deterministic cache key for address block reports */
+export function buildBlockCacheKey(lat: number, lng: number, radius: number, langCode: string): string {
+  const safeLat = Number(lat).toFixed(4);
+  const safeLng = Number(lng).toFixed(4);
+  const safeRadius = Math.min(2, Math.max(0.1, Number(radius) || 0.25));
+  const safeLang = normalizeKey(langCode);
+  return `addr_${safeLat}_${safeLng}_${safeRadius}_${safeLang}`;
+}
+
 // ---------------------------------------------------------------------------
 // Cache strategy abstraction — eliminates isVercel branching in every function
 // ---------------------------------------------------------------------------
@@ -46,7 +55,7 @@ interface CacheStrategy {
 const dbStrategy: CacheStrategy = {
   async get(community, language) {
     const row = await prisma.reportCache.findUnique({
-      where: { community_language: { community: normalizeKey(community), language: normalizeKey(language) } },
+      where: { community_language: { community: communityKey(community), language: communityKey(language) } },
     });
     if (!row) return null;
     const age = Date.now() - row.createdAt.getTime();
@@ -61,9 +70,9 @@ const dbStrategy: CacheStrategy = {
 
   async set(community, language, report) {
     await prisma.reportCache.upsert({
-      where: { community_language: { community: normalizeKey(community), language: normalizeKey(language) } },
+      where: { community_language: { community: communityKey(community), language: communityKey(language) } },
       update: { report: report as unknown as Record<string, unknown>, createdAt: new Date() },
-      create: { community: normalizeKey(community), language: normalizeKey(language), report: report as unknown as Record<string, unknown> },
+      create: { community: communityKey(community), language: communityKey(language), report: report as unknown as Record<string, unknown> },
     });
   },
 
@@ -183,13 +192,38 @@ export async function saveCachedBlockReport(anchorId: string, language: string, 
   }
 }
 
+/** Get a cached report by an arbitrary key (used for address block reports) */
+export async function getCachedReportByKey(key: string): Promise<CommunityReport | null> {
+  try {
+    return await strategy.get(key, 'default');
+  } catch (err) {
+    logger.error('Failed to read report cache by key', {
+      error: err instanceof Error ? err.message : String(err),
+      key,
+    });
+    return null;
+  }
+}
+
+/** Save a cached report by an arbitrary key (used for address block reports) */
+export async function saveCachedReportByKey(key: string, report: CommunityReport): Promise<void> {
+  try {
+    await strategy.set(key, 'default', report);
+  } catch (err) {
+    logger.error('Failed to write report cache by key', {
+      error: err instanceof Error ? err.message : String(err),
+      key,
+    });
+  }
+}
+
 /**
  * DB-backed rate limit check for report generation.
  * Counts reports created in the last windowMs. Works across serverless instances.
  * Returns true if the limit has been exceeded.
  */
 const GENERATION_RATE_LIMIT = 20; // max reports per window
-const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+export const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 /**
  * In-memory generation attempt tracker — counts attempts, not just successful cache writes.

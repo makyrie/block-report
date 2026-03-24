@@ -1,19 +1,21 @@
 import type { BlockMetrics, NeighborhoodProfile } from '../types';
 
 export interface ScaleComparison {
-  key: string;
-  vars: Record<string, string>;
+  text: string;
   type: 'insight' | 'good-news' | 'concern';
 }
 
+type TranslateFn = (key: string, vars?: Record<string, string>) => string;
+
 /**
- * Generate comparison callouts between block-level and neighborhood-level 311
- * data. Returns i18n keys + interpolation vars for translatable display.
+ * Generate plain-language comparison callouts between block-level and
+ * neighborhood-level 311 data. Returns up to 3 most relevant comparisons.
  */
 export function generateComparisons(
   block: BlockMetrics,
   neighborhood: NeighborhoodProfile['metrics'],
   communityName: string,
+  t: TranslateFn,
 ): ScaleComparison[] {
   // Guard: no neighborhood data
   if (neighborhood.totalRequests311 === 0) return [];
@@ -21,8 +23,7 @@ export function generateComparisons(
   // No block reports at all
   if (block.totalRequests === 0) {
     return [{
-      key: 'comparison.noReports',
-      vars: { radius: String(block.radiusMiles) },
+      text: t('dualScale.noReports', { radius: String(block.radiusMiles) }),
       type: 'insight',
     }];
   }
@@ -32,12 +33,11 @@ export function generateComparisons(
   // 1. Open count comparison
   const neighborhoodOpenCount = Math.max(0, neighborhood.totalRequests311 - neighborhood.resolvedCount);
   comparisons.push({
-    key: 'comparison.openCount',
-    vars: {
+    text: t('dualScale.cmpOpen', {
       blockOpen: String(block.openCount),
       community: communityName,
       neighborhoodOpen: neighborhoodOpenCount.toLocaleString(),
-    },
+    }),
     type: 'insight',
   });
 
@@ -49,20 +49,20 @@ export function generateComparisons(
     const rateDiff = Math.abs(blockRate - neighborhoodRate);
 
     if (rateDiff > 10) {
-      const higher = blockRate > neighborhoodRate;
+      const direction = blockRate > neighborhoodRate ? 'higher' : 'lower';
+      const compType = blockRate > neighborhoodRate ? 'good-news' : 'concern';
       comparisons.push({
-        key: higher ? 'comparison.resolutionHigher' : 'comparison.resolutionLower',
-        vars: {
+        text: t('dualScale.cmpResolution', {
           blockRate: String(Math.round(blockRate)),
+          direction: t(`dualScale.${direction}`),
           neighborhoodRate: String(Math.round(neighborhoodRate)),
           community: communityName,
-        },
-        type: higher ? 'good-news' : 'concern',
+        }),
+        type: compType as ScaleComparison['type'],
       });
     } else if (rateDiff <= 5) {
       comparisons.push({
-        key: 'comparison.resolutionSimilar',
-        vars: { community: communityName },
+        text: t('dualScale.cmpResolutionSame', { community: communityName }),
         type: 'insight',
       });
     }
@@ -73,12 +73,12 @@ export function generateComparisons(
       if (daysDiff > 2) {
         const faster = block.avgDaysToResolve < neighborhood.avgDaysToResolve;
         comparisons.push({
-          key: faster ? 'comparison.responseFaster' : 'comparison.responseSlower',
-          vars: {
+          text: t('dualScale.cmpResponseTime', {
             blockDays: String(Math.round(block.avgDaysToResolve)),
-            neighborhoodDays: String(Math.round(neighborhood.avgDaysToResolve)),
+            speed: t(faster ? 'dualScale.faster' : 'dualScale.slower'),
             community: communityName,
-          },
+            neighborhoodDays: String(Math.round(neighborhood.avgDaysToResolve)),
+          }),
           type: faster ? 'good-news' : 'concern',
         });
       }
@@ -90,14 +90,12 @@ export function generateComparisons(
       const neighborhoodTop = neighborhood.topIssues[0].category;
       if (blockTop === neighborhoodTop) {
         comparisons.push({
-          key: 'comparison.sameTopIssue',
-          vars: { issue: blockTop, community: communityName },
+          text: t('dualScale.cmpTopIssueSame', { issue: blockTop, community: communityName }),
           type: 'insight',
         });
       } else {
         comparisons.push({
-          key: 'comparison.differentTopIssue',
-          vars: { blockIssue: blockTop, neighborhoodIssue: neighborhoodTop },
+          text: t('dualScale.cmpTopIssueDiff', { blockIssue: blockTop, neighborhoodIssue: neighborhoodTop }),
           type: 'insight',
         });
       }

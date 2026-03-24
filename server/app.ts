@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -14,6 +14,7 @@ import reportRouter from './routes/report.js';
 import transitRouter from './routes/transit.js';
 import gapAnalysisRouter from './routes/gap-analysis.js';
 import blockRouter from './routes/block.js';
+import pdfRouter from './routes/pdf.js';
 
 const app = express();
 
@@ -32,7 +33,13 @@ if (process.env.VERCEL_URL) {
   }
 }
 if (allowedOrigins.length === 0) {
-  allowedOrigins.push('http://localhost:5173', 'http://localhost:3000');
+  if (isVercel) {
+    // On Vercel without explicit CORS_ORIGIN or VERCEL_URL, deny cross-origin requests
+    // rather than falling back to permissive localhost origins
+    logger.warn('No CORS_ORIGIN or VERCEL_URL set in production — CORS will reject all cross-origin requests. Set CORS_ORIGIN env var.');
+  } else {
+    allowedOrigins.push('http://localhost:5173', 'http://localhost:3000');
+  }
 }
 
 logger.info('CORS allowed origins', { origins: allowedOrigins });
@@ -41,7 +48,7 @@ app.use(cors({
   methods: ['GET', 'POST'],
 }));
 
-app.use(express.json({ limit: '50kb' }));
+app.use(express.json({ limit: '200kb' }));
 
 // Liveness probe — no DB, instant response for load balancers
 app.get('/api/health', (_req, res) => {
@@ -64,20 +71,37 @@ app.get('/api/health/ready', async (_req, res) => {
   }
 });
 
-// In-memory rate limiting is per-IP best-effort (resets on serverless cold starts).
-// The authoritative protection is the DB-backed rate limit in isGenerationRateLimited()
-// which counts total reports generated across all instances within a 1-hour window.
-// For per-IP durability in production, add Vercel WAF rules or Upstash Redis.
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
-const reportLimiter = rateLimit({
+// In-memory rate limiting is only effective on long-lived server processes.
+// On serverless (Vercel), each cold start resets counters — the DB-backed
+// isGenerationRateLimited() in report routes is the real protection there.
+// For production serverless, configure Vercel WAF or Upstash Redis for
+// general API rate limiting.
+if (!isVercel) {
+  const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
+  const reportLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many report generation requests, please try again later' },
+  });
+  const blockLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { error: 'Too many block data requests, please try again later' },
+  });
+  app.use('/api/report', reportLimiter);
+  app.use('/api/block', blockLimiter);
+  app.use('/api', apiLimiter);
+} else {
+  logger.info('Serverless mode: skipping in-memory rate limiting (DB-backed rate limit active for report generation)');
+}
+const pdfLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many report generation requests, please try again later' },
+  max: 5,
+  message: { error: 'Too many PDF generation requests, please try again later' },
 });
-app.use('/api/report', reportLimiter);
-app.use('/api', apiLimiter);
+app.use('/api/report/pdf', pdfLimiter);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -96,6 +120,7 @@ app.use('/api/locations', locationsRouter);
 app.use('/api/311', metricsRouter);
 app.use('/api/demographics', demographicsRouter);
 app.use('/api/report', reportRouter);
+app.use('/api/report', pdfRouter);
 app.use('/api/transit', transitRouter);
 app.use('/api/access-gap', gapAnalysisRouter);
 app.use('/api/block', blockRouter);
@@ -138,16 +163,16 @@ app.get('/api/cron/purge-cache', async (req, res) => {
   }
 });
 
-// Global error handler — catches unhandled errors from any route and returns
-// a consistent JSON response instead of Express's default HTML error page.
-// The 4-parameter signature tells Express this is an error-handling middleware.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+// API 404 catch-all — unknown API paths return JSON instead of falling through to SPA
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Global error handler — catches unhandled errors and returns JSON instead of Express's default HTML 500
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled error', {
-    error: err.message,
-    path: req.originalUrl,
-    method: req.method,
-    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
   });
   res.status(500).json({ error: 'Internal server error' });
 });

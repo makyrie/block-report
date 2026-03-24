@@ -9,6 +9,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor, StoredBlockReport } from '../../src/types/index.js';
+import { LANGUAGE_CODES } from '../../src/constants/languages.js';
+import { sanitizeFilename as sharedSanitizeFilename } from '../utils/language.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
@@ -18,21 +20,6 @@ const MANIFEST_PATH = path.join(REPORTS_DIR, 'manifest.json');
 const BASE_URL = `http://localhost:${process.env.PORT || 3001}`;
 const DELAY_MS = 1000; // 1 second between Claude API calls
 const LANGUAGE_THRESHOLD = 5; // minimum % to include a language
-
-// Map language labels to ISO-ish codes for filenames
-const LANGUAGE_CODES: Record<string, string> = {
-  English: 'en',
-  Spanish: 'es',
-  Chinese: 'zh',
-  Vietnamese: 'vi',
-  Tagalog: 'tl',
-  Korean: 'ko',
-  Arabic: 'ar',
-  'French/Haitian/Cajun': 'fr',
-  'German/West Germanic': 'de',
-  'Russian/Polish/Slavic': 'ru',
-  Other: 'other',
-};
 
 interface StoredReport {
   communityName: string;
@@ -64,9 +51,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function sanitizeFilename(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-}
+const sanitizeFilename = sharedSanitizeFilename;
 
 async function getAllCommunities(): Promise<string[]> {
   const geojson = await fetchJSON<{

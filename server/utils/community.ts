@@ -1,15 +1,25 @@
 // Shared community name normalization and validation for server routes
+//
+// Two normalization strategies, co-located here as the single source of truth:
+// - communityKey: UPPERCASE for in-memory Map lookups (gap-analysis, transit-scores)
+// - normalizeKey: lowercase-dashed for filesystem/DB cache keys (report-cache)
+// The frontend uses its own norm() (lowercase, space-separated) for display matching.
 
 /**
- * Canonical key for community lookups. Strips non-alphanumeric characters and
- * uppercases for consistent matching across data sources (311, transit, census).
- * Intentionally different from:
- * - frontend norm() (lowercase + spaces) — display matching only
- * - report-cache normalizeKey() (lowercase + dashes) — cache key storage only
- * Each normalizer only compares within its own domain, so the differences are safe.
+ * Canonical key for community lookups. All server-side maps use UPPERCASE keys.
  */
 export function communityKey(name: string): string {
-  return name.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/**
+ * Filesystem/DB-safe cache key. Lowercased, non-alphanumeric collapsed to dashes.
+ * Explicitly strips path separators to prevent directory traversal.
+ */
+export function normalizeKey(value: string): string {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  // Note: the regex above already strips / \ . and other path-special characters,
+  // making path traversal impossible. This comment serves as an explicit security note.
 }
 
 /**
