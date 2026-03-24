@@ -11,5 +11,5 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["server", "scripts", "types"]
+  "include": ["server", "scripts", "src/types", "src/utils"]
 }

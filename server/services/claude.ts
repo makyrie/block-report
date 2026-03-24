@@ -19,12 +19,14 @@ function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
     return obj.slice(0, 50).map(item => sanitizeStringFields(item, maxLen, depth + 1));
   }
   if (obj !== null && typeof obj === 'object') {
-    const sanitized: Record<string, unknown> = {};
+    const sanitized: Record<string, unknown> = Object.create(null);
     const keys = Object.keys(obj);
     if (keys.length > 100) {
       throw new Error('Object has too many keys (max 100)');
     }
+    const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
     for (const key of keys) {
+      if (DANGEROUS_KEYS.has(key)) continue;
       sanitized[key] = sanitizeStringFields((obj as Record<string, unknown>)[key], maxLen, depth + 1);
     }
     return sanitized;
@@ -160,7 +162,7 @@ function makeReportTool(description: string): Anthropic.Messages.Tool {
 }
 
 /** Call Claude with a prompt and report tool, returning the structured report */
-async function callClaudeForReport(prompt: string, toolDescription: string, logContext: Record<string, string>): Promise<CommunityReport> {
+async function callClaudeForReport(prompt: string, toolDescription: string, logContext: Record<string, string>, signal?: AbortSignal): Promise<CommunityReport> {
   const client = getClient();
   const reportTool = makeReportTool(toolDescription);
 
@@ -171,7 +173,7 @@ async function callClaudeForReport(prompt: string, toolDescription: string, logC
       messages: [{ role: 'user', content: prompt }],
       tools: [reportTool],
       tool_choice: { type: 'tool', name: 'community_report' },
-    });
+    }, { signal });
 
     const toolBlock = message.content.find((block) => block.type === 'tool_use');
     if (!toolBlock || toolBlock.type !== 'tool_use') {
@@ -200,6 +202,7 @@ function sanitizeLanguage(language: string): string {
 export async function generateReport(
   profile: NeighborhoodProfile,
   language: string,
+  signal?: AbortSignal,
 ): Promise<CommunityReport> {
   // Validate communityName to prevent prompt injection
   if (
@@ -236,6 +239,7 @@ Keep the total report under 400 words. It should fit on one printed page.`;
     prompt,
     'Output a structured community report for a San Diego neighborhood',
     { community: profile.communityName },
+    signal,
   );
 }
 
@@ -244,6 +248,7 @@ export async function generateBlockReport(
   blockMetrics: BlockMetrics,
   language: string,
   demographics?: { topLanguages: { language: string; percentage: number }[] },
+  signal?: AbortSignal,
 ): Promise<CommunityReport> {
   const safeAnchor = sanitizeStringFields(anchor, 200) as CommunityAnchor;
   const safeMetrics = sanitizeBlockMetrics(blockMetrics);
@@ -280,5 +285,6 @@ Keep the total report under 400 words. It should fit on one printed page.`;
     prompt,
     'Output a structured block-level community report centered on a civic anchor location',
     { anchor: anchor.name, community: anchor.community },
+    signal,
   );
 }

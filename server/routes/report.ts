@@ -17,23 +17,44 @@ function validateLanguage(language: unknown): string | null {
 
 const MAX_PROFILE_SIZE = 10_000;
 const MAX_BLOCK_METRICS_SIZE = 5_000;
-const RETRY_AFTER_SECONDS = 3600; // 1 hour
 
-// Simple per-IP rate limiting for report generation — supplements DB-backed global limit.
-// On serverless this resets per cold start, but still mitigates rapid-fire abuse from a single IP.
+// Per-IP rate limiting for report generation endpoints
+// WARNING: This in-memory map resets on every serverless cold start (same limitation
+// as the global express-rate-limit in app.ts). It provides best-effort protection
+// in long-running processes but is not durable across Vercel function invocations.
+const PER_IP_LIMIT = 5;
 const PER_IP_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const PER_IP_MAX = 5; // max reports per IP per window
+const MAX_IP_ENTRIES = 1000; // Cap map size to prevent unbounded memory growth
 const ipGenerationCounts = new Map<string, { count: number; resetAt: number }>();
 
 function isIpRateLimited(ip: string): boolean {
   const now = Date.now();
+
+  // Periodic cleanup: if map is too large, purge all expired entries
+  if (ipGenerationCounts.size >= MAX_IP_ENTRIES) {
+    for (const [key, val] of ipGenerationCounts) {
+      if (now >= val.resetAt) ipGenerationCounts.delete(key);
+    }
+    // If still too large after cleanup, drop oldest entries
+    if (ipGenerationCounts.size >= MAX_IP_ENTRIES) {
+      const toDelete = ipGenerationCounts.size - MAX_IP_ENTRIES + 100;
+      let deleted = 0;
+      for (const key of ipGenerationCounts.keys()) {
+        if (deleted >= toDelete) break;
+        ipGenerationCounts.delete(key);
+        deleted++;
+      }
+    }
+  }
+
   const entry = ipGenerationCounts.get(ip);
   if (!entry || now >= entry.resetAt) {
+    if (entry) ipGenerationCounts.delete(ip);
     ipGenerationCounts.set(ip, { count: 1, resetAt: now + PER_IP_WINDOW_MS });
     return false;
   }
   entry.count++;
-  return entry.count > PER_IP_MAX;
+  return entry.count > PER_IP_LIMIT;
 }
 
 // GET /api/report?community={name}&language={lang} — cached community report
@@ -95,6 +116,15 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'profile must be an object with a communityName string' });
       return;
     }
+
+    // Strip unexpected keys to prevent prompt bloat via arbitrary fields
+    const ALLOWED_PROFILE_KEYS = new Set(['communityName', 'anchor', 'metrics', 'transit', 'demographics', 'accessGap']);
+    for (const key of Object.keys(profile)) {
+      if (!ALLOWED_PROFILE_KEYS.has(key)) {
+        delete (profile as Record<string, unknown>)[key];
+      }
+    }
+
     const language = validateLanguage(rawLang);
     if (!language) {
       res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
@@ -105,8 +135,10 @@ router.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // Run cache lookup and rate limit check in parallel to save a DB round trip
-    const [cached, rateLimited] = await Promise.all([
+    const clientIp = req.ip ?? 'unknown';
+
+    // Run cache lookup and rate limit checks in parallel
+    const [cached, globalRateLimited] = await Promise.all([
       getCachedReport(profile.communityName, language),
       isGenerationRateLimited(),
     ]);
@@ -115,15 +147,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       res.json(cached);
       return;
     }
-    if (rateLimited) {
-      res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many reports generated recently, please try again later' });
-      return;
-    }
-    // Per-IP rate limit — supplements global DB-backed limit
-    const clientIp = req.ip || 'unknown';
-    if (isIpRateLimited(clientIp)) {
-      logger.warn('Per-IP rate limit exceeded for report generation', { ip: clientIp });
-      res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many report requests from this address, please try again later' });
+    if (globalRateLimited || isIpRateLimited(clientIp)) {
+      res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
 
@@ -135,10 +160,23 @@ router.post('/generate', async (req: Request, res: Response) => {
       community: profile.communityName,
       language,
     });
-    const report = await generateReport(profile, language);
 
-    // Cache the generated report for future instant access (saveCachedReport handles its own errors)
-    await saveCachedReport(profile.communityName, language, report);
+    // Abort the Claude API call if the client disconnects
+    const abortController = new AbortController();
+    const onClose = () => abortController.abort();
+    req.on('close', onClose);
+
+    let report;
+    try {
+      report = await generateReport(profile, language, abortController.signal);
+    } finally {
+      req.removeListener('close', onClose);
+    }
+
+    // Fire-and-forget: always return the report even if caching fails
+    saveCachedReport(profile.communityName, language, report).catch((err) => {
+      logger.error('Failed to cache report (fire-and-forget)', { error: err instanceof Error ? err.message : String(err) });
+    });
 
     res.json(report);
   } catch (error) {
@@ -162,8 +200,14 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     }
 
     // Validate anchor fields to prevent prompt injection via user-controlled strings
-    // Work on a copy to avoid mutating req.body
-    const anchor = { ...rawAnchor };
+    // Work on a copy with only allowed keys to prevent prototype pollution and prompt bloat
+    const ALLOWED_ANCHOR_KEYS = new Set(['id', 'name', 'type', 'lat', 'lng', 'address', 'phone', 'website', 'community']);
+    const anchor: Record<string, unknown> = {};
+    for (const key of Object.keys(rawAnchor)) {
+      if (ALLOWED_ANCHOR_KEYS.has(key)) {
+        anchor[key] = rawAnchor[key];
+      }
+    }
     const MAX_FIELD_LEN = 200;
     const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
     const ANCHOR_ID_RE = /^[a-zA-Z0-9_-]+$/;
@@ -195,38 +239,75 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       return;
     }
 
-    // Validate blockMetrics shape to prevent malformed input from reaching Claude
-    if (typeof blockMetrics !== 'object' || blockMetrics === null) {
-      res.status(400).json({ error: 'blockMetrics must be an object' });
-      return;
+    // Validate blockMetrics structure — strip unexpected keys to prevent prompt bloat
+    const ALLOWED_METRICS_KEYS = new Set(['totalRequests', 'openCount', 'resolvedCount', 'resolutionRate', 'avgDaysToResolve', 'topIssues', 'recentlyResolved', 'radiusMiles']);
+    for (const key of Object.keys(blockMetrics)) {
+      if (!ALLOWED_METRICS_KEYS.has(key)) {
+        delete blockMetrics[key];
+      }
     }
     if (typeof blockMetrics.totalRequests !== 'number' || typeof blockMetrics.openCount !== 'number') {
       res.status(400).json({ error: 'blockMetrics must contain numeric totalRequests and openCount fields' });
       return;
     }
+    for (const field of ['totalRequests', 'openCount', 'resolvedCount', 'resolutionRate', 'radiusMiles'] as const) {
+      if (typeof blockMetrics[field] !== 'number' || !isFinite(blockMetrics[field])) {
+        res.status(400).json({ error: `blockMetrics.${field} must be a finite number` });
+        return;
+      }
+    }
+    if (!Array.isArray(blockMetrics.topIssues) || !Array.isArray(blockMetrics.recentlyResolved)) {
+      res.status(400).json({ error: 'blockMetrics.topIssues and recentlyResolved must be arrays' });
+      return;
+    }
+    // Validate and sanitize array element contents to prevent prompt injection
+    const MAX_ARRAY_LEN = 20;
+    const MAX_STR_LEN = 200;
+    const CTRL_RE = /[\x00-\x1f\x7f]/g;
+    blockMetrics.topIssues = blockMetrics.topIssues.slice(0, MAX_ARRAY_LEN).map((item: unknown) => {
+      if (typeof item !== 'object' || item === null) return { category: 'Unknown', count: 0 };
+      const it = item as Record<string, unknown>;
+      return {
+        category: typeof it.category === 'string' ? it.category.slice(0, MAX_STR_LEN).replace(CTRL_RE, '') : 'Unknown',
+        count: typeof it.count === 'number' && isFinite(it.count) ? it.count : 0,
+      };
+    });
+    blockMetrics.recentlyResolved = blockMetrics.recentlyResolved.slice(0, MAX_ARRAY_LEN).map((item: unknown) => {
+      if (typeof item !== 'object' || item === null) return { category: 'Unknown', date: '' };
+      const it = item as Record<string, unknown>;
+      return {
+        category: typeof it.category === 'string' ? it.category.slice(0, MAX_STR_LEN).replace(CTRL_RE, '') : 'Unknown',
+        date: typeof it.date === 'string' ? it.date.slice(0, 30).replace(CTRL_RE, '') : '',
+      };
+    });
     if (JSON.stringify(blockMetrics).length > MAX_BLOCK_METRICS_SIZE) {
       res.status(400).json({ error: `blockMetrics payload too large (max ${MAX_BLOCK_METRICS_SIZE} bytes)` });
       return;
     }
+
+    // Validate demographics if provided
     if (demographics !== undefined && demographics !== null) {
-      if (typeof demographics !== 'object' || !Array.isArray(demographics.topLanguages)) {
-        res.status(400).json({ error: 'demographics must be an object with a topLanguages array' });
+      if (typeof demographics !== 'object') {
+        res.status(400).json({ error: 'demographics must be an object or null' });
         return;
       }
-      if (JSON.stringify(demographics).length > MAX_BLOCK_METRICS_SIZE) {
-        res.status(400).json({ error: `demographics payload too large (max ${MAX_BLOCK_METRICS_SIZE} bytes)` });
+      if (demographics.topLanguages !== undefined && !Array.isArray(demographics.topLanguages)) {
+        res.status(400).json({ error: 'demographics.topLanguages must be an array' });
         return;
       }
     }
 
+    const clientIp = req.ip ?? 'unknown';
+
+    // Derive cache key — both fields are optional, so guard against undefined
     const anchorCacheId = anchor.id || anchor.name;
     if (!anchorCacheId) {
-      res.status(400).json({ error: 'anchor must have a non-empty id or name' });
+      res.status(400).json({ error: 'anchor.id or anchor.name is required' });
       return;
     }
 
-    // Run cache lookup and rate limit check in parallel to save a DB round trip
-    const [cached, rateLimited] = await Promise.all([
+    // Run cache lookup and rate limit checks in parallel
+    const [cached, globalRateLimited] = await Promise.all([
       getCachedBlockReport(anchorCacheId, language),
       isGenerationRateLimited(),
     ]);
@@ -235,15 +316,8 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.json(cached);
       return;
     }
-    if (rateLimited) {
-      res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many reports generated recently, please try again later' });
-      return;
-    }
-    // Per-IP rate limit — supplements global DB-backed limit
-    const clientIp = req.ip || 'unknown';
-    if (isIpRateLimited(clientIp)) {
-      logger.warn('Per-IP rate limit exceeded for block report generation', { ip: clientIp });
-      res.set('Retry-After', String(RETRY_AFTER_SECONDS)).status(429).json({ error: 'Too many report requests from this address, please try again later' });
+    if (globalRateLimited || isIpRateLimited(clientIp)) {
+      res.status(429).json({ error: 'Too many reports generated recently, please try again later' });
       return;
     }
 
@@ -254,10 +328,22 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       language,
     });
 
-    const report = await generateBlockReport(anchor, blockMetrics, language, demographics);
+    // Abort the Claude API call if the client disconnects
+    const abortController = new AbortController();
+    const onClose = () => abortController.abort();
+    req.on('close', onClose);
 
-    // Cache the generated block report for future requests (saveCachedBlockReport handles its own errors)
-    await saveCachedBlockReport(anchorCacheId, language, report);
+    let report;
+    try {
+      report = await generateBlockReport(anchor, blockMetrics, language, demographics, abortController.signal);
+    } finally {
+      req.removeListener('close', onClose);
+    }
+
+    // Fire-and-forget: always return the report even if caching fails
+    saveCachedBlockReport(anchorCacheId, language, report).catch((err) => {
+      logger.error('Failed to cache block report (fire-and-forget)', { error: err instanceof Error ? err.message : String(err) });
+    });
 
     res.json(report);
   } catch (error) {

@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -32,7 +32,13 @@ if (process.env.VERCEL_URL) {
   }
 }
 if (allowedOrigins.length === 0) {
-  allowedOrigins.push('http://localhost:5173', 'http://localhost:3000');
+  if (isVercel) {
+    // On Vercel without explicit CORS_ORIGIN or VERCEL_URL, deny cross-origin requests
+    // rather than falling back to permissive localhost origins
+    logger.warn('No CORS_ORIGIN or VERCEL_URL set in production — CORS will reject all cross-origin requests. Set CORS_ORIGIN env var.');
+  } else {
+    allowedOrigins.push('http://localhost:5173', 'http://localhost:3000');
+  }
 }
 
 logger.info('CORS allowed origins', { origins: allowedOrigins });
@@ -78,7 +84,13 @@ if (!isVercel) {
     legacyHeaders: false,
     message: { error: 'Too many report generation requests, please try again later' },
   });
+  const blockLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { error: 'Too many block data requests, please try again later' },
+  });
   app.use('/api/report', reportLimiter);
+  app.use('/api/block', blockLimiter);
   app.use('/api', apiLimiter);
 } else {
   logger.info('Serverless mode: skipping in-memory rate limiting (DB-backed rate limit active for report generation)');

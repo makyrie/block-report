@@ -1,7 +1,8 @@
 // Shared helpers for seed scripts — keeps seed.ts and map-tracts.ts DRY
 
-import { pointInPolygon } from '../server/utils/geo.js';
-import { titleCase } from '../types/community.js';
+import { pointInFeature } from '../src/utils/geo.js';
+import { titleCase } from '../src/utils/community.js';
+import type { Polygon as GeoJSONPolygon } from 'geojson';
 
 export type Polygon = number[][][]; // [ring][point][lng, lat]
 
@@ -10,13 +11,12 @@ export interface CommunityFeature {
   polygons: Polygon[];
 }
 
-// Re-export shared titleCase as toTitleCase for backwards compatibility
-export const toTitleCase = titleCase;
+export { titleCase as toTitleCase };
 
 export function findCommunity(lat: number, lng: number, communities: CommunityFeature[]): string | null {
   for (const c of communities) {
     for (const poly of c.polygons) {
-      if (pointInPolygon(lat, lng, poly[0])) return c.name;
+      if (pointInFeature(lat, lng, { type: 'Polygon', coordinates: poly } as GeoJSONPolygon)) return c.name;
     }
   }
   return null;

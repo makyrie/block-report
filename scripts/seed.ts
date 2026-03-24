@@ -278,25 +278,82 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
   console.log(`  ✓ ${updates.length} tracts mapped to communities`);
 }
 
+const PERMIT_SEED_WINDOW_MONTHS = 12;
+
+async function seedPermits() {
+  console.log(`Seeding permits (last ${PERMIT_SEED_WINDOW_MONTHS} months)...`);
+  const cutoffDate = new Date();
+  cutoffDate.setMonth(cutoffDate.getMonth() - PERMIT_SEED_WINDOW_MONTHS);
+
+  const rows = await fetchCsv(
+    'https://seshat.datasd.org/dsd_permits/dsd_permits_all_pts_datasd.csv'
+  );
+
+  // Filter, map, deduplicate, and batch-insert (note: CSV is already fully in memory from fetchCsv)
+  const seen = new Set<string>();
+  let batch: ReturnType<typeof mapPermitRow>[] = [];
+  const batchSize = 1000;
+  let inserted = 0;
+
+  for (const r of rows) {
+    const dateStr = r.date_issued || r.approval_date || '';
+    if (!dateStr || new Date(dateStr) < cutoffDate) continue;
+    const status = (r.status || '').toLowerCase();
+    if (['denied', 'withdrawn', 'cancelled', 'void'].includes(status)) continue;
+
+    const mapped = mapPermitRow(r);
+    if (!mapped.permit_number || seen.has(mapped.permit_number)) continue;
+    seen.add(mapped.permit_number);
+
+    batch.push(mapped);
+    if (batch.length >= batchSize) {
+      const result = await prisma.permit.createMany({ data: batch });
+      inserted += result.count;
+      batch = [];
+    }
+  }
+
+  if (batch.length > 0) {
+    const result = await prisma.permit.createMany({ data: batch });
+    inserted += result.count;
+  }
+
+  console.log(`  ✓ ${inserted} permits`);
+}
+
+function mapPermitRow(r: Record<string, string>) {
+  return {
+    permit_number: r.permit_number || r.approval_id || r.project_id || '',
+    permit_type: r.permit_type || r.approval_type || null,
+    description: r.project_title || r.description || null,
+    date_issued: (r.date_issued || r.approval_date) ? new Date(r.date_issued || r.approval_date) : null,
+    status: r.status || null,
+    street_address: r.street_address || r.address || null,
+    community: r.comm_plan_name ? toTitleCase(r.comm_plan_name.trim()) : (r.community_plan ? toTitleCase(r.community_plan.trim()) : null),
+    lat: parseFloat_(r.lat),
+    lng: parseFloat_(r.lng),
+  };
+}
+
 // --- Main ---
 
 async function main() {
   console.log('Starting seed...\n');
 
-  console.log('Truncating tables (inside transaction)...');
-  await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language, report_cache CASCADE`;
-    console.log('  ✓ Tables truncated\n');
-  });
+  console.log('Truncating tables...');
+  await prisma.$executeRaw`TRUNCATE libraries, rec_centers, transit_stops, requests_311, census_language, permits`;
+  console.log('  ✓ Tables truncated\n');
 
-  // Seed operations run outside the truncate transaction because they involve
-  // external network fetches that can take minutes. If any step fails, the
-  // truncate has already committed — re-run the full seed to recover.
+  // Data seeding runs outside the truncate transaction because:
+  // 1. Network fetches + large batch inserts can exceed transaction timeouts
+  // 2. Each seeder is idempotent (createMany on empty tables after truncate)
+  // 3. If a seeder fails, re-running the full seed script is safe
   await seedLibraries();
   await seedRecCenters();
   await seedTransitStops();
   await seed311();
   await seedCensusLanguage();
+  await seedPermits();
 
   console.log('\nSeed complete.');
 }

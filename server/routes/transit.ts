@@ -5,6 +5,7 @@ import { validateCommunityParam, communityKey } from '../utils/community.js';
 
 const router = Router();
 
+
 router.get('/', async (req, res) => {
   const cleaned = validateCommunityParam(req.query.community as string | undefined);
   if (!cleaned) {
@@ -16,6 +17,8 @@ router.get('/', async (req, res) => {
     const scores = await getTransitScores();
     const key = communityKey(cleaned);
     const score = scores.get(key);
+
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
 
     if (!score) {
       res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
