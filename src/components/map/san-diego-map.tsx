@@ -1,17 +1,18 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { Block311Report, BlockMetrics, CommunityAnchor } from '../../types';
+import type { Block311Report, BlockMetrics, CommunityAnchor, Permit } from '../../types';
 import { norm, scoreToColor } from '../../utils/community';
 import {
   AnchorPopupContent,
   TransitPopupContent,
   BlockPopupContent,
   ReportPopupContent,
+  PermitPopupContent,
   STATUS_COLORS,
   reportStatus,
 } from './popup-content';
@@ -42,6 +43,7 @@ const orangeIcon = makePinIcon('#f97316');
 interface SanDiegoMapProps {
   libraries: CommunityAnchor[];
   recCenters: CommunityAnchor[];
+  permits: Permit[];
   neighborhoodBoundaries: FeatureCollection | null;
   selectedCommunity: string | null;
   onAnchorClick: (anchor: CommunityAnchor) => void;
@@ -161,6 +163,7 @@ const ReportMarkers = memo(function ReportMarkers({ reports }: { reports: Block3
 function SanDiegoMap({
   libraries,
   recCenters,
+  permits,
   neighborhoodBoundaries,
   selectedCommunity,
   onAnchorClick,
@@ -174,6 +177,9 @@ function SanDiegoMap({
   onToggleChoropleth,
   onCommunitySelect,
 }: SanDiegoMapProps) {
+  const [selectedPermit, setSelectedPermit] = useState<Permit | null>(null);
+  const permitPopupRef = useRef<L.Popup | null>(null);
+
   // Ref keeps click handlers current — onEachFeature binds once at GeoJSON mount,
   // so a direct closure would capture a stale onCommunitySelect.
   const onCommunitySelectRef = useRef(onCommunitySelect);
@@ -248,6 +254,10 @@ function SanDiegoMap({
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
           <span className="text-gray-700">Rec Center</span>
+        </li>
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-amber-500 shrink-0" />
+          <span className="text-gray-700">Permit</span>
         </li>
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
@@ -363,6 +373,27 @@ function SanDiegoMap({
           }}
         />
       )}
+
+      {/* Permit markers — amber circles with shared popup */}
+      {permits.map((permit) => (
+        <CircleMarker
+          key={`permit-${permit.id}`}
+          center={[permit.lat, permit.lng]}
+          radius={5}
+          pathOptions={{ color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.8, weight: 1 }}
+          eventHandlers={{ click: () => setSelectedPermit(permit) }}
+        />
+      ))}
+      {selectedPermit && (
+        <Popup
+          ref={permitPopupRef}
+          position={[selectedPermit.lat, selectedPermit.lng]}
+          eventHandlers={{ remove: () => setSelectedPermit(null) }}
+        >
+          <PermitPopupContent permit={selectedPermit} />
+        </Popup>
+      )}
+
 
       {/* Library markers — blue */}
       {libraries.map((lib) => (

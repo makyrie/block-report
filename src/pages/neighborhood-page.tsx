@@ -4,8 +4,8 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { generateReport, getPreGeneratedReport, getCitywideGaps } from '../api/client';
-import type { CommunityAnchor, CommunityReport, NeighborhoodProfile } from '../types';
+import { generateReport, getPreGeneratedReport, getPermits, getCitywideGaps } from '../api/client';
+import type { CommunityAnchor, CommunityReport, NeighborhoodProfile, Permit } from '../types';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
@@ -23,6 +23,7 @@ export default function NeighborhoodPage() {
   const [mobileView, setMobileView] = useState<'map' | 'info'>('map');
 
   const { libraries, recCenters, neighborhoodBoundaries, dataError } = useMapData();
+  const [permits, setPermits] = useState<Permit[]>([]);
 
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
     slug ? fromSlug(slug) : null,
@@ -47,6 +48,19 @@ export default function NeighborhoodPage() {
       setSelectedAnchor(null);
     }
   }, [slug]);
+
+  // Fetch permits filtered by selected community
+  useEffect(() => {
+    if (!selectedCommunity) {
+      setPermits([]);
+      return;
+    }
+    const controller = new AbortController();
+    getPermits(selectedCommunity, { signal: controller.signal })
+      .then(setPermits)
+      .catch((err: unknown) => { if (err instanceof Error && err.name !== 'AbortError') console.error(err); });
+    return () => controller.abort();
+  }, [selectedCommunity]);
 
   // Fetch access gap scores for choropleth on mount
   useEffect(() => {
@@ -311,6 +325,7 @@ export default function NeighborhoodPage() {
         <SanDiegoMap
           libraries={libraries}
           recCenters={recCenters}
+          permits={permits}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
           onAnchorClick={handleAnchorClickMobile}
