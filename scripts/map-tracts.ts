@@ -1,35 +1,5 @@
 import { prisma } from '../server/services/db.js';
-
-type Polygon = number[][][];
-interface CommunityFeature {
-  name: string;
-  polygons: Polygon[];
-}
-
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function pointInPolygon(lat: number, lng: number, ring: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-function findCommunity(lat: number, lng: number, communities: CommunityFeature[]): string | null {
-  for (const c of communities) {
-    for (const poly of c.polygons) {
-      if (pointInPolygon(lat, lng, poly[0])) return c.name;
-    }
-  }
-  return null;
-}
+import { findCommunity, parseCommunityFeatures } from './geo-helpers.js';
 
 async function main() {
   console.log('Fetching community boundaries...');
@@ -39,14 +9,7 @@ async function main() {
   if (!boundaryRes.ok) throw new Error(`Failed to fetch boundaries: ${boundaryRes.status}`);
   const boundaries = await boundaryRes.json();
 
-  const communities: CommunityFeature[] = [];
-  for (const feature of boundaries.features) {
-    const name = toTitleCase((feature.properties.cpname || feature.properties.name || '').trim());
-    if (!name) continue;
-    const geom = feature.geometry;
-    const polygons: Polygon[] = geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
-    communities.push({ name, polygons });
-  }
+  const communities = parseCommunityFeatures(boundaries);
   console.log(`  ${communities.length} community boundaries loaded`);
 
   // Fetch Census gazetteer for CA tracts (has INTPTLAT/INTPTLONG centroids)

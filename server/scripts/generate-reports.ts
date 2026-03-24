@@ -127,8 +127,6 @@ async function assembleProfile(community: string): Promise<NeighborhoodProfile |
       metrics,
       transit: {
         ...transit,
-        nearbyStopCount: transit.stopCount,
-        nearestStopDistance: 0,
         travelTimeToCityHall: (transit as Record<string, unknown>).travelTimeToCityHall as number | null ?? null,
       },
       demographics,
