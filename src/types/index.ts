@@ -48,6 +48,32 @@ export interface NeighborhoodProfile {
   } | null;
 }
 
+export interface TransitStop {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+}
+
+export interface NearbyOpenIssue {
+  serviceRequestId: string;
+  serviceName: string;
+  serviceNameDetail?: string;
+  streetAddress?: string;
+  dateRequested: string;
+  daysOpen: number;
+  distanceMiles: number;
+}
+
+export interface NearbyResource {
+  name: string;
+  type: 'library' | 'rec_center';
+  address: string;
+  distanceMiles: number;
+  phone?: string;
+  website?: string;
+}
+
 export interface TrendDataPoint {
   period: string;          // "YYYY-MM" format
   totalRequests: number;
@@ -83,13 +109,6 @@ export interface Permit {
   lng: number;
 }
 
-export interface TransitStop {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-}
-
 export interface Block311Report {
   id: string;
   lat: number;
@@ -112,9 +131,14 @@ export interface BlockMetrics {
   resolutionRate: number;
   avgDaysToResolve: number | null;
   topIssues: { category: string; count: number }[];
-  recentlyResolved: { category: string; date: string }[];
+  recentlyResolved?: { category: string; date: string }[];
   radiusMiles: number;
   reports: Block311Report[];
+  nearbyOpenIssues?: NearbyOpenIssue[];
+  nearbyResources?: NearbyResource[];
+  nearestAddress?: string | null;
+  communityName?: string | null;
+  truncated?: boolean;
 }
 
 export interface CommunityReport {

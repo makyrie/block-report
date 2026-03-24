@@ -9,7 +9,7 @@ import { communityKey } from '../utils/community.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Filesystem/DB-safe cache key: derives from communityKey() (the canonical
@@ -18,6 +18,15 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
  */
 function normalizeKey(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/** Build a deterministic cache key for address block reports */
+export function buildBlockCacheKey(lat: number, lng: number, radius: number, langCode: string): string {
+  const safeLat = Number(lat).toFixed(4);
+  const safeLng = Number(lng).toFixed(4);
+  const safeRadius = Math.min(2, Math.max(0.1, Number(radius) || 0.25));
+  const safeLang = normalizeKey(langCode);
+  return `addr_${safeLat}_${safeLng}_${safeRadius}_${safeLang}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +167,31 @@ export async function saveCachedBlockReport(anchorId: string, language: string, 
       error: err instanceof Error ? err.message : String(err),
       anchorId,
       language,
+    });
+  }
+}
+
+/** Get a cached report by an arbitrary key (used for address block reports) */
+export async function getCachedReportByKey(key: string): Promise<CommunityReport | null> {
+  try {
+    return await strategy.get(key, 'default');
+  } catch (err) {
+    logger.error('Failed to read report cache by key', {
+      error: err instanceof Error ? err.message : String(err),
+      key,
+    });
+    return null;
+  }
+}
+
+/** Save a cached report by an arbitrary key (used for address block reports) */
+export async function saveCachedReportByKey(key: string, report: CommunityReport): Promise<void> {
+  try {
+    await strategy.set(key, 'default', report);
+  } catch (err) {
+    logger.error('Failed to write report cache by key', {
+      error: err instanceof Error ? err.message : String(err),
+      key,
     });
   }
 }

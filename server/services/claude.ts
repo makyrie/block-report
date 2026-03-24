@@ -105,9 +105,6 @@ function sanitizeBlockMetrics(metrics: BlockMetrics): BlockMetrics {
   if (metrics.topIssues && !Array.isArray(metrics.topIssues)) {
     throw new Error('blockMetrics.topIssues must be an array');
   }
-  if (metrics.recentlyResolved && !Array.isArray(metrics.recentlyResolved)) {
-    throw new Error('blockMetrics.recentlyResolved must be an array');
-  }
   return sanitizeStringFields(metrics) as BlockMetrics;
 }
 
@@ -196,7 +193,7 @@ async function callClaudeForReport(prompt: string, toolDescription: string, logC
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
+      max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }],
       tools: [reportTool],
       tool_choice: { type: 'tool', name: 'community_report' },
@@ -319,5 +316,101 @@ Keep the total report under 400 words. It should fit on one printed page.`;
     'Output a structured block-level community report centered on a civic anchor location',
     { anchor: anchor.name, community: anchor.community },
     signal,
+  );
+}
+
+export async function generateAddressBlockReport(
+  address: string,
+  lat: number,
+  lng: number,
+  communityName: string,
+  blockMetrics: BlockMetrics,
+  communityMetrics: { resolutionRate: number; totalRequests: number } | null,
+  language: string,
+): Promise<CommunityReport> {
+  // Sanitize inputs
+  if (typeof address !== 'string' || address.trim().length === 0) {
+    throw new Error('address must be a non-empty string');
+  }
+  if (address.length > 200) {
+    throw new Error('address must be 200 characters or fewer');
+  }
+  if (typeof communityName !== 'string' || communityName.trim().length === 0) {
+    throw new Error('communityName must be a non-empty string');
+  }
+  if (communityName.length > 100) {
+    throw new Error('communityName must be 100 characters or fewer');
+  }
+
+  const safeAddress = sanitizeStringFields(address, 200) as string;
+  const safeCommunity = sanitizeStringFields(communityName, 100) as string;
+  const safeMetrics = sanitizeBlockMetrics(blockMetrics);
+  const safeLang = sanitizeLanguage(language);
+
+  // Sanitize communityMetrics
+  let safeCommunityMetrics: { resolutionRate: number; totalRequests: number } | null = null;
+  if (communityMetrics) {
+    safeCommunityMetrics = {
+      resolutionRate: Math.min(1, Math.max(0, Number(communityMetrics.resolutionRate) || 0)),
+      totalRequests: Math.max(0, Math.floor(Number(communityMetrics.totalRequests) || 0)),
+    };
+  }
+
+  // Format nearby open issues for the prompt
+  const openIssuesList = (safeMetrics.nearbyOpenIssues ?? [])
+    .map((issue) => {
+      const location = issue.streetAddress ? ` at ${issue.streetAddress}` : ' nearby';
+      const detail = issue.serviceNameDetail ? ` (${issue.serviceNameDetail})` : '';
+      return `- ${issue.serviceName}${detail}${location} — reported ${issue.daysOpen} days ago`;
+    })
+    .join('\n');
+
+  // Format nearby resources for the prompt
+  const resourcesList = (safeMetrics.nearbyResources ?? [])
+    .map((r) => {
+      const typeLabel = r.type === 'library' ? 'Library' : 'Rec Center';
+      return `- ${r.name} (${typeLabel}) — ${r.distanceMiles.toFixed(2)} miles away, ${r.address}`;
+    })
+    .join('\n');
+
+  // Community-level comparison context
+  const communityContext = safeCommunityMetrics
+    ? `\nNeighborhood-level context for comparison:\nAcross ${safeCommunity} as a whole, the city has received ${safeCommunityMetrics.totalRequests.toLocaleString()} total 311 reports with a ${Math.round(safeCommunityMetrics.resolutionRate * 100)}% resolution rate.`
+    : '';
+
+  const prompt = `You are generating a block-level community brief for the area within ${safeMetrics.radiusMiles} miles of ${safeAddress} in the ${safeCommunity} neighborhood of San Diego.
+
+This brief is hyperlocal — it should feel like a report about the user's immediate surroundings, not a broad neighborhood summary. The headline should reference the specific address.
+
+Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
+
+Here is the 311 service request data for this block:
+- Total requests: ${safeMetrics.totalRequests}
+- Open: ${safeMetrics.openCount}
+- Resolved: ${safeMetrics.resolvedCount}
+- Resolution rate: ${Math.round(safeMetrics.resolutionRate * 100)}%
+- Average days to resolve: ${safeMetrics.avgDaysToResolve ?? 'N/A'}
+
+Top issues:
+${safeMetrics.topIssues.map((i) => `- ${i.category}: ${i.count}`).join('\n')}
+
+${openIssuesList ? `Specific open issues nearby:\n${openIssuesList}` : 'Few open issues reported near this block.'}
+
+${resourcesList ? `Nearest civic resources:\n${resourcesList}` : ''}
+${communityContext}
+
+Generate a report with these sections:
+1. **Welcome** — A 2-sentence greeting that references the area around ${safeAddress} in ${safeCommunity}. Make it feel personal — "Your Block Report."
+2. **Good News** — 2-3 positive things happening based on the data (resolved issues, high resolution rates, quick response times, etc.).
+3. **What's Happening Near You** — Reference 3-5 specific open issues nearby with street addresses or descriptions if available. If fewer than 3, note that few issues are reported near the block (which is good news).
+4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report mentioning nearest cross streets, visit nearby resources, attend community events.
+5. **Nearby Resources** — List the closest libraries and rec centers with distances and addresses.
+
+Keep the total report under 400 words. It should fit on one printed page.`;
+
+  return callClaudeForReport(
+    prompt,
+    'Output a structured block-level community report for a specific address',
+    { address: safeAddress, community: safeCommunity },
   );
 }

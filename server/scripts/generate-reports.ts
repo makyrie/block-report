@@ -10,6 +10,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor, StoredBlockReport } from '../../src/types/index.js';
 import { LANGUAGE_CODES } from '../../src/constants/languages.js';
+import { sanitizeFilename as sharedSanitizeFilename } from '../utils/language.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');
@@ -50,9 +51,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function sanitizeFilename(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-}
+const sanitizeFilename = sharedSanitizeFilename;
 
 async function getAllCommunities(): Promise<string[]> {
   const geojson = await fetchJSON<{

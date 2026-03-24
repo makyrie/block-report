@@ -76,7 +76,7 @@ export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: A
 
 export async function getPreGeneratedReport(community: string, language: string): Promise<CommunityReport | null> {
   try {
-    return await fetchJSON(`${BASE}/report?community=${encodeURIComponent(community)}&language=${encodeURIComponent(language)}`);
+    return await fetchJSON(`${BASE}/report/community?community=${encodeURIComponent(community)}&language=${encodeURIComponent(language)}`);
   } catch {
     return null; // 404 or error — no pre-generated report available
   }
@@ -88,6 +88,22 @@ export function generateReport(profile: NeighborhoodProfile, language: string, s
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile, language }),
     signal,
+  });
+}
+
+export function generateAddressBlockReport(
+  address: string,
+  lat: number,
+  lng: number,
+  communityName: string,
+  radiusMiles: number,
+  language: string,
+  communityMetrics?: { resolutionRate: number; totalRequests: number } | null,
+): Promise<CommunityReport> {
+  return fetchJSON(`${BASE}/report/generate-address-block`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address, lat, lng, communityName, radiusMiles, language, communityMetrics }),
   });
 }
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { getBlockMetrics } from '../services/block.js';
 import { logger } from '../logger.js';
+import { prisma } from '../services/db.js';
 import { haversineDistanceMiles, MILES_PER_LAT_DEG, MILES_PER_LNG_DEG } from '../utils/geo.js';
 import { classifyStatus } from '../utils/status.js';
 import type { BlockMetrics } from '../../src/types/index.js';

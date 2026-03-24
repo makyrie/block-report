@@ -3,7 +3,7 @@
  * component. Any visual change here MUST be reflected there and vice-versa.
  */
 import { QRCodeSVG } from 'qrcode.react';
-import type { CommunityReport, CommunityTrends, NeighborhoodProfile } from '../../types/index';
+import type { CommunityReport, CommunityTrends, NeighborhoodProfile, BlockMetrics } from '../../types/index';
 import {
   CheckCircleIcon,
   SmartphoneIcon,
@@ -21,6 +21,12 @@ interface FlyerLayoutProps {
   trends?: CommunityTrends | null;
   /** When true, the flyer is visible on screen (used in preview). Default: hidden (print-only). */
   inline?: boolean;
+  /** When true, renders block-level variant with address headline */
+  isBlockLevel?: boolean;
+  /** The street address for block-level reports */
+  blockAddress?: string;
+  /** Block metrics for block-level reports */
+  blockMetrics?: BlockMetrics;
   /** Base URL for links and QR codes. Defaults to window.location.origin in browser. Required for SSR. */
   baseUrl?: string;
 }
@@ -159,7 +165,7 @@ const FLYER_LABELS: Record<string, FlyerLabels> = {
   },
 };
 
-export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, trends, inline = false, baseUrl }: FlyerLayoutProps) {
+export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, trends, inline = false, isBlockLevel = false, blockAddress, blockMetrics, baseUrl }: FlyerLayoutProps) {
   const labels = FLYER_LABELS[report.language] ?? FLYER_LABELS.English;
   const locale = LANGUAGE_TO_LOCALE[report.language] ?? 'en-US';
   const formattedDate = new Date(report.generatedAt).toLocaleDateString(locale, {
@@ -185,10 +191,19 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, t
 
       {/* ── TOP BANNER ── */}
       <div className="border-b-4 border-black pb-3 mb-4">
-        <p className="text-[11px] font-bold uppercase tracking-[0.35em] mb-1">{labels.blockReport}</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.35em] mb-1">
+          {isBlockLevel ? 'Your Block Report' : labels.blockReport}
+        </p>
         <h1 className="text-[32px] font-black leading-none">
-          {report.neighborhoodName}
+          {isBlockLevel && blockAddress
+            ? `Around ${blockAddress}`
+            : report.neighborhoodName}
         </h1>
+        {isBlockLevel && blockAddress && (
+          <p className="text-[15px] mt-0.5 font-medium text-gray-700">
+            {report.neighborhoodName}
+          </p>
+        )}
         <p className="text-[15px] mt-1.5 font-medium">
           {formattedDate}
         </p>
@@ -200,20 +215,24 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, t
       </p>
 
       {/* ── BIG NUMBER CARDS ── */}
-      {metrics && (
+      {(metrics || (isBlockLevel && blockMetrics)) && (
         <div className="grid grid-cols-3 gap-4 mb-5">
           <div className="border-2 border-black rounded-lg p-4 text-center">
             <div className="text-[36px] font-black leading-none">
-              {metrics.totalRequests311.toLocaleString()}
+              {isBlockLevel && blockMetrics
+                ? blockMetrics.totalReports.toLocaleString()
+                : metrics!.totalRequests311.toLocaleString()}
             </div>
             <div className="text-[12px] mt-1.5 font-semibold uppercase tracking-wide">
-              {labels.issuesReported}
+              {isBlockLevel ? 'Nearby Reports' : labels.issuesReported}
             </div>
           </div>
           <div className="border-2 border-black rounded-lg p-4 text-center">
             <div className="text-[36px] font-black leading-none">
-              {resolutionPct}%
-              {trends?.summary && (
+              {isBlockLevel && blockMetrics
+                ? Math.round(blockMetrics.resolutionRate * 100)
+                : resolutionPct}%
+              {!isBlockLevel && trends?.summary && (
                 <span className={`text-sm ml-1 ${
                   trends.summary.direction === 'improving' ? 'text-green-600' :
                   trends.summary.direction === 'declining' ? 'text-red-600' : 'text-gray-500'
@@ -229,7 +248,9 @@ export function FlyerLayout({ report, neighborhoodSlug, metrics, topLanguages, t
           </div>
           <div className="border-2 border-black rounded-lg p-4 text-center">
             <div className="text-[36px] font-black leading-none">
-              {avgDays}
+              {isBlockLevel && blockMetrics
+                ? (blockMetrics.avgDaysToResolve != null ? Math.round(blockMetrics.avgDaysToResolve) : '\u2014')
+                : avgDays}
             </div>
             <div className="text-[12px] mt-1.5 font-semibold uppercase tracking-wide">
               {labels.avgDaysToFix}

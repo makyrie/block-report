@@ -17,7 +17,7 @@ vi.mock('../logger.js', () => ({
 // Set env before import
 process.env.ANTHROPIC_API_KEY = 'test-key';
 
-import type { NeighborhoodProfile } from '../../types/index.js';
+import type { NeighborhoodProfile } from '../../src/types/index.js';
 
 const validProfile: NeighborhoodProfile = {
   communityName: 'Mira Mesa',

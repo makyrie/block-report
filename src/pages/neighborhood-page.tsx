@@ -4,8 +4,8 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { get311Trends, getPermits, getCitywideGaps } from '../api/client';
-import type { CommunityAnchor, CommunityTrends, Permit } from '../types';
+import { get311Trends, getPermits, getCitywideGaps, generateAddressBlockReport } from '../api/client';
+import type { CommunityAnchor, CommunityReport, CommunityTrends, Permit } from '../types';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
@@ -63,6 +63,12 @@ export default function NeighborhoodPage() {
   // Ref to avoid stale closure in the slug-sync effect below
   const selectedCommunityRef = useRef(selectedCommunity);
   selectedCommunityRef.current = selectedCommunity;
+
+  // Block-level report state
+  const [blockReport, setBlockReport] = useState<CommunityReport | null>(null);
+  const [blockReportLoading, setBlockReportLoading] = useState(false);
+  const [blockReportError, setBlockReportError] = useState<string | null>(null);
+  const blockReportGeneratingRef = useRef(false);
 
   // Sync URL -> state when slug changes (e.g. browser back/forward)
   useEffect(() => {
@@ -141,6 +147,8 @@ export default function NeighborhoodPage() {
   const handleMapClick = useCallback((lat: number, lng: number) => {
     setPinnedLocation({ lat, lng });
     setBlockData(null);
+    setBlockReport(null);
+    setBlockReportError(null);
 
     if (neighborhoodBoundaries) {
       const detected = findCommunityAtPoint(lat, lng, neighborhoodBoundaries);
@@ -161,6 +169,33 @@ export default function NeighborhoodPage() {
     [],
   );
 
+  const handleGenerateBlockReport = useCallback(async () => {
+    if (!pinnedLocation || !blockData || blockReportGeneratingRef.current) return;
+    blockReportGeneratingRef.current = true;
+
+    const address = blockData.nearestAddress || `${pinnedLocation.lat.toFixed(4)}, ${pinnedLocation.lng.toFixed(4)}`;
+    const community = blockData.communityName || selectedCommunity || 'San Diego';
+
+    setBlockReportLoading(true);
+    setBlockReportError(null);
+    try {
+      const result = await generateAddressBlockReport(
+        address,
+        pinnedLocation.lat,
+        pinnedLocation.lng,
+        community,
+        blockRadius,
+        reportLang,
+        metrics ? { resolutionRate: metrics.resolutionRate, totalRequests: metrics.totalRequests311 } : null,
+      );
+      setBlockReport(result);
+    } catch (err) {
+      setBlockReportError(err instanceof Error ? err.message : 'Failed to generate block report');
+    } finally {
+      blockReportGeneratingRef.current = false;
+      setBlockReportLoading(false);
+    }
+  }, [pinnedLocation, blockData, blockRadius, selectedCommunity, reportLang, metrics]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">
@@ -265,6 +300,22 @@ export default function NeighborhoodPage() {
                 </button>
               ))}
             </div>
+            {blockData && !blockLoading && (
+              <button
+                type="button"
+                onClick={handleGenerateBlockReport}
+                disabled={blockReportLoading}
+                className="mt-2 w-full rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {blockReportLoading ? 'Generating...' : 'Generate Block Report'}
+              </button>
+            )}
+            {blockData?.truncated && (
+              <p className="mt-1 text-xs text-amber-600">Data was capped at 5,000 records. Results may be incomplete for this radius.</p>
+            )}
+            {blockReportError && (
+              <p className="mt-1 text-xs text-red-600">{blockReportError}</p>
+            )}
           </div>
         )}
         <SanDiegoMap
@@ -323,13 +374,16 @@ export default function NeighborhoodPage() {
       </div>
 
       {/* Print-only flyer — rendered outside overflow containers so print.css can position it */}
-      {report && (
+      {(blockReport || report) && (
         <FlyerLayout
-          report={report}
-          neighborhoodSlug={toSlug(report.neighborhoodName)}
-          metrics={metrics}
-          topLanguages={topLanguages}
-          trends={trends}
+          report={blockReport || report!}
+          neighborhoodSlug={toSlug((blockReport || report!).neighborhoodName)}
+          metrics={blockReport ? undefined : metrics}
+          topLanguages={blockReport ? undefined : topLanguages}
+          trends={blockReport ? undefined : trends}
+          isBlockLevel={!!blockReport}
+          blockAddress={blockReport && blockData ? (blockData.nearestAddress || undefined) : undefined}
+          blockMetrics={blockReport ? blockData || undefined : undefined}
         />
       )}
     </div>
