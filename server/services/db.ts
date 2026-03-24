@@ -67,4 +67,3 @@ async function disconnect() {
 
 process.on('SIGTERM', disconnect);
 process.on('SIGINT', disconnect);
-process.on('beforeExit', disconnect);

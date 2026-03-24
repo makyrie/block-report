@@ -82,7 +82,6 @@ export default function NeighborhoodPage() {
 
 
   // Clear report when community or language changes
-  const generatingRef = useRef(false);
   useEffect(() => {
     setReport(null);
     setReportError(null);
@@ -99,11 +98,11 @@ export default function NeighborhoodPage() {
   accessGapRef.current = accessGap;
   const reportRef = useRef(report);
   reportRef.current = report;
+  const generatingRef = useRef(false);
 
   // Auto-fetch pre-generated report, falling back to on-demand generation
   useEffect(() => {
     if (!selectedCommunity) return;
-    if (generatingRef.current) return;
 
     const controller = new AbortController();
     setReportLoading(true);
@@ -203,7 +202,7 @@ export default function NeighborhoodPage() {
   );
 
   const handleGenerateReport = useCallback(async (language: string) => {
-    if (!selectedCommunity || !metrics) return;
+    if (!selectedCommunity || !metrics || reportLoading) return;
 
     // Cancel any previous in-flight manual generation
     manualGenerateControllerRef.current?.abort();
@@ -225,7 +224,7 @@ export default function NeighborhoodPage() {
     } finally {
       if (!controller.signal.aborted) setReportLoading(false);
     }
-  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
+  }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap, reportLoading]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">

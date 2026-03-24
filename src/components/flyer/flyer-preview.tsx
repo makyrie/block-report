@@ -69,7 +69,7 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
           {/* Hover overlay */}
           <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/5 transition-colors rounded">
             <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm text-gray-800 text-sm font-medium px-4 py-2 rounded-full shadow">
-              Click to view full size
+              {t('flyer.clickFullSize')}
             </span>
           </div>
         </button>
@@ -99,7 +99,7 @@ export function FlyerPreview({ report, metrics, topLanguages }: FlyerPreviewProp
             className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <ExpandIcon />
-            Full Size
+            {t('flyer.fullSize')}
           </button>
         </div>
         {downloadError && (
@@ -175,7 +175,7 @@ function FlyerModal({
       <div className="relative bg-white rounded-lg shadow-2xl max-w-[680px] w-full my-4">
         {/* Modal header */}
         <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b border-gray-200 px-4 py-3 rounded-t-lg">
-          <h2 className="text-sm font-semibold text-gray-800">Flyer Preview</h2>
+          <h2 className="text-sm font-semibold text-gray-800">{t('flyer.previewTitle')}</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"

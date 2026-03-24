@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { generateReport, generateBlockReport } from '../services/claude.js';
+import { generateReport, generateBlockReport, CONTROL_CHAR_RE } from '../services/claude.js';
 import { generatePdf } from '../services/pdf/index.js';
 import { logger } from '../logger.js';
 import type { CommunityReport, NeighborhoodProfile } from '../../src/types/index.js';
@@ -204,6 +204,11 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;
     }
+    if (typeof blockMetrics !== 'object' || blockMetrics === null ||
+        typeof blockMetrics.totalRequests !== 'number' || typeof blockMetrics.radiusMiles !== 'number') {
+      res.status(400).json({ error: 'blockMetrics must be an object with numeric totalRequests and radiusMiles' });
+      return;
+    }
 
     // Validate anchor fields to prevent prompt injection via user-controlled strings
     // Work on a copy with only allowed keys to prevent prototype pollution and prompt bloat
@@ -215,7 +220,6 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       }
     }
     const MAX_FIELD_LEN = 200;
-    const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
     const ANCHOR_ID_RE = /^[a-zA-Z0-9_-]+$/;
     const VALID_ANCHOR_TYPES = new Set(['library', 'rec_center']);
     for (const field of ['id', 'name', 'address', 'community', 'type'] as const) {

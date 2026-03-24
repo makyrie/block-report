@@ -90,3 +90,28 @@ export function generateReport(profile: NeighborhoodProfile, language: string, s
     signal,
   });
 }
+
+
+export async function downloadPdf(
+  report: CommunityReport,
+  neighborhoodSlug: string,
+  metrics?: NeighborhoodProfile['metrics'] | null,
+  topLanguages?: { language: string; percentage: number }[],
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const res = await fetch(`${BASE}/report/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report, neighborhoodSlug, metrics, topLanguages }),
+    signal,
+  });
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body.error) message = body.error;
+    } catch { /* use default message */ }
+    throw new Error(message);
+  }
+  return res.blob();
+}

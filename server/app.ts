@@ -14,6 +14,7 @@ import reportRouter from './routes/report.js';
 import transitRouter from './routes/transit.js';
 import gapAnalysisRouter from './routes/gap-analysis.js';
 import blockRouter from './routes/block.js';
+import pdfRouter from './routes/pdf.js';
 
 const app = express();
 
@@ -47,7 +48,7 @@ app.use(cors({
   methods: ['GET', 'POST'],
 }));
 
-app.use(express.json({ limit: '50kb' }));
+app.use(express.json({ limit: '200kb' }));
 
 // Liveness probe — no DB, instant response for load balancers
 app.get('/api/health', (_req, res) => {
@@ -119,6 +120,7 @@ app.use('/api/locations', locationsRouter);
 app.use('/api/311', metricsRouter);
 app.use('/api/demographics', demographicsRouter);
 app.use('/api/report', reportRouter);
+app.use('/api/report', pdfRouter);
 app.use('/api/transit', transitRouter);
 app.use('/api/access-gap', gapAnalysisRouter);
 app.use('/api/block', blockRouter);
@@ -164,6 +166,15 @@ app.get('/api/cron/purge-cache', async (req, res) => {
 // API 404 catch-all — unknown API paths return JSON instead of falling through to SPA
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });
+});
+
+// Global error handler — catches unhandled errors and returns JSON instead of Express's default HTML 500
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error('Unhandled error', {
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 export default app;

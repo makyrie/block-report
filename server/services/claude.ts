@@ -5,29 +5,56 @@ import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
 
+export const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
+
+/** Sanitize a language string to prevent prompt injection */
+function sanitizeLanguage(language: string): string {
+  return language.slice(0, 50).replace(CONTROL_CHAR_RE, '');
+}
+
 const MAX_RECURSION_DEPTH = 10;
+const MAX_KEYS = 100;
+const MAX_ARRAY_ITEMS = 50;
+
+interface SanitizeOptions {
+  maxStringLen?: number;
+  maxArrayItems?: number;
+  maxDepth?: number;
+  maxKeys?: number;
+}
 
 /** Strip any string values longer than maxLen and remove control characters */
-function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
-  if (depth > MAX_RECURSION_DEPTH) {
-    throw new Error(`Object nesting too deep (max ${MAX_RECURSION_DEPTH} levels)`);
+export function sanitizeStringFields(
+  obj: unknown,
+  maxLen?: number,
+  depth?: number,
+  opts?: SanitizeOptions,
+): unknown {
+  const maxStringLen = opts?.maxStringLen ?? maxLen ?? 500;
+  const maxArrayItems = opts?.maxArrayItems ?? MAX_ARRAY_ITEMS;
+  const maxDepth = opts?.maxDepth ?? MAX_RECURSION_DEPTH;
+  const maxKeys = opts?.maxKeys ?? MAX_KEYS;
+  const currentDepth = depth ?? 0;
+
+  if (currentDepth > maxDepth) {
+    throw new Error(`Object nesting too deep (max ${maxDepth} levels)`);
   }
   if (typeof obj === 'string') {
-    return obj.slice(0, maxLen).replace(/[\x00-\x1f\x7f]/g, '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return obj.slice(0, maxStringLen).replace(CONTROL_CHAR_RE, '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   if (Array.isArray(obj)) {
-    return obj.slice(0, 50).map(item => sanitizeStringFields(item, maxLen, depth + 1));
+    return obj.slice(0, maxArrayItems).map(item => sanitizeStringFields(item, undefined, currentDepth + 1, { maxStringLen, maxArrayItems, maxDepth, maxKeys }));
   }
   if (obj !== null && typeof obj === 'object') {
     const sanitized: Record<string, unknown> = Object.create(null);
     const keys = Object.keys(obj);
-    if (keys.length > 100) {
-      throw new Error('Object has too many keys (max 100)');
+    if (keys.length > maxKeys) {
+      throw new Error(`Object has too many keys (max ${maxKeys})`);
     }
     const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
     for (const key of keys) {
       if (DANGEROUS_KEYS.has(key)) continue;
-      sanitized[key] = sanitizeStringFields((obj as Record<string, unknown>)[key], maxLen, depth + 1);
+      sanitized[key] = sanitizeStringFields((obj as Record<string, unknown>)[key], undefined, currentDepth + 1, { maxStringLen, maxArrayItems, maxDepth, maxKeys });
     }
     return sanitized;
   }
@@ -192,11 +219,6 @@ async function callClaudeForReport(prompt: string, toolDescription: string, logC
     });
     throw error;
   }
-}
-
-/** Sanitize a language string for prompt embedding */
-function sanitizeLanguage(language: string): string {
-  return language.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, '');
 }
 
 export async function generateReport(
