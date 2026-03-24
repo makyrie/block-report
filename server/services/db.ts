@@ -13,7 +13,7 @@ let _prisma: PrismaClient | null = null;
  * Does NOT crash at module load if DATABASE_URL is missing — allows local dev
  * without a database for frontend-only work.
  */
-export function getPrisma(): PrismaClient {
+function getPrisma(): PrismaClient {
   if (_prisma) return _prisma;
 
   const connectionString = process.env.DATABASE_URL;

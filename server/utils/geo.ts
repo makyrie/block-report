@@ -4,14 +4,15 @@ import type { Polygon, MultiPolygon } from 'geojson';
 
 type PolygonLike = Polygon | MultiPolygon;
 
-// Ray-casting point-in-polygon test
-// Coordinates: lat/lng for the point, polygon ring as [lng, lat] pairs (GeoJSON convention)
+// Ray-casting point-in-polygon test.
+// Point: (lat, lng). Polygon ring: GeoJSON [lng, lat] pairs.
+// Internally maps to (x=lng, y=lat) for the ray-cast comparison.
 export function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+    const [pLng_i, pLat_i] = polygon[i]; // GeoJSON: [lng, lat]
+    const [pLng_j, pLat_j] = polygon[j];
+    if ((pLat_i > lat) !== (pLat_j > lat) && lng < ((pLng_j - pLng_i) * (lat - pLat_i)) / (pLat_j - pLat_i) + pLng_i) {
       inside = !inside;
     }
   }
@@ -19,7 +20,7 @@ export function pointInPolygon(lat: number, lng: number, polygon: number[][]): b
 }
 
 // Test whether a point is inside a GeoJSON Feature geometry (Polygon or MultiPolygon)
-// Correctly handles polygon holes — point must be inside outer ring and outside all holes
+// Correctly handles polygon holes: point must be inside outer ring AND outside all holes
 export function pointInFeature(
   lat: number,
   lng: number,
@@ -34,14 +35,17 @@ export function pointInFeature(
     return true;
   }
   if (geometry.type === 'MultiPolygon') {
-    return (geometry.coordinates as number[][][][]).some((poly) => {
+    for (const poly of geometry.coordinates as number[][][][]) {
       const [outer, ...holes] = poly;
-      if (!pointInPolygon(lat, lng, outer)) return false;
-      for (const hole of holes) {
-        if (pointInPolygon(lat, lng, hole)) return false;
+      if (pointInPolygon(lat, lng, outer)) {
+        let inHole = false;
+        for (const hole of holes) {
+          if (pointInPolygon(lat, lng, hole)) { inHole = true; break; }
+        }
+        if (!inHole) return true;
       }
-      return true;
-    });
+    }
+    return false;
   }
   return false;
 }
