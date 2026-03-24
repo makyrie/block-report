@@ -17,6 +17,8 @@
     "generate-reports": "node --env-file=.env --import=tsx server/scripts/generate-reports.ts",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
+    "mcp": "node --env-file=.env --import=tsx server/mcp/index.ts",
+    "mcp:http": "node --env-file=.env --import=tsx server/mcp/http.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -26,6 +28,7 @@
   "packageManager": "pnpm@10.20.0",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "@neondatabase/serverless": "~0.10.4",
     "@prisma/adapter-neon": "^5.22.0",
     "@prisma/client": "^5.22.0",
@@ -40,7 +43,8 @@
     "react-dom": "^19.2.4",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.13.1",
-    "ws": "^8.19.0"
+    "ws": "^8.19.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@axe-core/react": "^4.11.1",
