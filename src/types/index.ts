@@ -68,6 +68,21 @@ export interface CommunityTrends {
   summary: TrendSummary;
 }
 
+export interface Permit {
+  id: number;
+  permit_number: string;
+  permit_type: string | null;
+  description: string | null;
+  date_issued: string | null;
+  status: string | null;
+  street_address: string | null;
+  community: string | null;
+  /** Non-nullable: backend filters out permits without coordinates */
+  lat: number;
+  /** Non-nullable: backend filters out permits without coordinates */
+  lng: number;
+}
+
 export interface TransitStop {
   id: string;
   name: string;
@@ -75,15 +90,31 @@ export interface TransitStop {
   lng: number;
 }
 
+export interface Block311Report {
+  id: string;
+  lat: number;
+  lng: number;
+  category: string;
+  categoryDetail: string | null;
+  status: string;
+  statusCategory: 'open' | 'resolved' | 'referred';
+  dateRequested: string;
+  dateClosed: string | null;
+  address: string | null;
+}
+
+
 export interface BlockMetrics {
-  totalRequests: number;
+  totalReports: number;
   openCount: number;
   resolvedCount: number;
+  referredCount: number;
   resolutionRate: number;
   avgDaysToResolve: number | null;
   topIssues: { category: string; count: number }[];
   recentlyResolved: { category: string; date: string }[];
   radiusMiles: number;
+  reports: Block311Report[];
 }
 
 export interface CommunityReport {
@@ -113,6 +144,17 @@ export interface CitywideCommunity {
   rank: number;
   totalCommunities: number;
 }
+
+export const DEFAULT_TRANSIT: NeighborhoodProfile['transit'] = {
+  nearbyStopCount: 0,
+  nearestStopDistance: 0,
+  stopCount: 0,
+  agencyCount: 0,
+  agencies: [],
+  transitScore: 0,
+  cityAverage: 0,
+  travelTimeToCityHall: null,
+};
 
 export interface StoredBlockReport {
   anchorName: string;

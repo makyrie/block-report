@@ -1,4 +1,4 @@
-// Shared utility functions for citywide community features
+// Frontend community utilities — normalization and display helpers.
 
 // Sequential red-orange color ramp for access gap scores
 export const ACCESS_GAP_COLORS = ['#fee5d9', '#fcae91', '#fb6a4a', '#de2d26', '#a50f15'] as const;

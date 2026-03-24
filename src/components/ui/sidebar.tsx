@@ -373,18 +373,18 @@ export default function Sidebar({
           )}
 
           {/* Language suggestion based on demographics */}
-          {suggestedLangMeta && reportLang === 'English' && (
+          {suggestedLangCode && reportLang === 'en' && (
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
               <p className="text-sm text-blue-800 mb-2">
                 {t('sidebar.languageSuggestion', { language: suggestedLang!.language })}
               </p>
               <button
                 type="button"
-                onClick={() => setReportLang(suggestedLangMeta.label)}
+                onClick={() => setReportLang(suggestedLangCode)}
                 disabled={reportLoading}
                 className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
-                {t('sidebar.switchReportLang', { language: suggestedLangMeta.nativeLabel }) ?? `Switch report to ${suggestedLangMeta.nativeLabel}`}
+                {t('sidebar.switchReportLang', { language: suggestedLangMeta?.nativeLabel ?? '' }) ?? `Switch report to ${suggestedLangMeta?.nativeLabel ?? ''}`}
               </button>
             </div>
           )}
@@ -398,10 +398,10 @@ export default function Sidebar({
                   key={l.code}
                   type="button"
                   role="radio"
-                  aria-checked={reportLang === l.label}
-                  onClick={() => setReportLang(l.label)}
+                  aria-checked={reportLang === l.code}
+                  onClick={() => setReportLang(l.code)}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                    reportLang === l.label
+                    reportLang === l.code
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}

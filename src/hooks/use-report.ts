@@ -20,7 +20,7 @@ interface UseReportResult {
   report: CommunityReport | null;
   reportLoading: boolean;
   reportError: string | null;
-  regenerate: (language: string) => Promise<void>;
+  handleGenerateReport: (language: string) => Promise<void>;
 }
 
 /**
@@ -116,7 +116,7 @@ export function useReport({
     return () => { cancelled = true; };
   }, [community, reportLang, metrics, trends, trendsSettled, anchor, transitScore, topLanguages, accessGap]);
 
-  const regenerate = useCallback(async (language: string) => {
+  const handleGenerateReport = useCallback(async (language: string) => {
     if (!community || !metrics) return;
 
     const profile = buildNeighborhoodProfile({
@@ -141,5 +141,5 @@ export function useReport({
     }
   }, [community, anchor, metrics, topLanguages, transitScore, accessGap, trends]);
 
-  return { report, reportLoading, reportError, regenerate };
+  return { report, reportLoading, reportError, handleGenerateReport };
 }

@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { get311Trends } from '../api/client';
-import type { CommunityAnchor, CommunityTrends } from '../types';
+import { get311Trends, getPermits, getCitywideGaps } from '../api/client';
+import type { CommunityAnchor, CommunityTrends, Permit } from '../types';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
@@ -14,6 +14,7 @@ import { useMapData } from '../hooks/use-map-data';
 import { useCommunityData } from '../hooks/use-community-data';
 import { useBlockData } from '../hooks/use-block-data';
 import { useReport } from '../hooks/use-report';
+import { norm } from '../utils/community';
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -22,7 +23,9 @@ export default function NeighborhoodPage() {
   const [mobileView, setMobileView] = useState<'map' | 'info'>('map');
 
   const { libraries, recCenters, neighborhoodBoundaries, dataError } = useMapData();
+  const [permits, setPermits] = useState<Permit[]>([]);
 
+  // --- Community selection ---
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
     slug ? fromSlug(slug) : null,
   );
@@ -54,16 +57,49 @@ export default function NeighborhoodPage() {
     return () => { controller.abort(); };
   }, [selectedCommunity]);
 
+  const [accessGapScores, setAccessGapScores] = useState<Map<string, number>>(new Map());
+  const [showChoropleth, setShowChoropleth] = useState(false);
+
+  // Ref to avoid stale closure in the slug-sync effect below
+  const selectedCommunityRef = useRef(selectedCommunity);
+  selectedCommunityRef.current = selectedCommunity;
+
   // Sync URL -> state when slug changes (e.g. browser back/forward)
   useEffect(() => {
     const communityFromUrl = slug ? fromSlug(slug) : null;
-    if (communityFromUrl !== selectedCommunity) {
+    if (communityFromUrl !== selectedCommunityRef.current) {
       setSelectedCommunity(communityFromUrl);
       setSelectedAnchor(null);
     }
   }, [slug]);
 
-  const { report, reportLoading, reportError, regenerate: handleGenerateReport } = useReport({
+  // Fetch permits filtered by selected community
+  useEffect(() => {
+    if (!selectedCommunity) {
+      setPermits([]);
+      return;
+    }
+    const controller = new AbortController();
+    getPermits(selectedCommunity, { signal: controller.signal })
+      .then(setPermits)
+      .catch((err: unknown) => { if (err instanceof Error && err.name !== 'AbortError') console.error(err); });
+    return () => controller.abort();
+  }, [selectedCommunity]);
+
+  // Fetch access gap scores for choropleth on mount
+  useEffect(() => {
+    getCitywideGaps()
+      .then(({ ranking }) => {
+        const scoreMap = new Map<string, number>();
+        for (const r of ranking) {
+          scoreMap.set(norm(r.community), r.accessGapScore);
+        }
+        setAccessGapScores(scoreMap);
+      })
+      .catch(console.error);
+  }, []);
+
+  const { report, reportLoading, reportError, handleGenerateReport } = useReport({
     community: selectedCommunity,
     reportLang,
     metrics,
@@ -75,6 +111,7 @@ export default function NeighborhoodPage() {
     accessGap,
   });
 
+  // --- Event handlers ---
   const handleCommunityChange = useCallback(
     (community: string) => {
       if (community) {
@@ -94,7 +131,9 @@ export default function NeighborhoodPage() {
     (anchor: CommunityAnchor) => {
       setSelectedAnchor(anchor);
       setSelectedCommunity(anchor.community);
+      setMobileView('info');
       navigate(`/neighborhood/${toSlug(anchor.community)}`);
+      setMobileView('info');
     },
     [navigate],
   );
@@ -111,6 +150,17 @@ export default function NeighborhoodPage() {
       }
     }
   }, [neighborhoodBoundaries, selectedCommunity, navigate, setPinnedLocation, setBlockData]);
+
+  const handleAnchorClickMobile = useCallback(
+    (anchor: CommunityAnchor) => { handleAnchorClick(anchor); setMobileView('info'); },
+    [handleAnchorClick],
+  );
+
+  const handleToggleChoropleth = useCallback(
+    () => setShowChoropleth(prev => !prev),
+    [],
+  );
+
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">
@@ -220,14 +270,19 @@ export default function NeighborhoodPage() {
         <SanDiegoMap
           libraries={libraries}
           recCenters={recCenters}
+          permits={permits}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
-          onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}
+          onAnchorClick={handleAnchorClickMobile}
           onMapClick={handleMapClick}
           pinnedLocation={pinnedLocation}
           blockData={blockData}
           blockLoading={blockLoading}
           blockRadius={blockRadius}
+          accessGapScores={accessGapScores}
+          showChoropleth={showChoropleth}
+          onToggleChoropleth={handleToggleChoropleth}
+          onCommunitySelect={handleCommunityChange}
         />
       </main>
 
