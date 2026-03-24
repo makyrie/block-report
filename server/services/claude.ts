@@ -5,6 +5,85 @@ import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../logger.js';
 import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor } from '../../src/types/index.js';
 
+const MAX_RECURSION_DEPTH = 10;
+
+/** Strip any string values longer than maxLen and remove control characters */
+function sanitizeStringFields(obj: unknown, maxLen = 500, depth = 0): unknown {
+  if (depth > MAX_RECURSION_DEPTH) {
+    throw new Error(`Object nesting too deep (max ${MAX_RECURSION_DEPTH} levels)`);
+  }
+  if (typeof obj === 'string') {
+    return obj.slice(0, maxLen).replace(/[\x00-\x1f\x7f]/g, '');
+  }
+  if (Array.isArray(obj)) {
+    return obj.slice(0, 50).map(item => sanitizeStringFields(item, maxLen, depth + 1));
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const sanitized: Record<string, unknown> = {};
+    const keys = Object.keys(obj);
+    if (keys.length > 100) {
+      throw new Error('Object has too many keys (max 100)');
+    }
+    for (const key of keys) {
+      sanitized[key] = sanitizeStringFields((obj as Record<string, unknown>)[key], maxLen, depth + 1);
+    }
+    return sanitized;
+  }
+  return obj;
+}
+
+/** Validate and sanitize a NeighborhoodProfile before embedding in a prompt */
+function sanitizeProfile(profile: NeighborhoodProfile): NeighborhoodProfile {
+  if (typeof profile !== 'object' || profile === null) {
+    throw new Error('profile must be an object');
+  }
+  return sanitizeStringFields(profile) as NeighborhoodProfile;
+}
+
+/** Validate and sanitize BlockMetrics before embedding in a prompt */
+function sanitizeBlockMetrics(metrics: BlockMetrics): BlockMetrics {
+  if (typeof metrics !== 'object' || metrics === null) {
+    throw new Error('blockMetrics must be an object');
+  }
+  if (typeof metrics.totalRequests !== 'number' || typeof metrics.radiusMiles !== 'number') {
+    throw new Error('blockMetrics.totalRequests and radiusMiles must be numbers');
+  }
+  // Validate remaining numeric fields to prevent type confusion
+  for (const key of ['openCount', 'resolvedCount', 'resolutionRate', 'avgDaysToResolve'] as const) {
+    if (key in metrics && metrics[key as keyof BlockMetrics] != null && typeof metrics[key as keyof BlockMetrics] !== 'number') {
+      throw new Error(`blockMetrics.${key} must be a number`);
+    }
+  }
+  // Validate topIssues and recentlyResolved arrays contain expected shapes
+  if (metrics.topIssues && !Array.isArray(metrics.topIssues)) {
+    throw new Error('blockMetrics.topIssues must be an array');
+  }
+  return sanitizeStringFields(metrics) as BlockMetrics;
+}
+
+/** Validate and sanitize demographics before embedding in a prompt */
+function sanitizeDemographics(demographics: { topLanguages: { language: string; percentage: number }[] }): typeof demographics {
+  if (typeof demographics !== 'object' || demographics === null) {
+    throw new Error('demographics must be an object');
+  }
+  if (!Array.isArray(demographics.topLanguages)) {
+    throw new Error('demographics.topLanguages must be an array');
+  }
+  // Validate each language entry has expected types
+  for (const entry of demographics.topLanguages) {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('Each topLanguages entry must be an object');
+    }
+    if (typeof entry.language !== 'string') {
+      throw new Error('topLanguages[].language must be a string');
+    }
+    if (typeof entry.percentage !== 'number' || entry.percentage < 0 || entry.percentage > 100) {
+      throw new Error('topLanguages[].percentage must be a number between 0 and 100');
+    }
+  }
+  return sanitizeStringFields(demographics) as typeof demographics;
+}
+
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
   if (_client) return _client;
@@ -14,43 +93,42 @@ function getClient(): Anthropic {
       'ANTHROPIC_API_KEY is not set. Add it to your .env file.',
     );
   }
-  _client = new Anthropic({ apiKey });
+  _client = new Anthropic({ apiKey, timeout: 40_000 }); // 40s timeout — leaves 20s headroom for cold start within Vercel's 60s limit
   return _client;
 }
 
-// Shared tool schema — used by all report generation functions
-function makeReportTool(description: string, fieldOverrides?: Record<string, { description: string }>): Anthropic.Messages.Tool {
-  const overrides = fieldOverrides ?? {};
+/** Shared tool schema for community report output — used by both community and block report generators */
+function makeReportTool(description: string): Anthropic.Messages.Tool {
   return {
     name: 'community_report',
     description,
     input_schema: {
       type: 'object' as const,
       properties: {
-        neighborhoodName: { type: 'string', description: overrides.neighborhoodName?.description ?? 'Name of the neighborhood' },
-        language: { type: 'string', description: overrides.language?.description ?? 'Language the report is written in' },
-        summary: { type: 'string', description: overrides.summary?.description ?? 'A 2-sentence welcome greeting' },
+        neighborhoodName: { type: 'string', description: 'Name of the neighborhood' },
+        language: { type: 'string', description: 'Language the report is written in' },
+        summary: { type: 'string', description: 'A 2-sentence welcome greeting that names the neighborhood' },
         goodNews: {
           type: 'array',
           items: { type: 'string' },
-          description: overrides.goodNews?.description ?? '2-3 positive things happening based on the data',
+          description: '2-3 positive things happening based on the data',
         },
         topIssues: {
           type: 'array',
           items: { type: 'string' },
-          description: overrides.topIssues?.description ?? 'Top 3 issues being reported via 311, framed constructively',
+          description: 'Top 3 issues being reported via 311, framed constructively',
         },
         howToParticipate: {
           type: 'array',
           items: { type: 'string' },
-          description: overrides.howToParticipate?.description ?? '3-4 concrete actions residents can take to get involved',
+          description: '3-4 concrete actions residents can take to get involved',
         },
         contactInfo: {
           type: 'object',
           properties: {
             councilDistrict: { type: 'string' },
             phone311: { type: 'string' },
-            anchorLocation: { type: 'string', description: overrides.anchorLocation?.description ?? 'Nearest library or rec center with address' },
+            anchorLocation: { type: 'string', description: 'Nearest library or rec center with address' },
           },
           required: ['councilDistrict', 'phone311', 'anchorLocation'],
         },
@@ -60,34 +138,17 @@ function makeReportTool(description: string, fieldOverrides?: Record<string, { d
   };
 }
 
-/** Validate that Claude's tool_use response matches CommunityReport shape */
-function validateReportShape(input: unknown): input is Omit<CommunityReport, 'generatedAt'> {
-  if (typeof input !== 'object' || input === null) return false;
-  const obj = input as Record<string, unknown>;
-  return (
-    typeof obj.neighborhoodName === 'string' &&
-    typeof obj.language === 'string' &&
-    typeof obj.summary === 'string' &&
-    Array.isArray(obj.goodNews) &&
-    Array.isArray(obj.topIssues) &&
-    Array.isArray(obj.howToParticipate) &&
-    typeof obj.contactInfo === 'object' &&
-    obj.contactInfo !== null &&
-    typeof (obj.contactInfo as Record<string, unknown>).councilDistrict === 'string' &&
-    typeof (obj.contactInfo as Record<string, unknown>).phone311 === 'string' &&
-    typeof (obj.contactInfo as Record<string, unknown>).anchorLocation === 'string'
-  );
-}
-
-// Shared Claude API call + response extraction
-async function callClaudeForReport(prompt: string, tool: Anthropic.Messages.Tool, logContext: Record<string, string>): Promise<CommunityReport> {
+/** Call Claude with a prompt and report tool, returning the structured report */
+async function callClaudeForReport(prompt: string, toolDescription: string, logContext: Record<string, string>): Promise<CommunityReport> {
   const client = getClient();
+  const reportTool = makeReportTool(toolDescription);
+
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }],
-      tools: [tool],
+      tools: [reportTool],
       tool_choice: { type: 'tool', name: 'community_report' },
     });
 
@@ -96,16 +157,8 @@ async function callClaudeForReport(prompt: string, tool: Anthropic.Messages.Tool
       throw new Error('No tool use block in response');
     }
 
-    if (!validateReportShape(toolBlock.input)) {
-      logger.error('Claude response does not match expected report structure', {
-        keys: Object.keys(toolBlock.input as object),
-        ...logContext,
-      });
-      throw new Error('Claude response does not match expected report structure');
-    }
-
     return {
-      ...toolBlock.input,
+      ...(toolBlock.input as Omit<CommunityReport, 'generatedAt'>),
       generatedAt: new Date().toISOString(),
     };
   } catch (error) {
@@ -118,72 +171,9 @@ async function callClaudeForReport(prompt: string, tool: Anthropic.Messages.Tool
   }
 }
 
-function sanitizeProfile(profile: NeighborhoodProfile): NeighborhoodProfile {
-  const s = (v: unknown, max: number) => sanitizeString(v, max);
-  const num = (v: unknown, min = 0, max = Infinity) => Math.min(max, Math.max(min, Number(v) || 0));
-
-  return {
-    communityName: sanitizePromptValue(profile.communityName, 100) || 'Unknown',
-    anchor: {
-      id: s(profile.anchor.id, 50),
-      name: sanitizePromptValue(profile.anchor.name, 100),
-      type: profile.anchor.type === 'library' ? 'library' : 'rec_center',
-      lat: num(profile.anchor.lat, -90, 90),
-      lng: num(profile.anchor.lng, -180, 180),
-      address: s(profile.anchor.address, 200),
-      phone: profile.anchor.phone ? s(profile.anchor.phone, 20) : undefined,
-      website: profile.anchor.website ? s(profile.anchor.website, 200) : undefined,
-      community: s(profile.anchor.community, 100),
-    },
-    metrics: {
-      totalRequests311: num(profile.metrics.totalRequests311),
-      resolvedCount: num(profile.metrics.resolvedCount),
-      resolutionRate: num(profile.metrics.resolutionRate, 0, 1),
-      avgDaysToResolve: num(profile.metrics.avgDaysToResolve),
-      topIssues: (Array.isArray(profile.metrics.topIssues) ? profile.metrics.topIssues : []).slice(0, 10).map((i) => ({
-        category: s(i.category, 100),
-        count: Math.max(0, Math.floor(Number(i.count) || 0)),
-      })),
-      recentlyResolved: (Array.isArray(profile.metrics.recentlyResolved) ? profile.metrics.recentlyResolved : []).slice(0, 10).map((r) => ({
-        category: s(r.category, 100),
-        date: s(r.date, 30),
-      })),
-      population: num(profile.metrics.population),
-      requestsPer1000Residents: profile.metrics.requestsPer1000Residents != null ? num(profile.metrics.requestsPer1000Residents) : null,
-      goodNews: (Array.isArray(profile.metrics.goodNews) ? profile.metrics.goodNews : []).slice(0, 10).map((g) => s(g, 300)),
-    },
-    transit: {
-      nearbyStopCount: num(profile.transit.nearbyStopCount),
-      nearestStopDistance: num(profile.transit.nearestStopDistance),
-      stopCount: num(profile.transit.stopCount),
-      agencyCount: num(profile.transit.agencyCount),
-      agencies: (Array.isArray(profile.transit.agencies) ? profile.transit.agencies : []).slice(0, 10).map((a) => s(a, 100)),
-      transitScore: num(profile.transit.transitScore),
-      cityAverage: num(profile.transit.cityAverage),
-      travelTimeToCityHall: profile.transit.travelTimeToCityHall != null ? num(profile.transit.travelTimeToCityHall) : null,
-    },
-    demographics: {
-      topLanguages: sanitizeTopLanguages(profile.demographics?.topLanguages),
-    },
-    accessGap: profile.accessGap ? {
-      accessGapScore: num(profile.accessGap.accessGapScore),
-      signals: {
-        lowEngagement: profile.accessGap.signals.lowEngagement != null ? num(profile.accessGap.signals.lowEngagement) : null,
-        lowTransit: profile.accessGap.signals.lowTransit != null ? num(profile.accessGap.signals.lowTransit) : null,
-        highNonEnglish: profile.accessGap.signals.highNonEnglish != null ? num(profile.accessGap.signals.highNonEnglish) : null,
-      },
-      rank: num(profile.accessGap.rank),
-      totalCommunities: num(profile.accessGap.totalCommunities),
-    } : null,
-  };
-}
-
-function sanitizeTopLanguages(langs: unknown): { language: string; percentage: number }[] {
-  if (!Array.isArray(langs)) return [];
-  return langs.slice(0, 20).map((l) => ({
-    language: sanitizeString(l?.language, 50).replace(/[^a-zA-Z /()-]/g, '') || 'Unknown',
-    percentage: Math.min(100, Math.max(0, Number(l?.percentage) || 0)),
-  }));
+/** Sanitize a language string for prompt embedding */
+function sanitizeLanguage(language: string): string {
+  return language.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, '');
 }
 
 export async function generateReport(
@@ -200,15 +190,16 @@ export async function generateReport(
   if (profile.communityName.length > 100) {
     throw new Error('communityName must be 100 characters or fewer');
   }
-  // Sanitize all fields
-  profile = sanitizeProfile(profile);
 
-  const prompt = `You are generating a community report for the ${profile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
+  const safeLang = sanitizeLanguage(language);
+  const safeProfile = sanitizeProfile(profile);
 
-Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
+  const prompt = `You are generating a community report for the ${safeProfile.communityName} neighborhood of San Diego. The report will be printed and posted in the community — at a library, rec center, laundromat, or wherever neighbors gather.
+
+Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the data for this neighborhood:
-${JSON.stringify(profile, null, 2)}
+${JSON.stringify(safeProfile)}
 
 Generate a report with these sections:
 1. **Welcome** — A 2-sentence greeting that names the neighborhood.
@@ -220,12 +211,11 @@ Generate a report with these sections:
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 
-  const tool = makeReportTool(
+  return callClaudeForReport(
+    prompt,
     'Output a structured community report for a San Diego neighborhood',
-    { summary: { description: 'A 2-sentence welcome greeting that names the neighborhood' } },
+    { community: profile.communityName },
   );
-
-  return callClaudeForReport(prompt, tool, { community: profile.communityName });
 }
 
 export async function generateBlockReport(
@@ -234,98 +224,38 @@ export async function generateBlockReport(
   language: string,
   demographics?: { topLanguages: { language: string; percentage: number }[] },
 ): Promise<CommunityReport> {
-  // Sanitize anchor fields to prevent prompt injection (strict for prompt-interpolated values)
-  const anchorName = sanitizePromptValue(anchor.name, 100) || 'Unknown Location';
-  const anchorCommunity = sanitizePromptValue(anchor.community, 100) || 'San Diego';
-  const anchorAddress = sanitizePromptValue(anchor.address, 200) || 'address unavailable';
-  const anchorLabel = anchor.type === 'library' ? 'library' : 'recreation center';
-  // Sanitize blockMetrics and demographics
-  blockMetrics = sanitizeBlockMetrics(blockMetrics);
-  const sanitizedDemographics = demographics ? { topLanguages: sanitizeTopLanguages(demographics.topLanguages) } : undefined;
+  const safeAnchor = sanitizeStringFields(anchor, 200) as CommunityAnchor;
+  const safeMetrics = sanitizeBlockMetrics(blockMetrics);
+  const safeDemographics = demographics ? sanitizeDemographics(demographics) : undefined;
+  const safeLang = sanitizeLanguage(language);
 
-  const prompt = `You are generating a block-level community report for the area around ${anchorName} (a ${anchorLabel}) in the ${anchorCommunity} neighborhood of San Diego. The report covers a ${blockMetrics.radiusMiles}-mile radius around this location at ${anchorAddress}.
+  const anchorLabel = safeAnchor.type === 'library' ? 'library' : 'recreation center';
 
-This report will be printed and posted at ${anchorName} for visitors and neighbors to read.
+  const prompt = `You are generating a block-level community report for the area around ${safeAnchor.name} (a ${anchorLabel}) in the ${safeAnchor.community} neighborhood of San Diego. The report covers a ${safeMetrics.radiusMiles}-mile radius around this location at ${safeAnchor.address}.
 
-Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
+This report will be printed and posted at ${safeAnchor.name} for visitors and neighbors to read.
+
+Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the 311 service request data for this area:
-${JSON.stringify(blockMetrics, null, 2)}
+${JSON.stringify(safeMetrics)}
 
-${sanitizedDemographics ? `Language demographics for the surrounding area:\n${JSON.stringify(sanitizedDemographics, null, 2)}` : ''}
+${safeDemographics ? `Language demographics for the surrounding area:\n${JSON.stringify(safeDemographics)}` : ''}
 
 Generate a report with these sections:
-1. **Welcome** — A 2-sentence greeting that names ${anchorName} and the ${anchorCommunity} neighborhood.
+1. **Welcome** — A 2-sentence greeting that names ${safeAnchor.name} and the ${safeAnchor.community} neighborhood.
 2. **Good News** — 2-3 positive things happening based on the data (resolved issues, high resolution rates, etc.).
-3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311 near ${anchorName}, framed constructively.
-4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report, visit ${anchorName}, attend community events.
-5. **This Location** — Reference ${anchorName} at ${anchorAddress} as the anchor community resource.
+3. **What Your Neighbors Are Reporting** — Top 3 issues being reported via 311 near ${safeAnchor.name}, framed constructively.
+4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report, visit ${safeAnchor.name}, attend community events.
+5. **This Location** — Reference ${safeAnchor.name} at ${safeAnchor.address} as the anchor community resource.
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 
-  const tool = makeReportTool(
+  return callClaudeForReport(
+    prompt,
     'Output a structured block-level community report centered on a civic anchor location',
-    {
-      neighborhoodName: { description: 'Name of the anchor location and neighborhood' },
-      summary: { description: 'A 2-sentence welcome greeting naming the anchor location' },
-      anchorLocation: { description: 'The anchor location name and address' },
-    },
+    { anchor: anchor.name, community: anchor.community },
   );
-
-  return callClaudeForReport(prompt, tool, { anchor: anchorName, community: anchorCommunity });
-}
-
-export function sanitizeString(value: unknown, maxLen: number): string {
-  if (typeof value !== 'string') return '';
-  // Strip control characters and common prompt-injection delimiters
-  return value
-    .replace(/[\x00-\x1f\x7f]/g, '')
-    .replace(/[<>{}[\]]/g, '')
-    .slice(0, maxLen);
-}
-
-/** Stricter sanitizer for values interpolated directly into Claude prompts (addresses, community names). */
-export function sanitizePromptValue(value: unknown, maxLen: number): string {
-  if (typeof value !== 'string') return '';
-  // Allow only alphanumeric, spaces, commas, periods, hyphens, slashes, #, apostrophes, parentheses
-  return value
-    .replace(/[\x00-\x1f\x7f]/g, '')
-    .replace(/[^a-zA-Z0-9\s,.\-/#'()áéíóúñüÁÉÍÓÚÑÜ]/g, '')
-    .slice(0, maxLen);
-}
-
-export function sanitizeBlockMetrics(raw: BlockMetrics): BlockMetrics {
-  return {
-    totalRequests: Math.max(0, Math.floor(Number(raw.totalRequests) || 0)),
-    openCount: Math.max(0, Math.floor(Number(raw.openCount) || 0)),
-    resolvedCount: Math.max(0, Math.floor(Number(raw.resolvedCount) || 0)),
-    resolutionRate: Math.min(1, Math.max(0, Number(raw.resolutionRate) || 0)),
-    avgDaysToResolve: raw.avgDaysToResolve != null ? Math.max(0, Number(raw.avgDaysToResolve) || 0) : null,
-    topIssues: (Array.isArray(raw.topIssues) ? raw.topIssues : []).slice(0, 10).map((i) => ({
-      category: sanitizeString(i.category, 100),
-      count: Math.max(0, Math.floor(Number(i.count) || 0)),
-    })),
-    radiusMiles: Math.min(2, Math.max(0.1, Number(raw.radiusMiles) || 0.25)),
-    nearbyOpenIssues: (Array.isArray(raw.nearbyOpenIssues) ? raw.nearbyOpenIssues : []).slice(0, 10).map((issue) => ({
-      serviceRequestId: sanitizeString(issue.serviceRequestId, 50),
-      serviceName: sanitizeString(issue.serviceName, 100),
-      serviceNameDetail: issue.serviceNameDetail ? sanitizeString(issue.serviceNameDetail, 200) : undefined,
-      streetAddress: issue.streetAddress ? sanitizeString(issue.streetAddress, 200) : undefined,
-      dateRequested: sanitizeString(issue.dateRequested, 30),
-      daysOpen: Math.max(0, Math.floor(Number(issue.daysOpen) || 0)),
-      distanceMiles: Math.max(0, Number(issue.distanceMiles) || 0),
-    })),
-    nearbyResources: (Array.isArray(raw.nearbyResources) ? raw.nearbyResources : []).slice(0, 10).map((r) => ({
-      name: sanitizeString(r.name, 100),
-      type: r.type === 'library' ? 'library' as const : 'rec_center' as const,
-      address: sanitizeString(r.address, 200),
-      distanceMiles: Math.max(0, Number(r.distanceMiles) || 0),
-      phone: r.phone ? sanitizeString(r.phone, 20) : undefined,
-      website: r.website ? sanitizeString(r.website, 200) : undefined,
-    })),
-    nearestAddress: raw.nearestAddress ? sanitizeString(raw.nearestAddress, 200) : null,
-    communityName: raw.communityName ? sanitizeString(raw.communityName, 100) : null,
-  };
 }
 
 export async function generateAddressBlockReport(
@@ -350,21 +280,23 @@ export async function generateAddressBlockReport(
   if (communityName.length > 100) {
     throw new Error('communityName must be 100 characters or fewer');
   }
-  // Strip injection payloads — allow only address-safe characters
-  address = sanitizePromptValue(address, 200);
-  communityName = sanitizePromptValue(communityName, 100);
-  // Sanitize blockMetrics to prevent prompt injection via string fields
-  blockMetrics = sanitizeBlockMetrics(blockMetrics);
+
+  const safeAddress = sanitizeStringFields(address, 200) as string;
+  const safeCommunity = sanitizeStringFields(communityName, 100) as string;
+  const safeMetrics = sanitizeBlockMetrics(blockMetrics);
+  const safeLang = sanitizeLanguage(language);
+
   // Sanitize communityMetrics
+  let safeCommunityMetrics: { resolutionRate: number; totalRequests: number } | null = null;
   if (communityMetrics) {
-    communityMetrics = {
+    safeCommunityMetrics = {
       resolutionRate: Math.min(1, Math.max(0, Number(communityMetrics.resolutionRate) || 0)),
       totalRequests: Math.max(0, Math.floor(Number(communityMetrics.totalRequests) || 0)),
     };
   }
 
   // Format nearby open issues for the prompt
-  const openIssuesList = (blockMetrics.nearbyOpenIssues ?? [])
+  const openIssuesList = (safeMetrics.nearbyOpenIssues ?? [])
     .map((issue) => {
       const location = issue.streetAddress ? ` at ${issue.streetAddress}` : ' nearby';
       const detail = issue.serviceNameDetail ? ` (${issue.serviceNameDetail})` : '';
@@ -373,7 +305,7 @@ export async function generateAddressBlockReport(
     .join('\n');
 
   // Format nearby resources for the prompt
-  const resourcesList = (blockMetrics.nearbyResources ?? [])
+  const resourcesList = (safeMetrics.nearbyResources ?? [])
     .map((r) => {
       const typeLabel = r.type === 'library' ? 'Library' : 'Rec Center';
       return `- ${r.name} (${typeLabel}) — ${r.distanceMiles.toFixed(2)} miles away, ${r.address}`;
@@ -381,25 +313,25 @@ export async function generateAddressBlockReport(
     .join('\n');
 
   // Community-level comparison context
-  const communityContext = communityMetrics
-    ? `\nNeighborhood-level context for comparison:\nAcross ${communityName} as a whole, the city has received ${communityMetrics.totalRequests.toLocaleString()} total 311 reports with a ${Math.round(communityMetrics.resolutionRate * 100)}% resolution rate.`
+  const communityContext = safeCommunityMetrics
+    ? `\nNeighborhood-level context for comparison:\nAcross ${safeCommunity} as a whole, the city has received ${safeCommunityMetrics.totalRequests.toLocaleString()} total 311 reports with a ${Math.round(safeCommunityMetrics.resolutionRate * 100)}% resolution rate.`
     : '';
 
-  const prompt = `You are generating a block-level community brief for the area within ${blockMetrics.radiusMiles} miles of ${address} in the ${communityName} neighborhood of San Diego.
+  const prompt = `You are generating a block-level community brief for the area within ${safeMetrics.radiusMiles} miles of ${safeAddress} in the ${safeCommunity} neighborhood of San Diego.
 
 This brief is hyperlocal — it should feel like a report about the user's immediate surroundings, not a broad neighborhood summary. The headline should reference the specific address.
 
-Write in ${language}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
+Write in ${safeLang}. Use clear, warm, accessible language at a 6th-grade reading level. Avoid jargon.
 
 Here is the 311 service request data for this block:
-- Total requests: ${blockMetrics.totalRequests}
-- Open: ${blockMetrics.openCount}
-- Resolved: ${blockMetrics.resolvedCount}
-- Resolution rate: ${Math.round(blockMetrics.resolutionRate * 100)}%
-- Average days to resolve: ${blockMetrics.avgDaysToResolve ?? 'N/A'}
+- Total requests: ${safeMetrics.totalRequests}
+- Open: ${safeMetrics.openCount}
+- Resolved: ${safeMetrics.resolvedCount}
+- Resolution rate: ${Math.round(safeMetrics.resolutionRate * 100)}%
+- Average days to resolve: ${safeMetrics.avgDaysToResolve ?? 'N/A'}
 
 Top issues:
-${blockMetrics.topIssues.map((i) => `- ${i.category}: ${i.count}`).join('\n')}
+${safeMetrics.topIssues.map((i) => `- ${i.category}: ${i.count}`).join('\n')}
 
 ${openIssuesList ? `Specific open issues nearby:\n${openIssuesList}` : 'Few open issues reported near this block.'}
 
@@ -407,7 +339,7 @@ ${resourcesList ? `Nearest civic resources:\n${resourcesList}` : ''}
 ${communityContext}
 
 Generate a report with these sections:
-1. **Welcome** — A 2-sentence greeting that references the area around ${address} in ${communityName}. Make it feel personal — "Your Block Report."
+1. **Welcome** — A 2-sentence greeting that references the area around ${safeAddress} in ${safeCommunity}. Make it feel personal — "Your Block Report."
 2. **Good News** — 2-3 positive things happening based on the data (resolved issues, high resolution rates, quick response times, etc.).
 3. **What's Happening Near You** — Reference 3-5 specific open issues nearby with street addresses or descriptions if available. If fewer than 3, note that few issues are reported near the block (which is good news).
 4. **How to Get Involved** — 3-4 concrete actions: how to file a 311 report mentioning nearest cross streets, visit nearby resources, attend community events.
@@ -415,15 +347,9 @@ Generate a report with these sections:
 
 Keep the total report under 400 words. It should fit on one printed page.`;
 
-  const tool = makeReportTool(
+  return callClaudeForReport(
+    prompt,
     'Output a structured block-level community report for a specific address',
-    {
-      neighborhoodName: { description: 'Formatted as "Around {address}, {communityName}"' },
-      summary: { description: 'A 2-sentence welcome greeting referencing the specific address' },
-      topIssues: { description: '3-5 specific open issues nearby with street addresses, or note that few issues are reported' },
-      anchorLocation: { description: 'Nearest library or rec center with address and distance' },
-    },
+    { address: safeAddress, community: safeCommunity },
   );
-
-  return callClaudeForReport(prompt, tool, { address, community: communityName });
 }

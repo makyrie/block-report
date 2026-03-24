@@ -1,15 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { getLibraries, getRecCenters, getTransitStops, get311, getDemographics, generateReport, getPreGeneratedReport, getNeighborhoodBoundaries, getTransitScore, getAccessGap, getBlockData, generateAddressBlockReport } from '../api/client';
-import type { BlockMetrics, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
-import type { FeatureCollection } from 'geojson';
+import { generateReport, getPreGeneratedReport, generateAddressBlockReport } from '../api/client';
+import type { CommunityAnchor, CommunityReport, NeighborhoodProfile } from '../types';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
+import { findCommunityAtPoint } from '../utils/point-in-polygon';
+import { useMapData } from '../hooks/use-map-data';
+import { useCommunityData } from '../hooks/use-community-data';
+import { useBlockData } from '../hooks/use-block-data';
+import { DEFAULT_TRANSIT } from '../utils/defaults';
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -17,27 +21,15 @@ export default function NeighborhoodPage() {
   const { lang, setLang, t, reportLang } = useLanguage();
   const [mobileView, setMobileView] = useState<'map' | 'info'>('map');
 
-  const [libraries, setLibraries] = useState<CommunityAnchor[]>([]);
-  const [recCenters, setRecCenters] = useState<CommunityAnchor[]>([]);
-  const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
-  const [neighborhoodBoundaries, setNeighborhoodBoundaries] = useState<FeatureCollection | null>(null);
+  const { libraries, recCenters, neighborhoodBoundaries, dataError } = useMapData();
 
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
     slug ? fromSlug(slug) : null,
   );
   const [selectedAnchor, setSelectedAnchor] = useState<CommunityAnchor | null>(null);
-  const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
-  const [metricsLoading, setMetricsLoading] = useState(false);
-  const [topLanguages, setTopLanguages] = useState<{ language: string; percentage: number }[]>([]);
 
-  const [transitScore, setTransitScore] = useState<NeighborhoodProfile['transit'] | null>(null);
-  const [accessGap, setAccessGap] = useState<NeighborhoodProfile['accessGap']>(null);
-  const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [blockData, setBlockData] = useState<BlockMetrics | null>(null);
-  const [blockLoading, setBlockLoading] = useState(false);
-  const [blockRadius, setBlockRadius] = useState(0.25);
-
-  const [dataError, setDataError] = useState<string | null>(null);
+  const { metrics, metricsLoading, topLanguages, transitScore, accessGap } = useCommunityData(selectedCommunity);
+  const { pinnedLocation, setPinnedLocation, blockData, setBlockData, blockLoading, blockRadius, setBlockRadius } = useBlockData();
 
   const [report, setReport] = useState<CommunityReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -57,92 +49,24 @@ export default function NeighborhoodPage() {
     }
   }, [slug]);
 
-  // Fetch map data on mount
-  useEffect(() => {
-    const handleError = (label: string) => (err: unknown) => {
-      console.error(`${label}:`, err);
-      setDataError('Failed to load map data');
-    };
-    getLibraries().then(setLibraries).catch(handleError('libraries'));
-    getRecCenters().then(setRecCenters).catch(handleError('rec centers'));
-    getNeighborhoodBoundaries().then(setNeighborhoodBoundaries).catch(handleError('boundaries'));
-    getTransitStops().then(setTransitStops).catch(handleError('transit stops'));
-  }, []);
-
-  // Fetch 311 metrics and demographics when community changes
-  useEffect(() => {
-    if (!selectedCommunity) {
-      setMetrics(null);
-      setReport(null);
-      setTopLanguages([]);
-      setTransitScore(null);
-      setAccessGap(null);
-      setBlockReport(null);
-      setBlockReportError(null);
-      setPinnedLocation(null);
-      setBlockData(null);
-      return;
-    }
-
-    let cancelled = false;
-    setMetricsLoading(true);
-    setMetrics(null);
-    setTopLanguages([]);
-    setTransitScore(null);
-    setAccessGap(null);
-
-    get311(selectedCommunity)
-      .then((data) => { if (!cancelled) setMetrics(data); })
-      .catch(console.error)
-      .finally(() => { if (!cancelled) setMetricsLoading(false); });
-
-    getTransitScore(selectedCommunity)
-      .then((data) => { if (!cancelled) setTransitScore(data); })
-      .catch(() => { /* transit score may not be available */ });
-
-    getAccessGap(selectedCommunity)
-      .then((data) => { if (!cancelled && data?.accessGapScore != null) setAccessGap(data); })
-      .catch(() => { /* access gap score may not be available */ });
-
-    getDemographics(selectedCommunity)
-      .then((data) => {
-        if (!cancelled && data?.topLanguages) setTopLanguages(data.topLanguages);
-      })
-      .catch(() => {
-        // Demographics may not be available for all communities
-      });
-
-    return () => { cancelled = true; };
-  }, [selectedCommunity]);
-
-  const DEFAULT_TRANSIT = { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [] as string[], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null };
-
-  function buildProfile(community: string, metricsData: NeighborhoodProfile['metrics']): NeighborhoodProfile {
-    const anchor = selectedAnchor ?? {
-      id: '',
-      name: community,
-      type: 'library' as const,
-      lat: 0,
-      lng: 0,
-      address: '',
-      community,
-    };
-    return {
-      communityName: community,
-      anchor,
-      metrics: metricsData,
-      transit: transitScore ?? DEFAULT_TRANSIT,
-      demographics: { topLanguages },
-      accessGap: accessGap ?? null,
-    };
-  }
-
   // Clear report when community or language changes
   const generatingRef = useRef(false);
   useEffect(() => {
     setReport(null);
     setReportError(null);
   }, [selectedCommunity, reportLang]);
+
+  // Refs for supplementary data — read during generation but should not trigger the effect
+  const selectedAnchorRef = useRef(selectedAnchor);
+  selectedAnchorRef.current = selectedAnchor;
+  const transitScoreRef = useRef(transitScore);
+  transitScoreRef.current = transitScore;
+  const topLanguagesRef = useRef(topLanguages);
+  topLanguagesRef.current = topLanguages;
+  const accessGapRef = useRef(accessGap);
+  accessGapRef.current = accessGap;
+  const reportRef = useRef(report);
+  reportRef.current = report;
 
   // Auto-fetch pre-generated report, falling back to on-demand generation
   useEffect(() => {
@@ -153,7 +77,6 @@ export default function NeighborhoodPage() {
     setReportLoading(true);
 
     (async () => {
-      // Step 1: Try to load pre-generated report instantly
       const cached = await getPreGeneratedReport(selectedCommunity, reportLang);
       if (cancelled) return;
 
@@ -163,16 +86,22 @@ export default function NeighborhoodPage() {
         return;
       }
 
-      // Step 2: No cached report — generate on-demand if metrics are available
       if (!metrics) {
-        // Metrics haven't loaded yet; this effect will re-run when they do
+        setReportLoading(false);
+        return;
+      }
+
+      if (reportRef.current) {
         setReportLoading(false);
         return;
       }
 
       generatingRef.current = true;
 
-      const profile = buildProfile(selectedCommunity, metrics);
+      const profile = buildProfile(
+        selectedCommunity, selectedAnchorRef.current, metrics,
+        transitScoreRef.current, topLanguagesRef.current, accessGapRef.current,
+      );
 
       try {
         const result = await generateReport(profile, reportLang);
@@ -186,7 +115,6 @@ export default function NeighborhoodPage() {
     })();
 
     return () => { cancelled = true; generatingRef.current = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunity, reportLang, metrics]);
 
   const handleCommunityChange = useCallback(
@@ -198,8 +126,10 @@ export default function NeighborhoodPage() {
       }
       setSelectedCommunity(community || null);
       setSelectedAnchor(null);
+      setPinnedLocation(null);
+      setBlockData(null);
     },
-    [navigate],
+    [navigate, setPinnedLocation, setBlockData],
   );
 
   const handleAnchorClick = useCallback(
@@ -216,22 +146,18 @@ export default function NeighborhoodPage() {
     setBlockData(null);
     setBlockReport(null);
     setBlockReportError(null);
-  }, []);
 
-  // Fetch block data when pinned location or radius changes (debounced + abortable)
-  useEffect(() => {
-    if (!pinnedLocation) return;
-    const controller = new AbortController();
-    setBlockData(null);
-    const timer = setTimeout(() => {
-      setBlockLoading(true);
-      getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
-        .then((data) => { if (!controller.signal.aborted) setBlockData(data); })
-        .catch((err) => { if (!controller.signal.aborted) console.error('Failed to fetch block data', err); })
-        .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
-    }, 250);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [blockRadius, pinnedLocation]);
+    if (neighborhoodBoundaries) {
+      const detected = findCommunityAtPoint(lat, lng, neighborhoodBoundaries);
+      if (detected && detected !== selectedCommunity) {
+        setSelectedAnchor(null);
+        navigate(`/neighborhood/${toSlug(detected)}`);
+      }
+    }
+  }, [neighborhoodBoundaries, selectedCommunity, navigate, setPinnedLocation, setBlockData]);
+
+  const selectedCommunityRef = useRef(selectedCommunity);
+  selectedCommunityRef.current = selectedCommunity;
 
   const reportGeneratingRef = useRef(false);
   const blockReportGeneratingRef = useRef(false);
@@ -240,19 +166,23 @@ export default function NeighborhoodPage() {
     if (!selectedCommunity || !metrics || reportGeneratingRef.current) return;
     reportGeneratingRef.current = true;
 
-    const profile = buildProfile(selectedCommunity, metrics);
+    const communityAtCallTime = selectedCommunity;
+    const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
 
     setReportLoading(true);
     setReportError(null);
     try {
       const result = await generateReport(profile, language);
+      if (selectedCommunityRef.current !== communityAtCallTime) return;
       setReport(result);
     } catch (err) {
+      if (selectedCommunityRef.current !== communityAtCallTime) return;
       const message = err instanceof Error ? err.message : 'Failed to generate report';
       setReportError(message);
     } finally {
-      reportGeneratingRef.current = false;
-      setReportLoading(false);
+      if (selectedCommunityRef.current === communityAtCallTime) {
+        setReportLoading(false);
+      }
     }
   }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
 
@@ -302,6 +232,19 @@ export default function NeighborhoodPage() {
           ${mobileView === 'info' ? 'flex' : 'hidden md:flex'}
         `}
       >
+        {/* Back to citywide link */}
+        <div className="px-4 pt-3 pb-0 shrink-0">
+          <Link
+            to="/citywide"
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+            {t('citywide.backToCitywide')}
+          </Link>
+        </div>
+
         {/* Sidebar header with neighborhood selector + language buttons */}
         <div className="p-4 border-b border-gray-100 shrink-0">
           <div className="flex flex-wrap gap-1 mb-3">
@@ -338,6 +281,9 @@ export default function NeighborhoodPage() {
             topLanguages={topLanguages}
             transitScore={transitScore}
             accessGap={accessGap}
+            blockData={blockData}
+            blockRadius={blockRadius}
+            blockLoading={blockLoading}
           />
         </div>
       </aside>
@@ -391,7 +337,6 @@ export default function NeighborhoodPage() {
         <SanDiegoMap
           libraries={libraries}
           recCenters={recCenters}
-          transitStops={transitStops}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
           onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}
@@ -453,4 +398,33 @@ export default function NeighborhoodPage() {
       )}
     </div>
   );
+}
+
+/** Build a NeighborhoodProfile from component state — shared by auto-fetch and manual generation */
+function buildProfile(
+  community: string,
+  selectedAnchor: CommunityAnchor | null,
+  metrics: NeighborhoodProfile['metrics'],
+  transitScore: NeighborhoodProfile['transit'] | null,
+  topLanguages: { language: string; percentage: number }[],
+  accessGap: NeighborhoodProfile['accessGap'],
+): NeighborhoodProfile {
+  const anchor = selectedAnchor ?? {
+    id: '',
+    name: community,
+    type: 'library' as const,
+    lat: 0,
+    lng: 0,
+    address: '',
+    community,
+  };
+
+  return {
+    communityName: community,
+    anchor,
+    metrics,
+    transit: transitScore ?? DEFAULT_TRANSIT,
+    demographics: { topLanguages },
+    accessGap: accessGap ?? null,
+  };
 }

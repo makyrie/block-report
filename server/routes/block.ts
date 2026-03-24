@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
     const result = await fetchBlockData(lat, lng, radius);
     res.json(result);
   } catch (err) {
-    logger.error('Failed to fetch block data', { error: (err as Error).message });
+    logger.error('Failed to fetch block data', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
