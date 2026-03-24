@@ -104,14 +104,28 @@ app.use('/api/access-gap', gapAnalysisRouter);
 app.use('/api/block', blockRouter);
 
 // Cron-triggered cache purge — call via Vercel Cron or manual GET
-// Protected by CRON_SECRET to prevent abuse
+// Accepts both Authorization: Bearer <secret> and Vercel's x-vercel-cron-auth-key header
 app.get('/api/cron/purge-cache', async (req, res) => {
   const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.authorization ?? '';
-  const expected = `Bearer ${cronSecret}`;
-  const headersMatch = authHeader.length === expected.length &&
-    timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
-  if (!cronSecret || !headersMatch) {
+  if (!cronSecret) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  // Check Authorization header (manual calls) or x-vercel-cron-auth-key (Vercel Cron)
+  const candidates = [
+    req.headers.authorization?.replace(/^Bearer\s+/i, '') ?? '',
+    (req.headers['x-vercel-cron-auth-key'] as string) ?? '',
+  ];
+
+  const expectedBuf = Buffer.from(cronSecret);
+  const authenticated = candidates.some((candidate) => {
+    const candidateBuf = Buffer.from(candidate);
+    return candidateBuf.length === expectedBuf.length &&
+      timingSafeEqual(candidateBuf, expectedBuf);
+  });
+
+  if (!authenticated) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }

@@ -18,6 +18,7 @@ router.get('/', async (req, res) => {
     const score = scores.get(key);
 
     if (!score) {
+      res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
       res.json({
         stopCount: 0,
         agencyCount: 0,
@@ -29,12 +30,13 @@ router.get('/', async (req, res) => {
       return;
     }
 
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     res.json({
       ...score,
       cityAverage: getCityAverage(scores),
     });
   } catch (err) {
-    logger.error('Failed to compute transit scores', { error: (err as Error).message });
+    logger.error('Failed to compute transit scores', { error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
