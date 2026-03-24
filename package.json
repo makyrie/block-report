@@ -43,10 +43,14 @@
     "react-dom": "^19.2.4",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.13.1",
+    "puppeteer-core": "^24.9.0",
+    "qrcode": "^1.5.4",
+    "@sparticuz/chromium": "^133.0.0",
     "ws": "^8.19.0",
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@axe-core/react": "^4.11.1",
     "@eslint/js": "^9.39.4",
     "@tailwindcss/vite": "^4.2.1",

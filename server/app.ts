@@ -95,6 +95,12 @@ if (!isVercel) {
 } else {
   logger.info('Serverless mode: skipping in-memory rate limiting (DB-backed rate limit active for report generation)');
 }
+const pdfLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many PDF generation requests, please try again later' },
+});
+app.use('/api/report/pdf', pdfLimiter);
 
 app.use((req, res, next) => {
   const start = Date.now();

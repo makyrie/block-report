@@ -9,15 +9,17 @@ export const SUPPORTED_LANGUAGES = [
 
 export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]['code'];
 
-// Map from demographics label to language code
-export const DEMOGRAPHICS_TO_LANG: Record<string, LanguageCode> = {
-  Spanish: 'es',
-  Vietnamese: 'vi',
-  Tagalog: 'tl',
-  Chinese: 'zh',
-  Arabic: 'ar',
-  Korean: 'en', // no Korean UI translation, fall back to English
-};
+// Derive from the canonical LANGUAGE_CODES map, with overrides for
+// languages that lack a UI translation (fall back to English).
+import { LANGUAGE_CODES } from '../constants/languages';
+
+const SUPPORTED_CODES = new Set(SUPPORTED_LANGUAGES.map((l) => l.code));
+
+export const DEMOGRAPHICS_TO_LANG: Record<string, LanguageCode> = Object.fromEntries(
+  Object.entries(LANGUAGE_CODES)
+    .filter(([label]) => label !== 'English' && label !== 'Other')
+    .map(([label, code]) => [label, SUPPORTED_CODES.has(code as LanguageCode) ? code as LanguageCode : 'en']),
+);
 
 const translations: Record<LanguageCode, Record<string, string>> = {
   en: {
@@ -64,6 +66,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     'tile.q4desc': 'Generate a one-page flyer in plain language \u2014 ready to post at a library or laundromat.',
     'loading.data': 'Loading data for {community}',
     'flyer.print': 'Print Brief',
+    'flyer.download': 'Download PDF',
+    'flyer.generating': 'Generating...',
+    'flyer.downloadError': 'PDF generation failed. Please try again.',
     'report.communityReport': 'Community Brief',
     'report.goodNews': 'Good News',
     'report.topIssues': 'What Your Neighbors Are Reporting',
@@ -186,6 +191,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     'tile.q4desc': 'Genera un informe de una p\u00e1gina en lenguaje sencillo \u2014 listo para publicar en una biblioteca o lavander\u00eda.',
     'loading.data': 'Cargando datos para {community}',
     'flyer.print': 'Imprimir Informe',
+    'flyer.download': 'Descargar PDF',
+    'flyer.generating': 'Generando...',
+    'flyer.downloadError': 'Error al generar el PDF. Inténtalo de nuevo.',
     'report.communityReport': 'Informe Comunitario',
     'report.goodNews': 'Buenas Noticias',
     'report.topIssues': 'Lo Que Reportan Tus Vecinos',
@@ -298,6 +306,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     'tile.q4desc': 'T\u1ea1o b\u00e1o c\u00e1o m\u1ed9t trang b\u1eb1ng ng\u00f4n ng\u1eef d\u1ec5 hi\u1ec3u.',
     'loading.data': '\u0110ang t\u1ea3i d\u1eef li\u1ec7u cho {community}',
     'flyer.print': 'In B\u00e1o C\u00e1o',
+    'flyer.download': 'T\u1ea3i PDF',
+    'flyer.generating': '\u0110ang t\u1ea1o...',
+    'flyer.downloadError': 'T\u1ea1o PDF th\u1ea5t b\u1ea1i. Vui l\u00f2ng th\u1eed l\u1ea1i.',
     'report.communityReport': 'B\u00e1o C\u00e1o C\u1ed9ng \u0110\u1ed3ng',
     'report.goodNews': 'Tin T\u1ed1t',
     'report.topIssues': 'Nh\u1eefng G\u00ec H\u00e0ng X\u00f3m B\u00e1o C\u00e1o',
@@ -410,6 +421,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     'tile.q4desc': 'Gumawa ng isang pahina na ulat sa madaling wika.',
     'loading.data': 'Naglo-load ng data para sa {community}',
     'flyer.print': 'I-print ang Ulat',
+    'flyer.download': 'I-download ang PDF',
+    'flyer.generating': 'Ginagawa...',
+    'flyer.downloadError': 'Hindi nagawa ang PDF. Pakisubukan muli.',
     'report.communityReport': 'Ulat ng Komunidad',
     'report.goodNews': 'Magandang Balita',
     'report.topIssues': 'Ano ang Iniuulat ng mga Kapitbahay',
@@ -521,6 +535,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     'tile.q4desc': '\u751f\u6210\u4e00\u9875\u901a\u4fd7\u6613\u61c2\u7684\u62a5\u544a\u3002',
     'loading.data': '\u6b63\u5728\u52a0\u8f7d {community} \u7684\u6570\u636e',
     'flyer.print': '\u6253\u5370\u62a5\u544a',
+    'flyer.download': '\u4e0b\u8f7dPDF',
+    'flyer.generating': '\u751f\u6210\u4e2d...',
+    'flyer.downloadError': 'PDF\u751f\u6210\u5931\u8d25\u3002\u8bf7\u91cd\u8bd5\u3002',
     'report.communityReport': '\u793e\u533a\u62a5\u544a',
     'report.goodNews': '\u597d\u6d88\u606f',
     'report.topIssues': '\u90bb\u5c45\u4eec\u5728\u62a5\u544a\u4ec0\u4e48',
@@ -633,6 +650,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     'tile.q4desc': '\u0623\u0646\u0634\u0626 \u062a\u0642\u0631\u064a\u0631\u0627\u064b \u0645\u0646 \u0635\u0641\u062d\u0629 \u0648\u0627\u062d\u062f\u0629 \u0628\u0644\u063a\u0629 \u0633\u0647\u0644\u0629.',
     'loading.data': '\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a {community}',
     'flyer.print': '\u0637\u0628\u0627\u0639\u0629 \u0627\u0644\u062a\u0642\u0631\u064a\u0631',
+    'flyer.download': '\u062a\u062d\u0645\u064a\u0644 PDF',
+    'flyer.generating': '\u062c\u0627\u0631\u064a \u0627\u0644\u0625\u0646\u0634\u0627\u0621...',
+    'flyer.downloadError': '\u0641\u0634\u0644 \u0625\u0646\u0634\u0627\u0621 PDF. \u064a\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649.',
     'report.communityReport': '\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u062c\u062a\u0645\u0639',
     'report.goodNews': '\u0623\u062e\u0628\u0627\u0631 \u062c\u064a\u062f\u0629',
     'report.topIssues': '\u0645\u0627 \u064a\u0628\u0644\u063a\u0647 \u062c\u064a\u0631\u0627\u0646\u0643',

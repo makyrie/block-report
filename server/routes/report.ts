@@ -1,9 +1,15 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { generateReport, generateBlockReport } from '../services/claude.js';
+import { generatePdf } from '../services/pdf/index.js';
 import { logger } from '../logger.js';
-import type { NeighborhoodProfile } from '../../src/types/index.js';
+import type { CommunityReport, NeighborhoodProfile } from '../../src/types/index.js';
 import { getCachedReport, saveCachedReport, getCachedBlockReport, saveCachedBlockReport, isGenerationRateLimited, recordGenerationAttempt } from '../services/report-cache.js';
+import { LANGUAGE_CODES } from '../../src/constants/languages.js';
+
+function sanitizeFilename(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
 
 const router = Router();
 
@@ -353,6 +359,120 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       stack: error instanceof Error ? error.stack : undefined,
     });
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/report/pdf — Generate a PDF of the community flyer
+router.post('/pdf', async (req: Request, res: Response) => {
+  try {
+    const { report, metrics, topLanguages, neighborhoodSlug } = req.body as {
+      report: CommunityReport;
+      metrics?: NeighborhoodProfile['metrics'];
+      topLanguages?: { language: string; percentage: number }[];
+      neighborhoodSlug: string;
+    };
+
+    if (!report || !neighborhoodSlug) {
+      res.status(400).json({ error: 'Missing required fields: report, neighborhoodSlug' });
+      return;
+    }
+
+    // Validate report structure
+    if (
+      typeof report.neighborhoodName !== 'string' ||
+      typeof report.summary !== 'string' ||
+      typeof report.language !== 'string' ||
+      typeof report.generatedAt !== 'string' ||
+      !Array.isArray(report.goodNews) ||
+      !report.goodNews.every((s: unknown) => typeof s === 'string') ||
+      !Array.isArray(report.topIssues) ||
+      !report.topIssues.every((s: unknown) => typeof s === 'string') ||
+      !Array.isArray(report.howToParticipate) ||
+      !report.howToParticipate.every((s: unknown) => typeof s === 'string') ||
+      !report.contactInfo ||
+      typeof report.contactInfo.councilDistrict !== 'string' ||
+      typeof report.contactInfo.anchorLocation !== 'string'
+    ) {
+      res.status(400).json({ error: 'Invalid report structure' });
+      return;
+    }
+
+    if (typeof neighborhoodSlug !== 'string' || !/^[a-z0-9-]+$/.test(neighborhoodSlug)) {
+      res.status(400).json({ error: 'Invalid neighborhoodSlug format' });
+      return;
+    }
+
+    // Field length limits — defense-in-depth against oversized HTML rendering
+    const MAX_TEXT_LENGTH = 5000;
+    const MAX_ARRAY_ITEMS = 10;
+    if (
+      report.summary.length > MAX_TEXT_LENGTH ||
+      report.neighborhoodName.length > 200 ||
+      report.goodNews.length > MAX_ARRAY_ITEMS ||
+      report.topIssues.length > MAX_ARRAY_ITEMS ||
+      report.howToParticipate.length > MAX_ARRAY_ITEMS ||
+      report.goodNews.some((s: string) => s.length > MAX_TEXT_LENGTH) ||
+      report.topIssues.some((s: string) => s.length > MAX_TEXT_LENGTH) ||
+      report.howToParticipate.some((s: string) => s.length > MAX_TEXT_LENGTH)
+    ) {
+      res.status(400).json({ error: 'Report fields exceed maximum length' });
+      return;
+    }
+
+    // Validate optional metrics structure
+    if (metrics != null) {
+      if (
+        typeof metrics.totalRequests311 !== 'number' ||
+        typeof metrics.resolutionRate !== 'number' ||
+        typeof metrics.avgDaysToResolve !== 'number' ||
+        !Array.isArray(metrics.topIssues) ||
+        !metrics.topIssues.every((i: unknown) =>
+          i && typeof i === 'object' && typeof (i as Record<string, unknown>).category === 'string' && (i as Record<string, unknown>).category !== '' && ((i as Record<string, unknown>).category as string).length <= 200 && typeof (i as Record<string, unknown>).count === 'number'
+        ) ||
+        metrics.topIssues.length > MAX_ARRAY_ITEMS ||
+        !Array.isArray(metrics.goodNews) ||
+        !metrics.goodNews.every((g: unknown) => typeof g === 'string') ||
+        metrics.goodNews.length > MAX_ARRAY_ITEMS
+      ) {
+        res.status(400).json({ error: 'Invalid metrics structure' });
+        return;
+      }
+    }
+
+    // Validate optional topLanguages structure
+    if (topLanguages != null) {
+      if (
+        !Array.isArray(topLanguages) ||
+        !topLanguages.every((l: unknown) =>
+          l && typeof l === 'object' && typeof (l as Record<string, unknown>).language === 'string' && typeof (l as Record<string, unknown>).percentage === 'number'
+        )
+      ) {
+        res.status(400).json({ error: 'Invalid topLanguages structure' });
+        return;
+      }
+    }
+
+    if (!process.env.APP_URL) {
+      res.status(500).json({ error: 'APP_URL environment variable is not configured' });
+      return;
+    }
+    const baseUrl = process.env.APP_URL;
+    const pdf = await generatePdf({ report, metrics, topLanguages, neighborhoodSlug, baseUrl });
+
+    const langCode = LANGUAGE_CODES[report.language] || 'en';
+    const filename = `block-report-${sanitizeFilename(report.neighborhoodName)}-${langCode}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', pdf.length);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdf);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('PDF generation error', { error: message, stack: error instanceof Error ? error.stack : undefined });
+    if (message.includes('queue full') || message.includes('queue timeout')) {
+      res.status(503).json({ error: 'Server busy — try again shortly' });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 });
 
