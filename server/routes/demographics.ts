@@ -47,28 +47,19 @@ const TRACT_RE = /^\d{6,11}$/;
 
 router.get('/', async (req, res) => {
   const tract = req.query.tract as string | undefined;
-  const rawCommunity = req.query.community as string | undefined;
+  const community = validateCommunityParam(req.query.community as string | undefined);
 
-  if (!tract && !rawCommunity) {
+  if (!tract && !community) {
     res.status(400).json({ error: 'tract or community query parameter is required' });
     return;
   }
 
-  // Validate tract format
-  if (tract && !TRACT_RE.test(tract)) {
-    res.status(400).json({ error: 'Invalid tract format — expected a numeric census tract ID' });
-    return;
-  }
-
-  // Validate community parameter using shared utility
-  const community = rawCommunity ? validateCommunityParam(rawCommunity) : null;
-  if (rawCommunity && !community) {
-    res.status(400).json({ error: 'Invalid community parameter' });
-    return;
-  }
-
-  // Single tract lookup
+  // Single tract lookup — validate format (Census FIPS: digits and optional dots)
   if (tract) {
+    if (!/^[\d.]+$/.test(tract)) {
+      res.status(400).json({ error: 'Invalid tract format' });
+      return;
+    }
     try {
       const data = await prisma.censusLanguage.findUnique({ where: { tract } });
       if (!data) {

@@ -1,26 +1,53 @@
-// Server geo utilities — delegates core point-in-polygon to shared types/geo.ts
-// and adds server-specific helpers (bbox, haversine, centroid).
+// Server geo utilities — point-in-polygon, bbox, haversine, centroid.
 
 import type { Polygon, MultiPolygon } from 'geojson';
-import { pointInRing, pointInGeometry } from '../../types/geo.js';
 
 type PolygonLike = Polygon | MultiPolygon;
 
-// Re-export the shared algorithm under the legacy name used by scripts/geo-helpers.ts
+// Ray-casting point-in-polygon test.
+// Point: (lat, lng). Polygon ring: GeoJSON [lng, lat] pairs.
+// Internally maps to (x=lng, y=lat) for the ray-cast comparison.
 export function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
-  return pointInRing(lng, lat, polygon);
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [pLng_i, pLat_i] = polygon[i]; // GeoJSON: [lng, lat]
+    const [pLng_j, pLat_j] = polygon[j];
+    if ((pLat_i > lat) !== (pLat_j > lat) && lng < ((pLng_j - pLng_i) * (lat - pLat_i)) / (pLat_j - pLat_i) + pLng_i) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
-// Re-export for direct use
-export { pointInGeometry };
-
 // Test whether a point is inside a GeoJSON Feature geometry (Polygon or MultiPolygon)
+// Correctly handles polygon holes: point must be inside outer ring AND outside all holes
 export function pointInFeature(
   lat: number,
   lng: number,
   geometry: PolygonLike,
 ): boolean {
-  return pointInGeometry(lng, lat, geometry);
+  if (geometry.type === 'Polygon') {
+    const [outer, ...holes] = geometry.coordinates as number[][][];
+    if (!pointInPolygon(lat, lng, outer)) return false;
+    for (const hole of holes) {
+      if (pointInPolygon(lat, lng, hole)) return false;
+    }
+    return true;
+  }
+  if (geometry.type === 'MultiPolygon') {
+    for (const poly of geometry.coordinates as number[][][][]) {
+      const [outer, ...holes] = poly;
+      if (pointInPolygon(lat, lng, outer)) {
+        let inHole = false;
+        for (const hole of holes) {
+          if (pointInPolygon(lat, lng, hole)) { inHole = true; break; }
+        }
+        if (!inHole) return true;
+      }
+    }
+    return false;
+  }
+  return false;
 }
 
 // Compute bounding box for a polygon ring (used for spatial pre-filtering)

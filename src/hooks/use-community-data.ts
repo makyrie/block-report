@@ -10,7 +10,6 @@ export interface CommunityData {
   accessGap: NeighborhoodProfile['accessGap'];
 }
 
-/** Fetch 311 metrics, demographics, transit score, and access gap for a community. */
 export function useCommunityData(selectedCommunity: string | null): CommunityData {
   const [metrics, setMetrics] = useState<NeighborhoodProfile['metrics'] | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
@@ -27,8 +26,8 @@ export function useCommunityData(selectedCommunity: string | null): CommunityDat
       return;
     }
 
+    let cancelled = false;
     const controller = new AbortController();
-    const { signal } = controller;
 
     setMetricsLoading(true);
     setMetrics(null);
@@ -36,26 +35,31 @@ export function useCommunityData(selectedCommunity: string | null): CommunityDat
     setTransitScore(null);
     setAccessGap(null);
 
-    get311(selectedCommunity, signal)
-      .then((data) => { if (!signal.aborted) setMetrics(data); })
-      .catch((err) => { if (!signal.aborted) console.error('Failed to load 311 metrics', err); })
-      .finally(() => { if (!signal.aborted) setMetricsLoading(false); });
+    get311(selectedCommunity, controller.signal)
+      .then((data) => { if (!cancelled) setMetrics(data); })
+      .catch((err) => { if (!cancelled && err?.name !== 'AbortError') console.error(err); })
+      .finally(() => { if (!cancelled) setMetricsLoading(false); });
 
-    getTransitScore(selectedCommunity, signal)
-      .then((data) => { if (!signal.aborted) setTransitScore(data); })
-      .catch((err) => { if (!signal.aborted) console.error('Failed to load transit score', err); });
+    getTransitScore(selectedCommunity, controller.signal)
+      .then((data) => { if (!cancelled) setTransitScore(data); })
+      .catch((err) => { if (!cancelled && err?.name !== 'AbortError') console.error('Transit score fetch failed:', err); });
 
-    getAccessGap(selectedCommunity, signal)
-      .then((data) => { if (!signal.aborted && data?.accessGapScore != null) setAccessGap(data); })
-      .catch((err) => { if (!signal.aborted) console.error('Failed to load access gap', err); });
+    getAccessGap(selectedCommunity, controller.signal)
+      .then((data) => { if (!cancelled && data?.accessGapScore != null) setAccessGap(data); })
+      .catch((err) => { if (!cancelled && err?.name !== 'AbortError') console.error('Access gap fetch failed:', err); });
 
-    getDemographics(selectedCommunity, signal)
+    getDemographics(selectedCommunity, controller.signal)
       .then((data) => {
-        if (!signal.aborted && data?.topLanguages) setTopLanguages(data.topLanguages);
+        if (!cancelled && data?.topLanguages) setTopLanguages(data.topLanguages);
       })
-      .catch((err) => { if (!signal.aborted) console.error('Failed to load demographics', err); });
+      .catch((err) => {
+        if (!cancelled && err?.name !== 'AbortError') console.error('Demographics fetch failed:', err);
+      });
 
-    return () => { controller.abort(); };
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [selectedCommunity]);
 
   return { metrics, metricsLoading, topLanguages, transitScore, accessGap };

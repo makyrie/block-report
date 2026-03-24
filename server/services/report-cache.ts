@@ -1,7 +1,7 @@
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { CommunityReport } from '../../types/index.js';
+import type { CommunityReport } from '../../src/types/index.js';
 import { isVercel } from '../env.js';
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
@@ -10,6 +10,15 @@ import { communityKey } from '../utils/community.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Filesystem/DB-safe cache key: derives from communityKey() (the canonical
+ * UPPERCASE normalizer), then lowercases and converts spaces/punctuation to dashes.
+ * This ensures cache keys stay consistent with the server-side community lookup maps.
+ */
+function normalizeKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
 
 // ---------------------------------------------------------------------------
 // Cache strategy abstraction — eliminates isVercel branching in every function
@@ -57,7 +66,7 @@ const dbStrategy: CacheStrategy = {
 /** File-based cache for local development */
 const fileStrategy: CacheStrategy = {
   async get(community, language) {
-    const filePath = join(CACHE_DIR, `${communityKey(community)}_${communityKey(language)}.json`);
+    const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
     try {
       // Enforce TTL on file cache — don't serve stale files indefinitely
       const fileStat = await stat(filePath);
@@ -73,8 +82,10 @@ const fileStrategy: CacheStrategy = {
 
   async set(community, language, report) {
     await mkdir(CACHE_DIR, { recursive: true });
-    const filePath = join(CACHE_DIR, `${communityKey(community)}_${communityKey(language)}.json`);
-    await writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
+    const filePath = join(CACHE_DIR, `${normalizeKey(community)}_${normalizeKey(language)}.json`);
+    const tmpPath = filePath + '.tmp';
+    await writeFile(tmpPath, JSON.stringify(report), 'utf-8');
+    await rename(tmpPath, filePath);
   },
 
   async countRecent() {
@@ -123,7 +134,7 @@ export async function saveCachedReport(community: string, language: string, repo
 // ---------------------------------------------------------------------------
 
 function blockCacheKey(anchorId: string): string {
-  return `block:${communityKey(anchorId)}`;
+  return `blkreport-${normalizeKey(anchorId)}`;
 }
 
 export async function getCachedBlockReport(anchorId: string, language: string): Promise<CommunityReport | null> {
@@ -159,8 +170,39 @@ export async function saveCachedBlockReport(anchorId: string, language: string, 
 const GENERATION_RATE_LIMIT = 20; // max reports per window
 export const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
+/**
+ * In-memory generation attempt tracker — counts attempts, not just successful cache writes.
+ * Closes the gap where failed Claude API calls don't increment the DB-backed count,
+ * preventing cost exposure from repeated failing requests.
+ *
+ * Limitation: resets on serverless cold start. The DB-backed countRecent() check
+ * provides cross-instance protection for successful generations. For failed attempts,
+ * express-rate-limit (also in-memory) provides a first line of defense. Production
+ * deployments should use Vercel WAF or Upstash Redis for durable rate limiting.
+ */
+const attemptTimestamps: number[] = [];
+
+export function recordGenerationAttempt(): void {
+  const cutoff = Date.now() - GENERATION_RATE_WINDOW_MS;
+  // Evict expired entries
+  while (attemptTimestamps.length > 0 && attemptTimestamps[0] < cutoff) {
+    attemptTimestamps.shift();
+  }
+  attemptTimestamps.push(Date.now());
+}
+
 export async function isGenerationRateLimited(): Promise<boolean> {
   try {
+    // Check in-memory attempts first — catches failed generations that never wrote to DB
+    const cutoff = Date.now() - GENERATION_RATE_WINDOW_MS;
+    while (attemptTimestamps.length > 0 && attemptTimestamps[0] < cutoff) {
+      attemptTimestamps.shift();
+    }
+    if (attemptTimestamps.length >= GENERATION_RATE_LIMIT) {
+      return true;
+    }
+
+    // Also check DB — catches attempts from other serverless instances
     const count = await strategy.countRecent(GENERATION_RATE_WINDOW_MS);
     return count >= GENERATION_RATE_LIMIT;
   } catch (err) {

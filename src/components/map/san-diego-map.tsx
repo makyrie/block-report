@@ -1,22 +1,12 @@
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { BlockMetrics, CommunityAnchor, TransitStop } from '../../types';
-import { norm, escapeHtml } from '../../utils/community';
-
-/** Only allow http/https URLs to prevent javascript: XSS */
-function safeHref(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? url : null;
-  } catch {
-    return null;
-  }
-}
+import type { BlockMetrics, CommunityAnchor } from '../../types';
+import { norm } from '../../utils/community';
 
 // ── Popup content components ─────────────────────────────────────────────────
 
@@ -26,10 +16,9 @@ type TypeConfig = {
   text: string;  // text color for label
 };
 
-const TYPE_CONFIG: Record<'library' | 'rec_center' | 'transit', TypeConfig> = {
+const TYPE_CONFIG: Record<'library' | 'rec_center', TypeConfig> = {
   library:    { dot: 'bg-blue-500',  label: 'Library',      text: 'text-blue-700'  },
   rec_center: { dot: 'bg-green-500', label: 'Rec Center',   text: 'text-green-700' },
-  transit:    { dot: 'bg-violet-600', label: 'Transit Stop', text: 'text-violet-700' },
 };
 
 function TypeBadge({ type }: { type: keyof typeof TYPE_CONFIG }) {
@@ -40,6 +29,16 @@ function TypeBadge({ type }: { type: keyof typeof TYPE_CONFIG }) {
       <span className={`text-xs font-semibold uppercase tracking-wide ${text}`}>{label}</span>
     </div>
   );
+}
+
+/** Only allow http/https URLs to prevent javascript: XSS */
+function safeHref(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 function AnchorPopupContent({ anchor }: { anchor: CommunityAnchor }) {
@@ -207,7 +206,6 @@ const orangeIcon = makePinIcon('#f97316');
 interface SanDiegoMapProps {
   libraries: CommunityAnchor[];
   recCenters: CommunityAnchor[];
-  transitStops: TransitStop[];
   neighborhoodBoundaries: FeatureCollection | null;
   selectedCommunity: string | null;
   onAnchorClick: (anchor: CommunityAnchor) => void;
@@ -226,37 +224,6 @@ function findCommunityFeature(features: Feature[], community: string): Feature |
     features.find((f) => target.includes(norm(f.properties?.cpname ?? ''))) ??
     null
   );
-}
-
-// Child component — renders all transit stops as a single Leaflet layer (avoids 6000+ React components)
-function TransitStopsLayer({ stops }: { stops: TransitStop[] }) {
-  const map = useMap();
-  const layerRef = useRef<L.LayerGroup | null>(null);
-
-  useEffect(() => {
-    if (layerRef.current) {
-      layerRef.current.remove();
-    }
-    const group = L.layerGroup();
-    for (const stop of stops) {
-      const marker = L.circleMarker([stop.lat, stop.lng], {
-        radius: 4,
-        color: '#7c3aed',
-        fillColor: '#7c3aed',
-        fillOpacity: 0.8,
-        weight: 1,
-      });
-      marker.bindPopup(
-        `<div class="min-w-[160px] max-w-[240px]"><div class="flex items-center gap-1.5 mb-2"><span class="w-2.5 h-2.5 rounded-full shrink-0 bg-violet-600" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7c3aed;"></span><span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6d28d9;">Transit Stop</span></div><p style="font-weight:600;color:#111827;font-size:14px;line-height:1.375;">${escapeHtml(stop.name)}</p></div>`,
-      );
-      group.addLayer(marker);
-    }
-    group.addTo(map);
-    layerRef.current = group;
-    return () => { group.remove(); };
-  }, [stops, map]);
-
-  return null;
 }
 
 // Child component — pinned block location marker that auto-opens its popup
@@ -321,7 +288,6 @@ function MapController({ feature }: { feature: Feature | null }) {
 function SanDiegoMap({
   libraries,
   recCenters,
-  transitStops,
   neighborhoodBoundaries,
   selectedCommunity,
   onAnchorClick,
@@ -331,7 +297,7 @@ function SanDiegoMap({
   blockLoading = false,
   blockRadius = 0.25,
 }: SanDiegoMapProps) {
-  const markerClickHandlers = useMemo(() => {
+  const markerClickHandlers = useCallback(() => {
     const handlers = new Map<string, () => void>();
     for (const anchor of [...libraries, ...recCenters]) {
       handlers.set(anchor.id, () => onAnchorClick(anchor));
@@ -339,25 +305,37 @@ function SanDiegoMap({
     return handlers;
   }, [libraries, recCenters, onAnchorClick]);
 
+  const handlers = markerClickHandlers();
+
   const selectedFeature = selectedCommunity && neighborhoodBoundaries
     ? findCommunityFeature(neighborhoodBoundaries.features, selectedCommunity)
     : null;
 
+  // Only show legend items for layers that have data (branch feature: hide unavailable legend items)
+  const hasLibraries = libraries.length > 0;
+  const hasRecCenters = recCenters.length > 0;
+
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
-    {/* Legend */}
-    <nav aria-label="Map legend" className="absolute bottom-8 left-2 z-[1000] bg-white/90 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 text-xs print:hidden">
-      <ul className="space-y-1.5">
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-blue-500 shrink-0" />
-          <span className="text-gray-700">Library</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
-          <span className="text-gray-700">Rec Center</span>
-        </li>
-      </ul>
-    </nav>
+    {/* Legend — only show items that have data */}
+    {(hasLibraries || hasRecCenters) && (
+      <nav aria-label="Map legend" className="absolute bottom-8 left-2 z-[1000] bg-white/90 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 text-xs print:hidden">
+        <ul className="space-y-1.5">
+          {hasLibraries && (
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-blue-500 shrink-0" />
+              <span className="text-gray-700">Library</span>
+            </li>
+          )}
+          {hasRecCenters && (
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
+              <span className="text-gray-700">Rec Center</span>
+            </li>
+          )}
+        </ul>
+      </nav>
+    )}
     <MapContainer
       center={[32.7157, -117.1611]}
       zoom={11}
@@ -414,9 +392,6 @@ function SanDiegoMap({
         />
       )}
 
-      {/* Transit stops — single imperative layer instead of 6000+ React components */}
-      <TransitStopsLayer stops={transitStops} />
-
       {/* Library markers — blue */}
       {libraries.map((lib) => (
         <Marker
@@ -425,7 +400,7 @@ function SanDiegoMap({
           icon={blueIcon}
           title={`Library: ${lib.name}`}
           alt={`Library: ${lib.name}`}
-          eventHandlers={{ click: markerClickHandlers.get(lib.id) }}
+          eventHandlers={{ click: handlers.get(lib.id) }}
         >
           <Popup>
             <AnchorPopupContent anchor={lib} />
@@ -441,7 +416,7 @@ function SanDiegoMap({
           icon={greenIcon}
           title={`Rec Center: ${rc.name}`}
           alt={`Rec Center: ${rc.name}`}
-          eventHandlers={{ click: markerClickHandlers.get(rc.id) }}
+          eventHandlers={{ click: handlers.get(rc.id) }}
         >
           <Popup>
             <AnchorPopupContent anchor={rc} />

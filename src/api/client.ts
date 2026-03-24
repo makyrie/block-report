@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile, TransitStop } from '../types';
+import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile } from '../types';
 
 const BASE = '/api';
 
@@ -22,24 +22,6 @@ export function getLibraries(signal?: AbortSignal): Promise<CommunityAnchor[]> {
 
 export function getRecCenters(signal?: AbortSignal): Promise<CommunityAnchor[]> {
   return fetchJSON(`${BASE}/locations/rec-centers`, signal ? { signal } : undefined);
-}
-
-let transitStopsPromise: Promise<TransitStop[]> | null = null;
-let transitStopsCachedAt = 0;
-const TRANSIT_STOPS_CLIENT_TTL = 60 * 60 * 1000; // 1 hour
-
-export function getTransitStops(): Promise<TransitStop[]> {
-  if (transitStopsPromise && Date.now() - transitStopsCachedAt < TRANSIT_STOPS_CLIENT_TTL) {
-    return transitStopsPromise;
-  }
-  transitStopsCachedAt = Date.now();
-  transitStopsPromise = fetchJSON<TransitStop[]>(
-    `${BASE}/locations/transit-stops`,
-  ).catch((err) => {
-    transitStopsPromise = null;
-    throw err;
-  });
-  return transitStopsPromise;
 }
 
 let boundaryPromise: Promise<FeatureCollection> | null = null;
@@ -80,7 +62,7 @@ export function getCitywideGaps(signal?: AbortSignal): Promise<{
   ranking: CitywideCommunity[];
   summary: { total: number; withGaps: number };
 }> {
-  return fetchJSON(`${BASE}/access-gap/ranking?limit=0`, signal ? { signal } : undefined);
+  return fetchJSON(`${BASE}/access-gap/ranking?limit=all`, signal ? { signal } : undefined);
 }
 
 export function getBlockData(lat: number, lng: number, radius = 0.25, signal?: AbortSignal): Promise<BlockMetrics> {
@@ -102,4 +84,3 @@ export function generateReport(profile: NeighborhoodProfile, language: string): 
     body: JSON.stringify({ profile, language }),
   });
 }
-

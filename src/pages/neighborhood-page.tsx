@@ -4,15 +4,16 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { getBlockData } from '../api/client';
-import type { BlockMetrics, CommunityAnchor, NeighborhoodProfile } from '../types';
+import type { CommunityAnchor, NeighborhoodProfile } from '../types';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
 import { findCommunityAtPoint } from '../utils/point-in-polygon';
 import { useMapData } from '../hooks/use-map-data';
 import { useCommunityData } from '../hooks/use-community-data';
+import { useBlockData } from '../hooks/use-block-data';
 import { useReport } from '../hooks/use-report';
+import { DEFAULT_TRANSIT } from '../utils/defaults';
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -20,14 +21,16 @@ export default function NeighborhoodPage() {
   const { lang, setLang, t, reportLang } = useLanguage();
   const [mobileView, setMobileView] = useState<'map' | 'info'>('map');
 
-  // --- Static map data ---
-  const { libraries, recCenters, transitStops, neighborhoodBoundaries, error: dataError } = useMapData();
+  const { libraries, recCenters, neighborhoodBoundaries, dataError } = useMapData();
 
   // --- Community selection ---
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
     slug ? fromSlug(slug) : null,
   );
   const [selectedAnchor, setSelectedAnchor] = useState<CommunityAnchor | null>(null);
+
+  const { metrics, metricsLoading, topLanguages, transitScore, accessGap } = useCommunityData(selectedCommunity);
+  const { pinnedLocation, setPinnedLocation, blockData, setBlockData, blockLoading, blockRadius, setBlockRadius } = useBlockData();
 
   // Sync URL -> state when slug changes (e.g. browser back/forward)
   useEffect(() => {
@@ -37,26 +40,6 @@ export default function NeighborhoodPage() {
       setSelectedAnchor(null);
     }
   }, [slug]);
-
-  // --- Community-specific data ---
-  const { metrics, metricsLoading, topLanguages, transitScore, accessGap } = useCommunityData(selectedCommunity);
-
-  // --- Block data ---
-  const [pinnedLocation, setPinnedLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [blockData, setBlockData] = useState<BlockMetrics | null>(null);
-  const [blockLoading, setBlockLoading] = useState(false);
-  const [blockRadius, setBlockRadius] = useState(0.25);
-
-  useEffect(() => {
-    if (!pinnedLocation) return;
-    const controller = new AbortController();
-    setBlockLoading(true);
-    getBlockData(pinnedLocation.lat, pinnedLocation.lng, blockRadius, controller.signal)
-      .then(setBlockData)
-      .catch((err) => { if (!controller.signal.aborted) console.error('Failed to fetch block data', err); })
-      .finally(() => { if (!controller.signal.aborted) setBlockLoading(false); });
-    return () => controller.abort();
-  }, [blockRadius, pinnedLocation]);
 
   // --- Report ---
   const buildProfile = useCallback((): NeighborhoodProfile | null => {
@@ -74,7 +57,7 @@ export default function NeighborhoodPage() {
       communityName: selectedCommunity,
       anchor,
       metrics,
-      transit: transitScore ?? { nearbyStopCount: 0, nearestStopDistance: 0, stopCount: 0, agencyCount: 0, agencies: [], transitScore: 0, cityAverage: 0, travelTimeToCityHall: null },
+      transit: transitScore ?? DEFAULT_TRANSIT,
       demographics: { topLanguages },
       accessGap: accessGap ?? null,
     };
@@ -99,7 +82,7 @@ export default function NeighborhoodPage() {
       setPinnedLocation(null);
       setBlockData(null);
     },
-    [navigate],
+    [navigate, setPinnedLocation, setBlockData],
   );
 
   const handleAnchorClick = useCallback(
@@ -122,7 +105,7 @@ export default function NeighborhoodPage() {
         navigate(`/neighborhood/${toSlug(detected)}`);
       }
     }
-  }, [neighborhoodBoundaries, selectedCommunity, navigate]);
+  }, [neighborhoodBoundaries, selectedCommunity, navigate, setPinnedLocation, setBlockData]);
 
   return (
     <div className="flex flex-col h-full md:flex-row print:block">
@@ -231,7 +214,6 @@ export default function NeighborhoodPage() {
         <SanDiegoMap
           libraries={libraries}
           recCenters={recCenters}
-          transitStops={transitStops}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
           onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}

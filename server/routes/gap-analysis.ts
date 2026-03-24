@@ -35,12 +35,16 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/access-gap/ranking?limit={n}  (limit=0 returns all, capped at 200)
+// GET /api/access-gap/ranking?limit={n}
+// limit=all  → returns all communities (capped at 200)
+// limit=0    → alias for "all" (deprecated, use limit=all)
+// limit=N    → returns top N (capped at 200)
+// no limit   → defaults to 10
 router.get('/ranking', async (req, res) => {
   const MAX_RESULTS = 200;
   const rawLimit = req.query.limit;
   const parsed = Number(rawLimit);
-  const limit = (rawLimit === '0' || rawLimit === 'all')
+  const limit = (rawLimit === 'all' || rawLimit === '0')
     ? MAX_RESULTS
     : (Number.isFinite(parsed) && parsed > 0)
       ? Math.min(Math.round(parsed), MAX_RESULTS)
