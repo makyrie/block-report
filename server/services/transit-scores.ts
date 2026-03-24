@@ -57,6 +57,11 @@ function getStopsInBBox(
   return result;
 }
 
+/** Yield to the event loop so other requests can be served during heavy computation */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 export interface TransitScore {
   stopCount: number;
   agencyCount: number;
@@ -69,10 +74,14 @@ export interface TransitScore {
 async function computeAllScores(): Promise<Map<string, TransitScore>> {
   logger.info('Computing transit scores for all communities...');
 
+  const TRANSIT_QUERY_LIMIT = 50_000;
   const stops = await prisma.transitStop.findMany({
     select: { lat: true, lng: true, stop_agncy: true },
-    take: 50_000, // Safety bound — San Diego has ~6k stops; prevents runaway queries
+    take: TRANSIT_QUERY_LIMIT,
   });
+  if (stops.length === TRANSIT_QUERY_LIMIT) {
+    logger.warn('Transit stops query hit safety cap', { limit: TRANSIT_QUERY_LIMIT });
+  }
 
   const geojson = await fetchBoundaries();
 
@@ -94,10 +103,17 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
   );
 
   const scores = new Map<string, TransitScore>();
+  const YIELD_INTERVAL = 5; // yield every N communities to keep event loop responsive
 
-  for (const feature of geojson.features) {
+  for (let fi = 0; fi < geojson.features.length; fi++) {
+    const feature = geojson.features[fi];
     const communityName: string = feature.properties?.cpname || feature.properties?.name || '';
     if (!communityName) continue;
+
+    // Yield to event loop periodically so other requests can be served
+    if (fi > 0 && fi % YIELD_INTERVAL === 0) {
+      await yieldToEventLoop();
+    }
 
     // Use spatial grid + bbox to narrow candidate stops
     const bbox = computeBBox(feature.geometry);
@@ -169,7 +185,8 @@ async function computeAllScores(): Promise<Map<string, TransitScore>> {
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 const DISK_CACHE_PATH = join(DISK_CACHE_DIR, 'transit-scores.json');
-const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL, { diskCachePath: DISK_CACHE_PATH });
+/** @internal Exported for test isolation — call invalidate() in beforeEach */
+export const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL, { diskCachePath: DISK_CACHE_PATH });
 
 export function getTransitScores(): Promise<Map<string, TransitScore>> {
   return cachedScores.get();

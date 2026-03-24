@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { getCityAverage } from './transit-scores';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { getCityAverage, cachedScores } from './transit-scores';
 import type { TransitScore } from './transit-scores';
 
 function makeScore(transitScore: number): TransitScore {
@@ -14,6 +14,7 @@ function makeScore(transitScore: number): TransitScore {
 }
 
 describe('getCityAverage', () => {
+  beforeEach(() => { cachedScores.invalidate(); });
   it('computes rounded average of transit scores', () => {
     const scores = new Map<string, TransitScore>([
       ['A', makeScore(60)],

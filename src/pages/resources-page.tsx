@@ -4,6 +4,7 @@ import { useLanguage } from '../i18n/context';
 import type { CommunityAnchor } from '../types';
 import { isSafeUrl } from '../utils/url';
 
+
 function safeWebsiteHref(url: string): string {
   try {
     const parsed = new URL(url, 'https://placeholder.invalid');

@@ -103,7 +103,7 @@ export default function WelcomePage() {
           {/* Divider */}
           <div className="flex items-center gap-3 max-w-sm mx-auto mt-4">
             <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400">or enter your zip code</span>
+            <span className="text-xs text-gray-400">{t('welcome.orZip')}</span>
             <div className="flex-1 h-px bg-gray-200" />
           </div>
 
@@ -134,7 +134,7 @@ export default function WelcomePage() {
               disabled={zip.length !== 5}
               className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 shrink-0"
             >
-              Look up
+              {t('welcome.lookUp')}
             </button>
           </div>
 
@@ -143,12 +143,12 @@ export default function WelcomePage() {
             <div id="zip-results" className="max-w-sm mx-auto mt-3" aria-live="polite">
               {zipResults.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center">
-                  No San Diego neighborhoods found for <strong>{zip}</strong>.
+                  {t('welcome.noResults', { zip })}
                 </p>
               ) : (
                 <div>
                   <p className="text-xs text-gray-500 mb-2 text-center">
-                    {zip} covers {zipResults.length} neighborhood{zipResults.length > 1 ? 's' : ''} — pick one:
+                    {t('welcome.zipCovers', { zip, count: String(zipResults.length) })}
                   </p>
                   <ul className="flex flex-col gap-1.5" role="list">
                     {zipResults.map((name) => (

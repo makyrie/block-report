@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createCachedComputation } from './cached-computation';
 
 describe('createCachedComputation', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('returns computed value', async () => {
     const compute = vi.fn().mockResolvedValue(42);
     const cached = createCachedComputation(compute, 1000);
@@ -56,7 +60,6 @@ describe('createCachedComputation', () => {
     vi.advanceTimersByTime(1001);
     expect(await cached.get()).toBe('refreshed');
     expect(compute).toHaveBeenCalledTimes(2);
-    vi.useRealTimers();
   });
 
   it('invalidate forces recomputation', async () => {

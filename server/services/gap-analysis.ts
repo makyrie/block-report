@@ -32,10 +32,15 @@ interface CensusRow {
 }
 
 async function fetchCensusData(): Promise<CensusRow[]> {
-  return prisma.censusLanguage.findMany({
+  const CENSUS_QUERY_LIMIT = 10_000;
+  const rows = await prisma.censusLanguage.findMany({
     select: { community: true, total_pop_5plus: true, english_only: true },
-    take: 50_000, // Safety bound — SD county has ~900 tracts; prevents runaway queries
+    take: CENSUS_QUERY_LIMIT,
   });
+  if (rows.length === CENSUS_QUERY_LIMIT) {
+    logger.warn('Census query hit safety cap', { limit: CENSUS_QUERY_LIMIT });
+  }
+  return rows;
 }
 
 async function fetchEngagementRates(censusRows: CensusRow[]): Promise<Map<string, number>> {
@@ -107,10 +112,11 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
 
   const censusRows = await fetchCensusData();
 
-  const [engagementRates, transitScores] = await Promise.all([
-    fetchEngagementRates(censusRows),
-    getTransitScoreValues(),
-  ]);
+  // Serialize DB-heavy queries to avoid exhausting the max:2 connection pool.
+  // fetchEngagementRates and getTransitScoreValues each need a DB connection;
+  // running them in parallel would leave no connections for other requests.
+  const engagementRates = await fetchEngagementRates(censusRows);
+  const transitScores = await getTransitScoreValues();
   const nonEnglishPcts = computeNonEnglishPct(censusRows);
 
   // Collect all known communities
@@ -216,7 +222,8 @@ async function computeAllScores(): Promise<Map<string, AccessGapResult>> {
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 const DISK_CACHE_PATH = join(DISK_CACHE_DIR, 'gap-analysis.json');
-const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL, { diskCachePath: DISK_CACHE_PATH });
+/** @internal Exported for test isolation — call invalidate() in beforeEach */
+export const cachedScores = createCachedComputation(computeAllScores, CACHE_TTL, { diskCachePath: DISK_CACHE_PATH });
 
 export function getAccessGapScores(): Promise<Map<string, AccessGapResult>> {
   return cachedScores.get();
@@ -245,7 +252,7 @@ export async function getTopUnderserved(limit = 10): Promise<
   { community: string; accessGapScore: number; signals: AccessGapResult['signals']; topFactors: string[]; rank: number; totalCommunities: number }[]
 > {
   const scores = await getAccessGapScores();
-  // scores Map is already sorted by descending accessGapScore from computeAllScores
+  // Map preserves insertion order from computeAllScores' sorted array — no re-sort needed
   const entries = Array.from(scores.entries());
   const sliced = entries.slice(0, limit);
   return sliced.map(([community, data]) => ({

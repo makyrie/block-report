@@ -43,21 +43,29 @@ function mockReq(query: Record<string, string | undefined> = {}): Request {
   return { query } as unknown as Request;
 }
 
-const mockScores = new Map([
-  ['COMMUNITY_A', { accessGapScore: 70, signals: { lowEngagement: 0.8, lowTransit: 0.5, highNonEnglish: 0.6 }, rank: 1, totalCommunities: 3 }],
-  ['COMMUNITY_B', { accessGapScore: 55, signals: { lowEngagement: 0.4, lowTransit: 0.7, highNonEnglish: 0.5 }, rank: 2, totalCommunities: 3 }],
-  ['COMMUNITY_C', { accessGapScore: 30, signals: { lowEngagement: 0.2, lowTransit: 0.3, highNonEnglish: 0.1 }, rank: 3, totalCommunities: 3 }],
-]);
+function createMockScores() {
+  return new Map([
+    ['COMMUNITY_A', { accessGapScore: 70, signals: { lowEngagement: 0.8, lowTransit: 0.5, highNonEnglish: 0.6 }, rank: 1, totalCommunities: 3 }],
+    ['COMMUNITY_B', { accessGapScore: 55, signals: { lowEngagement: 0.4, lowTransit: 0.7, highNonEnglish: 0.5 }, rank: 2, totalCommunities: 3 }],
+    ['COMMUNITY_C', { accessGapScore: 30, signals: { lowEngagement: 0.2, lowTransit: 0.3, highNonEnglish: 0.1 }, rank: 3, totalCommunities: 3 }],
+  ]);
+}
 
-const mockRanking = [
-  { community: 'COMMUNITY_A', accessGapScore: 70, signals: mockScores.get('COMMUNITY_A')!.signals, topFactors: ['factor.lowEngagement'], rank: 1, totalCommunities: 3 },
-  { community: 'COMMUNITY_B', accessGapScore: 55, signals: mockScores.get('COMMUNITY_B')!.signals, topFactors: ['factor.lowTransit'], rank: 2, totalCommunities: 3 },
-];
+function createMockRanking(scores: ReturnType<typeof createMockScores>) {
+  return [
+    { community: 'COMMUNITY_A', accessGapScore: 70, signals: scores.get('COMMUNITY_A')!.signals, topFactors: ['factor.lowEngagement'], rank: 1, totalCommunities: 3 },
+    { community: 'COMMUNITY_B', accessGapScore: 55, signals: scores.get('COMMUNITY_B')!.signals, topFactors: ['factor.lowTransit'], rank: 2, totalCommunities: 3 },
+  ];
+}
 
 describe('/api/access-gap/ranking', () => {
   let handler: (req: Request, res: Response) => Promise<void>;
+  let mockScores: ReturnType<typeof createMockScores>;
+  let mockRanking: ReturnType<typeof createMockRanking>;
 
   beforeEach(async () => {
+    mockScores = createMockScores();
+    mockRanking = createMockRanking(mockScores);
     vi.mocked(getAccessGapScores).mockResolvedValue(mockScores);
     vi.mocked(getTopUnderserved).mockResolvedValue(mockRanking);
     handler = await getRankingHandler();

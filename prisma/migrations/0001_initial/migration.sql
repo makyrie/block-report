@@ -119,3 +119,110 @@ CREATE UNIQUE INDEX "report_cache_community_language_key" ON "report_cache"("com
 
 -- CreateIndex
 CREATE INDEX "idx_report_cache_created_at" ON "report_cache"("created_at");
+
+-- CreateIndex (P1: lat/lng index for block endpoint spatial queries)
+CREATE INDEX "idx_311_lat_lng" ON "requests_311"("lat", "lng");
+
+-- CreateFunction: get_community_metrics
+-- Returns aggregated 311 metrics for a given community as JSONB
+CREATE OR REPLACE FUNCTION get_community_metrics(community_name TEXT)
+RETURNS JSONB AS $$
+DECLARE
+  result JSONB;
+BEGIN
+  WITH base AS (
+    SELECT *
+    FROM requests_311
+    WHERE LOWER(comm_plan_name) = LOWER(community_name)
+  ),
+  counts AS (
+    SELECT
+      COUNT(*)::int AS total_requests,
+      COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::int AS resolved_count,
+      ROUND(AVG(
+        CASE WHEN date_closed IS NOT NULL AND date_requested IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (date_closed - date_requested)) / 86400.0
+        END
+      )::numeric, 1) AS avg_days_to_resolve
+    FROM base
+  ),
+  top_issues AS (
+    SELECT jsonb_agg(row_to_json(t)::jsonb ORDER BY t.count DESC) AS val
+    FROM (
+      SELECT COALESCE(service_name, 'Unknown') AS category, COUNT(*)::int AS count
+      FROM base
+      GROUP BY service_name
+      ORDER BY count DESC
+      LIMIT 10
+    ) t
+  ),
+  recently_resolved AS (
+    SELECT jsonb_agg(row_to_json(t)::jsonb ORDER BY t.date DESC) AS val
+    FROM (
+      SELECT COALESCE(service_name, 'Unknown') AS category, date_closed::text AS date
+      FROM base
+      WHERE date_closed IS NOT NULL
+      ORDER BY date_closed DESC
+      LIMIT 5
+    ) t
+  ),
+  recent_90d AS (
+    SELECT
+      COUNT(*) FILTER (WHERE date_closed IS NOT NULL AND date_closed >= NOW() - INTERVAL '90 days')::int AS recent_resolved_90d
+    FROM base
+  ),
+  top_recent AS (
+    SELECT COALESCE(service_name, 'Unknown') AS category, COUNT(*)::int AS cnt
+    FROM base
+    WHERE date_closed IS NOT NULL AND date_closed >= NOW() - INTERVAL '90 days'
+    GROUP BY service_name
+    ORDER BY cnt DESC
+    LIMIT 1
+  ),
+  high_res AS (
+    SELECT jsonb_agg(row_to_json(t)::jsonb ORDER BY t.resolution_rate DESC) AS val
+    FROM (
+      SELECT
+        COALESCE(service_name, 'Unknown') AS category,
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::int AS resolved,
+        ROUND(
+          (COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::numeric / NULLIF(COUNT(*), 0)) * 100,
+          0
+        )::int AS resolution_rate
+      FROM base
+      GROUP BY service_name
+      HAVING COUNT(*) >= 10
+        AND (COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::numeric / NULLIF(COUNT(*), 0)) >= 0.9
+      ORDER BY resolution_rate DESC
+      LIMIT 5
+    ) t
+  ),
+  pop AS (
+    SELECT COALESCE(SUM(total_pop_5plus), 0)::int AS population
+    FROM census_language
+    WHERE LOWER(community) = LOWER(community_name)
+  )
+  SELECT jsonb_build_object(
+    'total_requests', c.total_requests,
+    'resolved_count', c.resolved_count,
+    'avg_days_to_resolve', COALESCE(c.avg_days_to_resolve, 0),
+    'top_issues', COALESCE(ti.val, '[]'::jsonb),
+    'recently_resolved', COALESCE(rr.val, '[]'::jsonb),
+    'recent_resolved_90d', r9.recent_resolved_90d,
+    'top_recent_category', tr.category,
+    'top_recent_category_count', COALESCE(tr.cnt, 0),
+    'high_res_categories', COALESCE(hr.val, '[]'::jsonb),
+    'population', p.population
+  ) INTO result
+  FROM counts c
+  CROSS JOIN top_issues ti
+  CROSS JOIN recently_resolved rr
+  CROSS JOIN recent_90d r9
+  CROSS JOIN pop p
+  LEFT JOIN top_recent tr ON TRUE
+  CROSS JOIN high_res hr;
+
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql STABLE;

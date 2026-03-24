@@ -5,11 +5,22 @@ import type { CommunityReport } from '../../src/types/index.js';
 import { isVercel } from '../env.js';
 import { prisma } from './db.js';
 import { logger } from '../logger.js';
+import { validateReportShape } from '../utils/report-validation.js';
 import { communityKey } from '../utils/community.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '..', 'cache', 'reports');
 export const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/** Check whether a cached value has a valid CommunityReport shape */
+function isValidReportShape(data: unknown): data is CommunityReport {
+  try {
+    validateReportShape(data);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Filesystem/DB-safe cache key: derives from communityKey() (the canonical
@@ -49,7 +60,12 @@ const dbStrategy: CacheStrategy = {
     if (!row) return null;
     const age = Date.now() - row.createdAt.getTime();
     if (age > CACHE_TTL_MS) return null;
-    return row.report as unknown as CommunityReport;
+    const report = row.report as unknown;
+    if (!isValidReportShape(report)) {
+      logger.warn('Cached report has invalid shape, discarding', { community, language });
+      return null;
+    }
+    return report;
   },
 
   async set(community, language, report) {
@@ -83,7 +99,12 @@ const fileStrategy: CacheStrategy = {
       if (age > CACHE_TTL_MS) return null;
 
       const raw = await readFile(filePath, 'utf-8');
-      return JSON.parse(raw) as CommunityReport;
+      const parsed = JSON.parse(raw);
+      if (!isValidReportShape(parsed)) {
+        logger.warn('Cached report file has invalid shape, discarding', { filePath });
+        return null;
+      }
+      return parsed;
     } catch {
       return null;
     }
