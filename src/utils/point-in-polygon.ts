@@ -1,3 +1,6 @@
+// Client-side point-in-polygon utilities for detecting which community
+// a clicked point falls within.
+
 import type { FeatureCollection, Geometry, Position } from 'geojson';
 
 /**

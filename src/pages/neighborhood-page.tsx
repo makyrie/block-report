@@ -25,6 +25,7 @@ export default function NeighborhoodPage() {
   const { libraries, recCenters, neighborhoodBoundaries, dataError } = useMapData();
   const [permits, setPermits] = useState<Permit[]>([]);
 
+  // --- Community selection ---
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
     slug ? fromSlug(slug) : null,
   );
@@ -148,6 +149,7 @@ export default function NeighborhoodPage() {
     return () => { controller.abort(); generatingRef.current = false; };
   }, [selectedCommunity, reportLang, metrics]);
 
+  // --- Event handlers ---
   const handleCommunityChange = useCallback(
     (community: string) => {
       if (community) {

@@ -42,7 +42,16 @@ function getPrisma(): PrismaClient {
 let _proxyClient: PrismaClient | null = null;
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop: string | symbol) {
-    if (!_proxyClient) _proxyClient = getPrisma();
+    if (!_proxyClient) {
+      try {
+        _proxyClient = getPrisma();
+      } catch (err) {
+        // Don't cache a broken client — allow retry on next access
+        _prisma = null;
+        _proxyClient = null;
+        throw err;
+      }
+    }
     return Reflect.get(_proxyClient, prop);
   },
 });

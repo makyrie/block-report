@@ -225,6 +225,11 @@ function SanDiegoMap({
     [selectedCommunity, neighborhoodBoundaries],
   );
 
+  // Only show legend items for layers that have data (branch feature: hide unavailable legend items)
+  const hasLibraries = libraries.length > 0;
+  const hasRecCenters = recCenters.length > 0;
+  const hasPermits = permits.length > 0;
+
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
     {/* Screen reader announcement for filter changes */}
@@ -295,47 +300,57 @@ function SanDiegoMap({
         <span className="font-semibold text-gray-900">{totalReports}</span> reports
       </div>
     )}
-    {/* Legend */}
-    <nav aria-label="Map legend" className="absolute bottom-8 left-2 z-[1000] bg-white/90 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 text-xs print:hidden">
-      <ul className="space-y-1.5">
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-blue-500 shrink-0" />
-          <span className="text-gray-700">{t('map.legend.library')}</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
-          <span className="text-gray-700">{t('map.legend.recCenter')}</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-amber-500 shrink-0" />
-          <span className="text-gray-700">Permit</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
-          <span className="text-gray-700">Transit Stop</span>
-        </li>
-        <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-orange-500 shrink-0" />
-          <span className="text-gray-700">Your Block</span>
-        </li>
-        {pinnedLocation && reports.length > 0 && (
-          <>
-            <li className="border-t border-gray-200 pt-1.5 mt-1 flex items-center gap-2">
-              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.open }} />
-              <span className="text-gray-700">311 Open</span>
-            </li>
+    {/* Legend — only show items that have data */}
+    {(hasLibraries || hasRecCenters || hasPermits || pinnedLocation) && (
+      <nav aria-label="Map legend" className="absolute bottom-8 left-2 z-[1000] bg-white/90 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 text-xs print:hidden">
+        <ul className="space-y-1.5">
+          {hasLibraries && (
             <li className="flex items-center gap-2">
-              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.resolved }} />
-              <span className="text-gray-700">311 Resolved</span>
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-blue-500 shrink-0" />
+              <span className="text-gray-700">{t('map.legend.library')}</span>
             </li>
+          )}
+          {hasRecCenters && (
             <li className="flex items-center gap-2">
-              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.referred }} />
-              <span className="text-gray-700">311 Referred</span>
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-green-500 shrink-0" />
+              <span className="text-gray-700">{t('map.legend.recCenter')}</span>
             </li>
-          </>
-        )}
-      </ul>
-    </nav>
+          )}
+          {hasPermits && (
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-amber-500 shrink-0" />
+              <span className="text-gray-700">Permit</span>
+            </li>
+          )}
+          <li className="flex items-center gap-2">
+            <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-violet-600 shrink-0" />
+            <span className="text-gray-700">Transit Stop</span>
+          </li>
+          {pinnedLocation && (
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full bg-orange-500 shrink-0" />
+              <span className="text-gray-700">Your Block</span>
+            </li>
+          )}
+          {pinnedLocation && reports.length > 0 && (
+            <>
+              <li className="border-t border-gray-200 pt-1.5 mt-1 flex items-center gap-2">
+                <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.open }} />
+                <span className="text-gray-700">311 Open</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.resolved }} />
+                <span className="text-gray-700">311 Resolved</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.referred }} />
+                <span className="text-gray-700">311 Referred</span>
+              </li>
+            </>
+          )}
+        </ul>
+      </nav>
+    )}
     <MapContainer
       center={[32.7157, -117.1611]}
       zoom={11}

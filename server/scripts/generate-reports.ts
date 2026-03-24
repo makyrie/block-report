@@ -8,7 +8,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor, StoredBlockReport } from '../../src/types/index.js';
+import type { NeighborhoodProfile, CommunityReport, BlockMetrics, CommunityAnchor, StoredBlockReport } from '../../types/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(__dirname, '..', 'cache', 'reports');

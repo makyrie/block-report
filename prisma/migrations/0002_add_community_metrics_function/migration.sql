@@ -1,10 +1,5 @@
--- RPC function to aggregate 311 metrics for a community server-side.
--- This runs as raw SQL via prisma.$queryRaw since Prisma doesn't manage functions.
--- To apply: run this SQL directly against your Neon database.
---
--- Requires functional indexes for performance:
---   CREATE INDEX idx_requests_311_comm_plan_lower ON requests_311 (LOWER(comm_plan_name));
---   CREATE INDEX idx_census_language_community_lower ON census_language (LOWER(community));
+-- CreateFunction: get_community_metrics
+-- Aggregates 311 metrics for a community, used by /api/311 endpoint
 
 CREATE OR REPLACE FUNCTION get_community_metrics(community_name TEXT)
 RETURNS JSONB AS $$
@@ -12,7 +7,7 @@ DECLARE
   result JSONB;
   cleaned TEXT;
 BEGIN
-  cleaned := LOWER(replace(replace(community_name, '%', ''), '_', ''));
+  cleaned := replace(replace(community_name, '%', ''), '_', '');
 
   SELECT jsonb_build_object(
     'total_requests', COALESCE(agg.total, 0),
@@ -34,13 +29,13 @@ BEGIN
         FILTER (WHERE date_closed IS NOT NULL AND date_requested IS NOT NULL
                 AND date_closed >= date_requested) AS avg_days
     FROM requests_311
-    WHERE LOWER(comm_plan_name) = cleaned
+    WHERE LOWER(comm_plan_name) = LOWER(cleaned)
     ) agg,
     LATERAL (
       SELECT jsonb_agg(row_to_json(t)::jsonb) AS items FROM (
         SELECT service_name AS category, COUNT(*) AS count
         FROM requests_311
-        WHERE LOWER(comm_plan_name) = cleaned
+        WHERE LOWER(comm_plan_name) = LOWER(cleaned)
         GROUP BY service_name
         ORDER BY count DESC
         LIMIT 10
@@ -50,7 +45,7 @@ BEGIN
       SELECT jsonb_agg(row_to_json(t)::jsonb) AS items FROM (
         SELECT service_name AS category, date_closed AS date
         FROM requests_311
-        WHERE LOWER(comm_plan_name) = cleaned
+        WHERE LOWER(comm_plan_name) = LOWER(cleaned)
           AND date_closed IS NOT NULL
           AND (status = 'Closed' OR date_closed IS NOT NULL)
         ORDER BY date_closed DESC
@@ -65,14 +60,14 @@ BEGIN
       FROM (
         SELECT COUNT(*) AS cnt
         FROM requests_311
-        WHERE LOWER(comm_plan_name) = cleaned
+        WHERE LOWER(comm_plan_name) = LOWER(cleaned)
           AND (status = 'Closed' OR date_closed IS NOT NULL)
           AND date_closed >= NOW() - INTERVAL '90 days'
       ) c,
       LATERAL (
         SELECT service_name AS top_cat, COUNT(*) AS top_cat_cnt
         FROM requests_311
-        WHERE LOWER(comm_plan_name) = cleaned
+        WHERE LOWER(comm_plan_name) = LOWER(cleaned)
           AND (status = 'Closed' OR date_closed IS NOT NULL)
           AND date_closed >= NOW() - INTERVAL '90 days'
         GROUP BY service_name
@@ -91,7 +86,7 @@ BEGIN
             / COUNT(*)::numeric * 100
           ) AS resolution_rate
         FROM requests_311
-        WHERE LOWER(comm_plan_name) = cleaned
+        WHERE LOWER(comm_plan_name) = LOWER(cleaned)
         GROUP BY service_name
         HAVING COUNT(*) >= 10
           AND COUNT(*) FILTER (WHERE status = 'Closed' OR date_closed IS NOT NULL)::numeric
@@ -103,7 +98,7 @@ BEGIN
     LATERAL (
       SELECT COALESCE(SUM(total_pop_5plus), 0) AS total
       FROM census_language
-      WHERE LOWER(community) = cleaned
+      WHERE LOWER(community) = LOWER(cleaned)
     ) pop;
 
   RETURN result;

@@ -9,7 +9,7 @@
  * Canonical key for community lookups. All server-side maps use UPPERCASE keys.
  */
 export function communityKey(name: string): string {
-  return name.toUpperCase().trim();
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 /**

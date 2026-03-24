@@ -10,6 +10,14 @@ const router = Router();
 /** Server-side language allowlist — prevents prompt injection via arbitrary language strings */
 const ALLOWED_LANGUAGES = new Set(['en', 'es', 'vi', 'tl', 'zh', 'ar']);
 
+function validateLanguage(language: unknown): string | null {
+  if (typeof language !== 'string' || !language || !ALLOWED_LANGUAGES.has(language)) return null;
+  return language;
+}
+
+const MAX_PROFILE_SIZE = 10_000;
+const MAX_BLOCK_METRICS_SIZE = 5_000;
+
 // Per-IP rate limiting for report generation endpoints
 // WARNING: This in-memory map resets on every serverless cold start (same limitation
 // as the global express-rate-limit in app.ts). It provides best-effort protection
@@ -53,7 +61,7 @@ function isIpRateLimited(ip: string): boolean {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const community = req.query.community as string;
-    const language = req.query.language as string || 'en';
+    const language = validateLanguage(req.query.language) || 'en';
 
     if (!community) {
       res.status(400).json({ error: 'Missing required query parameter: community' });
@@ -99,7 +107,7 @@ router.get('/block', async (req: Request, res: Response) => {
 
 router.post('/generate', async (req: Request, res: Response) => {
   try {
-    const { profile, language } = req.body as {
+    const { profile, language: rawLang } = req.body as {
       profile: NeighborhoodProfile;
       language: string;
     };
@@ -116,8 +124,14 @@ router.post('/generate', async (req: Request, res: Response) => {
         delete (profile as Record<string, unknown>)[key];
       }
     }
-    if (typeof language !== 'string' || !ALLOWED_LANGUAGES.has(language)) {
+
+    const language = validateLanguage(rawLang);
+    if (!language) {
       res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
+      return;
+    }
+    if (JSON.stringify(profile).length > MAX_PROFILE_SIZE) {
+      res.status(400).json({ error: `profile payload too large (max ${MAX_PROFILE_SIZE} bytes)` });
       return;
     }
 
@@ -178,9 +192,9 @@ router.post('/generate', async (req: Request, res: Response) => {
 // POST /api/report/generate-block — Generate a block-level report for an anchor location
 router.post('/generate-block', async (req: Request, res: Response) => {
   try {
-    const { anchor: rawAnchor, blockMetrics, language, demographics } = req.body;
+    const { anchor: rawAnchor, blockMetrics, language: rawLang, demographics } = req.body;
 
-    if (!rawAnchor || !blockMetrics || !language) {
+    if (!rawAnchor || !blockMetrics || !rawLang) {
       res.status(400).json({ error: 'Missing required fields: anchor, blockMetrics, language' });
       return;
     }
@@ -196,6 +210,8 @@ router.post('/generate-block', async (req: Request, res: Response) => {
     }
     const MAX_FIELD_LEN = 200;
     const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
+    const ANCHOR_ID_RE = /^[a-zA-Z0-9_-]+$/;
+    const VALID_ANCHOR_TYPES = new Set(['library', 'rec_center']);
     for (const field of ['id', 'name', 'address', 'community', 'type'] as const) {
       if (anchor[field] !== undefined) {
         if (typeof anchor[field] !== 'string') {
@@ -209,18 +225,17 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         anchor[field] = anchor[field].replace(CONTROL_CHAR_RE, '');
       }
     }
-    if (typeof language !== 'string' || !ALLOWED_LANGUAGES.has(language)) {
+    if (anchor.id && !ANCHOR_ID_RE.test(anchor.id)) {
+      res.status(400).json({ error: 'anchor.id must contain only alphanumeric characters, hyphens, and underscores' });
+      return;
+    }
+    if (anchor.type && !VALID_ANCHOR_TYPES.has(anchor.type)) {
+      res.status(400).json({ error: `anchor.type must be one of: ${Array.from(VALID_ANCHOR_TYPES).join(', ')}` });
+      return;
+    }
+    const language = validateLanguage(rawLang);
+    if (!language) {
       res.status(400).json({ error: `language must be one of: ${Array.from(ALLOWED_LANGUAGES).join(', ')}` });
-      return;
-    }
-
-    // Validate blockMetrics shape to prevent malformed input from reaching Claude
-    if (typeof blockMetrics !== 'object' || blockMetrics === null) {
-      res.status(400).json({ error: 'blockMetrics must be an object' });
-      return;
-    }
-    if (typeof blockMetrics.totalRequests !== 'number' || typeof blockMetrics.openCount !== 'number') {
-      res.status(400).json({ error: 'blockMetrics must contain numeric totalRequests and openCount fields' });
       return;
     }
 
@@ -230,6 +245,10 @@ router.post('/generate-block', async (req: Request, res: Response) => {
       if (!ALLOWED_METRICS_KEYS.has(key)) {
         delete blockMetrics[key];
       }
+    }
+    if (typeof blockMetrics.totalRequests !== 'number' || typeof blockMetrics.openCount !== 'number') {
+      res.status(400).json({ error: 'blockMetrics must contain numeric totalRequests and openCount fields' });
+      return;
     }
     for (const field of ['totalRequests', 'openCount', 'resolvedCount', 'resolutionRate', 'radiusMiles'] as const) {
       if (typeof blockMetrics[field] !== 'number' || !isFinite(blockMetrics[field])) {
@@ -261,6 +280,10 @@ router.post('/generate-block', async (req: Request, res: Response) => {
         date: typeof it.date === 'string' ? it.date.slice(0, 30).replace(CTRL_RE, '') : '',
       };
     });
+    if (JSON.stringify(blockMetrics).length > MAX_BLOCK_METRICS_SIZE) {
+      res.status(400).json({ error: `blockMetrics payload too large (max ${MAX_BLOCK_METRICS_SIZE} bytes)` });
+      return;
+    }
 
     // Validate demographics if provided
     if (demographics !== undefined && demographics !== null) {

@@ -257,8 +257,8 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
   }
   console.log(`  ${tractCentroids.size} tract centroids loaded`);
 
-  // Match each tract to a community
-  let mapped = 0;
+  // Match each tract to a community (batched transaction)
+  const updates: ReturnType<typeof prisma.censusLanguage.update>[] = [];
   for (const row of censusRows) {
     const tract = row[row.length - 1];
     const centroid = tractCentroids.get(tract);
@@ -267,13 +267,15 @@ async function mapTractsToCommunitites(censusRows: string[][]) {
     const community = findCommunity(centroid.lat, centroid.lng, communities);
     if (!community) continue;
 
-    await prisma.censusLanguage.update({
+    updates.push(prisma.censusLanguage.update({
       where: { tract },
       data: { community },
-    });
-    mapped++;
+    }));
   }
-  console.log(`  ✓ ${mapped} tracts mapped to communities`);
+  if (updates.length > 0) {
+    await prisma.$transaction(updates);
+  }
+  console.log(`  ✓ ${updates.length} tracts mapped to communities`);
 }
 
 const PERMIT_SEED_WINDOW_MONTHS = 12;

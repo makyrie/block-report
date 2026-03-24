@@ -1,10 +1,6 @@
--- RPC function to aggregate 311 metrics for a community server-side.
--- This runs as raw SQL via prisma.$queryRaw since Prisma doesn't manage functions.
--- To apply: run this SQL directly against your Neon database.
---
--- Requires functional indexes for performance:
---   CREATE INDEX idx_requests_311_comm_plan_lower ON requests_311 (LOWER(comm_plan_name));
---   CREATE INDEX idx_census_language_community_lower ON census_language (LOWER(community));
+-- Update get_community_metrics to pre-lowercase the cleaned input,
+-- so WHERE clauses can match the functional indexes on LOWER(comm_plan_name)
+-- and LOWER(community) without calling LOWER() on both sides.
 
 CREATE OR REPLACE FUNCTION get_community_metrics(community_name TEXT)
 RETURNS JSONB AS $$

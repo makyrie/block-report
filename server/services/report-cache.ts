@@ -35,7 +35,7 @@ interface CacheStrategy {
 const dbStrategy: CacheStrategy = {
   async get(community, language) {
     const row = await prisma.reportCache.findUnique({
-      where: { community_language: { community: normalizeKey(community), language: normalizeKey(language) } },
+      where: { community_language: { community: communityKey(community), language: communityKey(language) } },
     });
     if (!row) return null;
     const age = Date.now() - row.createdAt.getTime();
@@ -45,9 +45,9 @@ const dbStrategy: CacheStrategy = {
 
   async set(community, language, report) {
     await prisma.reportCache.upsert({
-      where: { community_language: { community: normalizeKey(community), language: normalizeKey(language) } },
+      where: { community_language: { community: communityKey(community), language: communityKey(language) } },
       update: { report: report as unknown as Record<string, unknown>, createdAt: new Date() },
-      create: { community: normalizeKey(community), language: normalizeKey(language), report: report as unknown as Record<string, unknown> },
+      create: { community: communityKey(community), language: communityKey(language), report: report as unknown as Record<string, unknown> },
     });
   },
 
@@ -168,7 +168,7 @@ export async function saveCachedBlockReport(anchorId: string, language: string, 
  * Returns true if the limit has been exceeded.
  */
 const GENERATION_RATE_LIMIT = 20; // max reports per window
-const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+export const GENERATION_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 /**
  * In-memory generation attempt tracker — counts attempts, not just successful cache writes.

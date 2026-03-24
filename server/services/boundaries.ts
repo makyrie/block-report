@@ -45,10 +45,22 @@ async function computeBoundaries(): Promise<BoundaryCollection> {
       throw new Error(`Boundary response too large: ${contentLength} bytes`);
     }
 
-    const text = await res.text();
-    if (text.length > MAX_RESPONSE_BYTES) {
-      throw new Error(`Boundary response body too large: ${text.length} bytes`);
+    // Stream body with incremental size check to avoid buffering oversized payloads
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('No response body');
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_RESPONSE_BYTES) {
+        reader.cancel();
+        throw new Error(`Boundary response body too large: exceeded ${MAX_RESPONSE_BYTES} bytes`);
+      }
+      chunks.push(value);
     }
+    const text = new TextDecoder().decode(Buffer.concat(chunks));
 
     const data: unknown = JSON.parse(text);
     if (!validateBoundaryCollection(data)) {

@@ -144,7 +144,7 @@ export default function CitywideRanking({
               isHovered={isHovered}
               onHoverCommunity={onHoverCommunity}
               onClickCommunity={onClickCommunity}
-              rowRef={rowRefCallbacks.get(entry.community)!}
+              rowRef={rowRefCallbacks.get(entry.community) ?? (() => {})}
             />
           );
         })}

@@ -70,32 +70,31 @@ app.get('/api/health/ready', async (_req, res) => {
   }
 });
 
-// WARNING: In-memory rate limiting resets on every cold start in serverless (Vercel).
-// This provides best-effort protection only — a determined caller can bypass it by
-// waiting for new instances. For production, use Vercel WAF or Upstash Redis-backed
-// rate limiting to protect against Claude API cost exposure.
-if (isVercel) {
-  logger.warn('Rate limiting is in-memory only — ineffective across serverless instances. Configure Vercel WAF or Upstash for production.');
+// In-memory rate limiting is only effective on long-lived server processes.
+// On serverless (Vercel), each cold start resets counters — the DB-backed
+// isGenerationRateLimited() in report routes is the real protection there.
+// For production serverless, configure Vercel WAF or Upstash Redis for
+// general API rate limiting.
+if (!isVercel) {
+  const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
+  const reportLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many report generation requests, please try again later' },
+  });
+  const blockLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { error: 'Too many block data requests, please try again later' },
+  });
+  app.use('/api/report', reportLimiter);
+  app.use('/api/block', blockLimiter);
+  app.use('/api', apiLimiter);
+} else {
+  logger.info('Serverless mode: skipping in-memory rate limiting (DB-backed rate limit active for report generation)');
 }
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
-const reportLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many report generation requests, please try again later' },
-});
-const blockLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { error: 'Too many block data requests, please try again later' },
-});
-// Note: /api/report and /api/block requests hit both their dedicated limiter
-// AND the general apiLimiter (intentional defense-in-depth — the dedicated
-// limiters are stricter, while apiLimiter caps total API usage per client).
-app.use('/api/report', reportLimiter);
-app.use('/api/block', blockLimiter);
-app.use('/api', apiLimiter);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -154,6 +153,11 @@ app.get('/api/cron/purge-cache', async (req, res) => {
     });
     res.status(500).json({ error: 'Purge failed' });
   }
+});
+
+// API 404 catch-all — unknown API paths return JSON instead of falling through to SPA
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
 export default app;
