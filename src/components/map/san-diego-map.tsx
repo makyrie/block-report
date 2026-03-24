@@ -6,7 +6,7 @@ import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import type { Feature, FeatureCollection } from 'geojson';
 import type { Block311Report, BlockMetrics, CommunityAnchor } from '../../types';
-import { norm } from '../../utils/community';
+import { norm, scoreToColor } from '../../utils/community';
 import {
   AnchorPopupContent,
   TransitPopupContent,
@@ -50,7 +50,13 @@ interface SanDiegoMapProps {
   blockData?: BlockMetrics | null;
   blockLoading?: boolean;
   blockRadius?: number;
+  accessGapScores?: Map<string, number>;
+  showChoropleth?: boolean;
+  onToggleChoropleth?: () => void;
+  onCommunitySelect?: (community: string) => void;
 }
+
+
 
 function findCommunityFeature(features: Feature[], community: string): Feature | null {
   const target = norm(community);
@@ -96,6 +102,7 @@ function PinnedMarker({
 // Child component — handles map click events with debounce
 function MapClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
   useMapEvents({
     click(e) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -162,7 +169,16 @@ function SanDiegoMap({
   blockData,
   blockLoading = false,
   blockRadius = 0.25,
+  accessGapScores,
+  showChoropleth = false,
+  onToggleChoropleth,
+  onCommunitySelect,
 }: SanDiegoMapProps) {
+  // Ref keeps click handlers current — onEachFeature binds once at GeoJSON mount,
+  // so a direct closure would capture a stale onCommunitySelect.
+  const onCommunitySelectRef = useRef(onCommunitySelect);
+  onCommunitySelectRef.current = onCommunitySelect;
+
   const reports = blockData?.reports ?? EMPTY_REPORTS;
   const totalReports = blockData?.totalReports ?? 0;
   const handleMarkerClick = useCallback(
@@ -181,9 +197,43 @@ function SanDiegoMap({
 
   return (
     <div role="region" aria-label="San Diego neighborhood map" className="relative w-full h-full">
+    {/* Choropleth toggle */}
+    {onToggleChoropleth && accessGapScores && accessGapScores.size > 0 && (
+      <div className="absolute top-14 right-2 z-[999] print:hidden">
+        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2">
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input type="checkbox" checked={showChoropleth} onChange={onToggleChoropleth} className="accent-amber-600" />
+            Access Gap Layer
+          </label>
+        </div>
+      </div>
+    )}
+
+    {/* Choropleth legend */}
+    {showChoropleth && (
+      <div className="absolute bottom-8 right-2 z-[1000] print:hidden">
+        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md p-3 text-xs">
+          <div className="font-semibold mb-1.5 text-gray-700">Access Gap Score</div>
+          {[0, 20, 40, 60, 80].map((grade) => (
+            <div key={grade} className="flex items-center gap-1.5 mb-0.5">
+              <span
+                className="inline-block w-4 h-4 rounded-sm border border-gray-300"
+                style={{ backgroundColor: scoreToColor(grade) }}
+              />
+              <span className="text-gray-600">{grade}–{grade + 20}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="inline-block w-4 h-4 rounded-sm border border-gray-300 bg-gray-300" />
+            <span className="text-gray-600">No data</span>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Report count indicator — shown when results are capped */}
     {pinnedLocation && totalReports > reports.length && (
-      <div className="absolute top-14 right-2 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-1.5 text-xs text-gray-600">
+      <div className="absolute top-28 right-2 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-1.5 text-xs text-gray-600">
         Showing <span className="font-semibold text-gray-900">{reports.length}</span> of{' '}
         <span className="font-semibold text-gray-900">{totalReports}</span> reports
       </div>
@@ -235,6 +285,36 @@ function SanDiegoMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+
+      {/* Choropleth layer — renders below markers */}
+      {showChoropleth && neighborhoodBoundaries && (
+        <GeoJSON
+          key={`choropleth-${accessGapScores?.size ?? 0}`}
+          data={neighborhoodBoundaries}
+          style={(feature) => {
+            const name = norm(feature?.properties?.cpname || '');
+            const score = accessGapScores?.get(name) ?? null;
+            return {
+              fillColor: scoreToColor(score),
+              color: '#666',
+              weight: 1.5,
+              opacity: 0.8,
+              fillOpacity: 0.6,
+            };
+          }}
+          onEachFeature={(feature, layer) => {
+            const name = feature.properties?.cpname || 'Unknown';
+            const score = accessGapScores?.get(norm(name));
+            const el = document.createElement('span');
+            el.textContent = `${name}: ${score !== undefined ? score + '/100' : 'No data'}`;
+            layer.bindTooltip(el, { sticky: true });
+            layer.on('click', (e) => {
+              L.DomEvent.stopPropagation(e as L.LeafletEvent);
+              onCommunitySelectRef.current?.(name);
+            });
+          }}
+        />
+      )}
 
       {/* Click-to-explore handler */}
       {onMapClick && <MapClickHandler onClick={onMapClick} />}
