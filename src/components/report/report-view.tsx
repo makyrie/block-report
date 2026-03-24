@@ -1,4 +1,4 @@
-import type { CommunityReport, NeighborhoodProfile } from '../../types/index';
+import type { CommunityReport, CommunityTrends, NeighborhoodProfile } from '../../types/index';
 import { useLanguage } from '../../i18n/context';
 import { FlyerPreview } from '../flyer/flyer-preview';
 
@@ -7,9 +7,10 @@ interface ReportViewProps {
   loading: boolean;
   metrics?: NeighborhoodProfile['metrics'] | null;
   topLanguages?: { language: string; percentage: number }[];
+  trends?: CommunityTrends | null;
 }
 
-export default function ReportView({ report, loading, metrics, topLanguages }: ReportViewProps) {
+export default function ReportView({ report, loading, metrics, topLanguages, trends }: ReportViewProps) {
   const { t } = useLanguage();
 
   if (loading) {
@@ -33,6 +34,7 @@ export default function ReportView({ report, loading, metrics, topLanguages }: R
         report={report}
         metrics={metrics}
         topLanguages={topLanguages}
+        trends={trends}
       />
     </>
   );

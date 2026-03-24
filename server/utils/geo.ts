@@ -1,8 +1,10 @@
-// Shared geo utilities — single source of truth for point-in-polygon logic
+// Server geo utilities — re-exports shared primitives from src/utils/geo.ts
+// plus server-specific helpers (bbox, haversine, centroid).
 
-import type { Polygon, MultiPolygon } from 'geojson';
+export { pointInPolygon, pointInFeature } from '../../src/utils/geo.js';
+export type { PolygonLike } from '../../src/utils/geo.js';
 
-type PolygonLike = Polygon | MultiPolygon;
+import type { PolygonLike } from '../../src/utils/geo.js';
 
 // San Diego bounding box
 export const SD_BOUNDS = { latMin: 32.5, latMax: 33.2, lngMin: -117.6, lngMax: -116.8 } as const;
@@ -11,52 +13,6 @@ export const SD_BOUNDS = { latMin: 32.5, latMax: 33.2, lngMin: -117.6, lngMax: -
 export const MILES_PER_LAT_DEG = 69;
 // At San Diego (~32.7°N): 1 deg longitude ~ 58.8 miles
 export const MILES_PER_LNG_DEG = 58.8;
-
-// Ray-casting point-in-polygon test.
-// Point: (lat, lng). Polygon ring: GeoJSON [lng, lat] pairs.
-// Internally maps to (x=lng, y=lat) for the ray-cast comparison.
-export function pointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [pLng_i, pLat_i] = polygon[i]; // GeoJSON: [lng, lat]
-    const [pLng_j, pLat_j] = polygon[j];
-    if ((pLat_i > lat) !== (pLat_j > lat) && lng < ((pLng_j - pLng_i) * (lat - pLat_i)) / (pLat_j - pLat_i) + pLng_i) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-// Test whether a point is inside a GeoJSON Feature geometry (Polygon or MultiPolygon)
-// Correctly handles polygon holes: point must be inside outer ring AND outside all holes
-export function pointInFeature(
-  lat: number,
-  lng: number,
-  geometry: PolygonLike,
-): boolean {
-  if (geometry.type === 'Polygon') {
-    const [outer, ...holes] = geometry.coordinates as number[][][];
-    if (!pointInPolygon(lat, lng, outer)) return false;
-    for (const hole of holes) {
-      if (pointInPolygon(lat, lng, hole)) return false;
-    }
-    return true;
-  }
-  if (geometry.type === 'MultiPolygon') {
-    for (const poly of geometry.coordinates as number[][][][]) {
-      const [outer, ...holes] = poly;
-      if (pointInPolygon(lat, lng, outer)) {
-        let inHole = false;
-        for (const hole of holes) {
-          if (pointInPolygon(lat, lng, hole)) { inHole = true; break; }
-        }
-        if (!inHole) return true;
-      }
-    }
-    return false;
-  }
-  return false;
-}
 
 // Compute bounding box for a polygon ring (used for spatial pre-filtering)
 export interface BBox {

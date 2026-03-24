@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { BlockMetrics, NeighborhoodProfile, CommunityReport } from '../../types';
+import type { BlockMetrics, NeighborhoodProfile, CommunityReport, CommunityTrends } from '../../types';
 import ReportView from '../report/report-view';
+import TrendIndicator from './trend-indicator';
 import DualScaleView from './dual-scale-view';
 import { useLanguage } from '../../i18n/context';
 import { SUPPORTED_LANGUAGES, DEMOGRAPHICS_TO_LANG } from '../../i18n/translations';
@@ -16,6 +17,7 @@ interface SidebarProps {
   topLanguages?: { language: string; percentage: number }[];
   transitScore?: NeighborhoodProfile['transit'] | null;
   accessGap?: NeighborhoodProfile['accessGap'];
+  trends?: CommunityTrends | null;
   blockData?: BlockMetrics | null;
   blockRadius?: number;
   blockLoading?: boolean;
@@ -75,6 +77,7 @@ export default function Sidebar({
   topLanguages,
   transitScore,
   accessGap,
+  trends,
   blockData,
   blockRadius,
   blockLoading,
@@ -198,6 +201,31 @@ export default function Sidebar({
               </dl>
             )}
           </section>
+
+          {/* Historical trends */}
+          {trends && trends.monthly.length >= 3 && (
+            <section aria-labelledby="trends-heading" className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <h2 id="trends-heading" className="text-sm font-medium text-blue-800 mb-2">
+                12-Month Trends
+              </h2>
+              <TrendIndicator
+                direction={trends.summary.direction}
+                label="Resolution rate"
+                sparklineData={trends.monthly.map(d => d.resolutionRate)}
+              />
+              <div className="mt-1.5">
+                <TrendIndicator
+                  direction={trends.summary.volumeDirection}
+                  label="Neighborhood activity"
+                  sparklineData={trends.monthly.map(d => d.totalRequests)}
+                />
+              </div>
+              <p className="text-xs text-blue-600 mt-2">
+                Resolution rate: {Math.round(trends.summary.previousResolutionRate * 100)}%
+                {' \u2192 '}{Math.round(trends.summary.currentResolutionRate * 100)}%
+              </p>
+            </section>
+          )}
 
           {/* Transit accessibility */}
           {transitScore && transitScore.stopCount > 0 && (
@@ -345,18 +373,18 @@ export default function Sidebar({
           )}
 
           {/* Language suggestion based on demographics */}
-          {suggestedLangMeta && reportLang === 'English' && (
+          {suggestedLangCode && reportLang === 'en' && (
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
               <p className="text-sm text-blue-800 mb-2">
                 {t('sidebar.languageSuggestion', { language: suggestedLang!.language })}
               </p>
               <button
                 type="button"
-                onClick={() => setReportLang(suggestedLangMeta.label)}
+                onClick={() => setReportLang(suggestedLangCode)}
                 disabled={reportLoading}
                 className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
-                {t('sidebar.switchReportLang', { language: suggestedLangMeta.nativeLabel }) ?? `Switch report to ${suggestedLangMeta.nativeLabel}`}
+                {t('sidebar.switchReportLang', { language: suggestedLangMeta?.nativeLabel ?? '' }) ?? `Switch report to ${suggestedLangMeta?.nativeLabel ?? ''}`}
               </button>
             </div>
           )}
@@ -370,10 +398,10 @@ export default function Sidebar({
                   key={l.code}
                   type="button"
                   role="radio"
-                  aria-checked={reportLang === l.label}
-                  onClick={() => setReportLang(l.label)}
+                  aria-checked={reportLang === l.code}
+                  onClick={() => setReportLang(l.code)}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                    reportLang === l.label
+                    reportLang === l.code
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
@@ -403,7 +431,7 @@ export default function Sidebar({
         </div>
       )}
 
-      <ReportView report={report} loading={reportLoading} metrics={metrics} topLanguages={topLanguages} />
+      <ReportView report={report} loading={reportLoading} metrics={metrics} topLanguages={topLanguages} trends={trends} />
     </div>
   );
 }
