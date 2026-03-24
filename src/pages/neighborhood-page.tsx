@@ -4,8 +4,8 @@ import SanDiegoMap from '../components/map/san-diego-map';
 import NeighborhoodSelector from '../components/ui/neighborhood-selector';
 import Sidebar from '../components/ui/sidebar';
 import { FlyerLayout } from '../components/flyer/flyer-layout';
-import { generateReport, getPreGeneratedReport } from '../api/client';
-import type { CommunityAnchor, CommunityReport, NeighborhoodProfile } from '../types';
+import { generateReport, getPreGeneratedReport, getPermits, getCitywideGaps } from '../api/client';
+import type { CommunityAnchor, CommunityReport, NeighborhoodProfile, Permit } from '../types';
 import { useLanguage } from '../i18n/context';
 import { SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { toSlug, fromSlug } from '../utils/slug';
@@ -14,6 +14,7 @@ import { useMapData } from '../hooks/use-map-data';
 import { useCommunityData } from '../hooks/use-community-data';
 import { useBlockData } from '../hooks/use-block-data';
 import { DEFAULT_TRANSIT } from '../utils/defaults';
+import { norm } from '../utils/community';
 
 export default function NeighborhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -22,7 +23,9 @@ export default function NeighborhoodPage() {
   const [mobileView, setMobileView] = useState<'map' | 'info'>('map');
 
   const { libraries, recCenters, neighborhoodBoundaries, dataError } = useMapData();
+  const [permits, setPermits] = useState<Permit[]>([]);
 
+  // --- Community selection ---
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
     slug ? fromSlug(slug) : null,
   );
@@ -31,18 +34,52 @@ export default function NeighborhoodPage() {
   const { metrics, metricsLoading, topLanguages, transitScore, accessGap } = useCommunityData(selectedCommunity);
   const { pinnedLocation, setPinnedLocation, blockData, setBlockData, blockLoading, blockRadius, setBlockRadius } = useBlockData();
 
+  const [accessGapScores, setAccessGapScores] = useState<Map<string, number>>(new Map());
+  const [showChoropleth, setShowChoropleth] = useState(false);
+
   const [report, setReport] = useState<CommunityReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  // Ref to avoid stale closure in the slug-sync effect below
+  const selectedCommunityRef = useRef(selectedCommunity);
+  selectedCommunityRef.current = selectedCommunity;
+
   // Sync URL -> state when slug changes (e.g. browser back/forward)
   useEffect(() => {
     const communityFromUrl = slug ? fromSlug(slug) : null;
-    if (communityFromUrl !== selectedCommunity) {
+    if (communityFromUrl !== selectedCommunityRef.current) {
       setSelectedCommunity(communityFromUrl);
       setSelectedAnchor(null);
     }
   }, [slug]);
+
+  // Fetch permits filtered by selected community
+  useEffect(() => {
+    if (!selectedCommunity) {
+      setPermits([]);
+      return;
+    }
+    const controller = new AbortController();
+    getPermits(selectedCommunity, { signal: controller.signal })
+      .then(setPermits)
+      .catch((err: unknown) => { if (err instanceof Error && err.name !== 'AbortError') console.error(err); });
+    return () => controller.abort();
+  }, [selectedCommunity]);
+
+  // Fetch access gap scores for choropleth on mount
+  useEffect(() => {
+    getCitywideGaps()
+      .then(({ ranking }) => {
+        const scoreMap = new Map<string, number>();
+        for (const r of ranking) {
+          scoreMap.set(norm(r.community), r.accessGapScore);
+        }
+        setAccessGapScores(scoreMap);
+      })
+      .catch(console.error);
+  }, []);
+
 
   // Clear report when community or language changes
   const generatingRef = useRef(false);
@@ -68,12 +105,12 @@ export default function NeighborhoodPage() {
     if (!selectedCommunity) return;
     if (generatingRef.current) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
     setReportLoading(true);
 
     (async () => {
       const cached = await getPreGeneratedReport(selectedCommunity, reportLang);
-      if (cancelled) return;
+      if (controller.signal.aborted) return;
 
       if (cached) {
         setReport(cached);
@@ -99,19 +136,20 @@ export default function NeighborhoodPage() {
       );
 
       try {
-        const result = await generateReport(profile, reportLang);
-        if (!cancelled) setReport(result);
+        const result = await generateReport(profile, reportLang, controller.signal);
+        if (!controller.signal.aborted) setReport(result);
       } catch (err) {
-        if (!cancelled) setReportError(err instanceof Error ? err.message : 'Failed to generate report');
+        if (!controller.signal.aborted) setReportError(err instanceof Error ? err.message : 'Failed to generate report');
       } finally {
         generatingRef.current = false;
-        if (!cancelled) setReportLoading(false);
+        if (!controller.signal.aborted) setReportLoading(false);
       }
     })();
 
-    return () => { cancelled = true; generatingRef.current = false; };
+    return () => { controller.abort(); generatingRef.current = false; };
   }, [selectedCommunity, reportLang, metrics]);
 
+  // --- Event handlers ---
   const handleCommunityChange = useCallback(
     (community: string) => {
       if (community) {
@@ -131,7 +169,9 @@ export default function NeighborhoodPage() {
     (anchor: CommunityAnchor) => {
       setSelectedAnchor(anchor);
       setSelectedCommunity(anchor.community);
+      setMobileView('info');
       navigate(`/neighborhood/${toSlug(anchor.community)}`);
+      setMobileView('info');
     },
     [navigate],
   );
@@ -149,29 +189,41 @@ export default function NeighborhoodPage() {
     }
   }, [neighborhoodBoundaries, selectedCommunity, navigate, setPinnedLocation, setBlockData]);
 
-  const selectedCommunityRef = useRef(selectedCommunity);
-  selectedCommunityRef.current = selectedCommunity;
+  // Ref to track the in-flight manual report generation so we can abort on community switch
+  const manualGenerateControllerRef = useRef<AbortController | null>(null);
+
+  const handleAnchorClickMobile = useCallback(
+    (anchor: CommunityAnchor) => { handleAnchorClick(anchor); setMobileView('info'); },
+    [handleAnchorClick],
+  );
+
+  const handleToggleChoropleth = useCallback(
+    () => setShowChoropleth(prev => !prev),
+    [],
+  );
 
   const handleGenerateReport = useCallback(async (language: string) => {
     if (!selectedCommunity || !metrics) return;
 
-    const communityAtCallTime = selectedCommunity;
+    // Cancel any previous in-flight manual generation
+    manualGenerateControllerRef.current?.abort();
+    const controller = new AbortController();
+    manualGenerateControllerRef.current = controller;
+
     const profile = buildProfile(selectedCommunity, selectedAnchor, metrics, transitScore, topLanguages, accessGap);
 
     setReportLoading(true);
     setReportError(null);
     try {
-      const result = await generateReport(profile, language);
-      if (selectedCommunityRef.current !== communityAtCallTime) return;
-      setReport(result);
+      const result = await generateReport(profile, language, controller.signal);
+      if (!controller.signal.aborted) setReport(result);
     } catch (err) {
-      if (selectedCommunityRef.current !== communityAtCallTime) return;
-      const message = err instanceof Error ? err.message : 'Failed to generate report';
-      setReportError(message);
-    } finally {
-      if (selectedCommunityRef.current === communityAtCallTime) {
-        setReportLoading(false);
+      if (!controller.signal.aborted) {
+        const message = err instanceof Error ? err.message : 'Failed to generate report';
+        setReportError(message);
       }
+    } finally {
+      if (!controller.signal.aborted) setReportLoading(false);
     }
   }, [selectedCommunity, selectedAnchor, metrics, topLanguages, transitScore, accessGap]);
 
@@ -282,14 +334,19 @@ export default function NeighborhoodPage() {
         <SanDiegoMap
           libraries={libraries}
           recCenters={recCenters}
+          permits={permits}
           neighborhoodBoundaries={neighborhoodBoundaries}
           selectedCommunity={selectedCommunity}
-          onAnchorClick={(anchor) => { handleAnchorClick(anchor); setMobileView('info'); }}
+          onAnchorClick={handleAnchorClickMobile}
           onMapClick={handleMapClick}
           pinnedLocation={pinnedLocation}
           blockData={blockData}
           blockLoading={blockLoading}
           blockRadius={blockRadius}
+          accessGapScores={accessGapScores}
+          showChoropleth={showChoropleth}
+          onToggleChoropleth={handleToggleChoropleth}
+          onCommunitySelect={handleCommunityChange}
         />
       </main>
 

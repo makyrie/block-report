@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile } from '../types';
+import type { BlockMetrics, CitywideCommunity, CommunityAnchor, CommunityReport, NeighborhoodProfile, Permit } from '../types';
 
 const BASE = '/api';
 
@@ -27,6 +27,11 @@ export function getRecCenters(signal?: AbortSignal): Promise<CommunityAnchor[]> 
 let boundaryPromise: Promise<FeatureCollection> | null = null;
 let boundaryCachedAt = 0;
 const BOUNDARY_CLIENT_TTL = 60 * 60 * 1000; // 1 hour
+
+export function getPermits(community?: string, init?: RequestInit): Promise<Permit[]> {
+  const params = community ? `?community=${encodeURIComponent(community)}` : '';
+  return fetchJSON(`${BASE}/locations/permits${params}`, init);
+}
 
 export function getNeighborhoodBoundaries(): Promise<FeatureCollection> {
   if (boundaryPromise && Date.now() - boundaryCachedAt < BOUNDARY_CLIENT_TTL) {
@@ -77,11 +82,11 @@ export async function getPreGeneratedReport(community: string, language: string)
   }
 }
 
-export function generateReport(profile: NeighborhoodProfile, language: string): Promise<CommunityReport> {
+export function generateReport(profile: NeighborhoodProfile, language: string, signal?: AbortSignal): Promise<CommunityReport> {
   return fetchJSON(`${BASE}/report/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile, language }),
+    signal,
   });
 }
-

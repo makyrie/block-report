@@ -17,6 +17,8 @@
     "generate-reports": "node --env-file=.env --import=tsx server/scripts/generate-reports.ts",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
+    "mcp": "node --env-file=.env --import=tsx server/mcp/index.ts",
+    "mcp:http": "node --env-file=.env --import=tsx server/mcp/http.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -26,6 +28,7 @@
   "packageManager": "pnpm@10.20.0",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "@neondatabase/serverless": "~0.10.4",
     "@prisma/adapter-neon": "^5.22.0",
     "@prisma/client": "^5.22.0",
@@ -43,7 +46,8 @@
     "puppeteer-core": "^24.9.0",
     "qrcode": "^1.5.4",
     "@sparticuz/chromium": "^133.0.0",
-    "ws": "^8.19.0"
+    "ws": "^8.19.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.5",

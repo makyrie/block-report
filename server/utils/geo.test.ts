@@ -33,6 +33,30 @@ describe('pointInFeature', () => {
     expect(pointInFeature(15, 15, geometry)).toBe(false);
   });
 
+  it('returns false for a point inside a polygon hole', () => {
+    const hole = [[3, 3], [7, 3], [7, 7], [3, 7], [3, 3]];
+    const geometry: Polygon = {
+      type: 'Polygon',
+      coordinates: [squareRing, hole],
+    };
+    // Inside the hole — should be false
+    expect(pointInFeature(5, 5, geometry)).toBe(false);
+    // Outside the hole but inside outer ring — should be true
+    expect(pointInFeature(1, 1, geometry)).toBe(true);
+    // Outside entirely — should be false
+    expect(pointInFeature(15, 15, geometry)).toBe(false);
+  });
+
+  it('returns false for a point inside a MultiPolygon hole', () => {
+    const hole = [[3, 3], [7, 3], [7, 7], [3, 7], [3, 3]];
+    const geometry: MultiPolygon = {
+      type: 'MultiPolygon',
+      coordinates: [[squareRing, hole]],
+    };
+    expect(pointInFeature(5, 5, geometry)).toBe(false);
+    expect(pointInFeature(1, 1, geometry)).toBe(true);
+  });
+
   it('works with MultiPolygon geometry', () => {
     const geometry: MultiPolygon = {
       type: 'MultiPolygon',
